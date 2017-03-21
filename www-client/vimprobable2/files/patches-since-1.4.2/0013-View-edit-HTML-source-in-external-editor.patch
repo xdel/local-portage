@@ -1,0 +1,234 @@
+From a07ac4375f1c5837fabfca7bc66f5d15b8c76f4a Mon Sep 17 00:00:00 2001
+From: Hannes Schueller <hannes@yllr.net>
+Date: Fri, 26 Dec 2014 12:16:27 +0100
+Subject: [PATCH 13/20] View/edit HTML source in external editor
+
+Patch by Matthew Carter <jehiva@gmail.com>
+---
+ config.h        |   1 +
+ main.c          | 147 +++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ vimprobable.h   |   2 +-
+ vimprobablerc.5 |   3 ++
+ 4 files changed, 150 insertions(+), 3 deletions(-)
+
+diff --git a/config.h b/config.h
+index 276fc9f..a2c81b2 100644
+--- a/config.h
++++ b/config.h
+@@ -157,6 +157,7 @@ Command commands[COMMANDSIZE] = {
+     { "bma",                                           	bookmark,         {0} },
+     { "bookmark",                                      	bookmark,         {0} },
+     { "source",                                        	view_source,      {0} },
++    { "esource",                                       	edit_source,      {0} },
+     { "openeditor",                                   	open_editor,      {0} },
+     { "set",                                           	browser_settings, {0} },
+     { "map",                                           	mappings,         {0} },
+diff --git a/main.c b/main.c
+index 3ae2813..584f576 100644
+--- a/main.c
++++ b/main.c
+@@ -69,7 +69,9 @@ static gboolean descend(const Arg *arg);
+ gboolean echo(const Arg *arg);
+ static gboolean focus_input(const Arg *arg);
+ static gboolean open_editor(const Arg *arg);
++static gboolean edit_source(const Arg *arg);
+ void _resume_from_editor(GPid child_pid, int status, gpointer data);
++void _resume_from_edit_source(GPid child_pid, int status, gpointer data);
+ static gboolean input(const Arg *arg);
+ static gboolean open_inspector(const Arg * arg);
+ static gboolean navigate(const Arg *arg);
+@@ -1974,14 +1976,79 @@ open_editor(const Arg *arg) {
+     return TRUE;
+ }
+ 
++/* open an external editor defined by the protocol handler for
++vimprobableedit on page source */
++static gboolean
++edit_source(const Arg *arg) {
++    char *text = NULL;
++    gboolean success;
++    GPid child_pid;
++    gchar *value = NULL, *message = NULL, *tag = NULL, *edit_url = NULL;
++    gchar *temp_file_name = g_strdup_printf("%s/vimprobableeditXXXXXX",
++      temp_dir);
++    int temp_file_handle = -1;
++
++    jsapi_evaluate_script("document.documentElement.innerHTML", &value, &message);
++    text = g_strdup(value);
++    if (text == NULL) {
++        g_free(value);
++        g_free(message);
++        return FALSE;
++    }
++
++    /* write text into temporary file */
++    temp_file_handle = mkstemp(temp_file_name);
++    if (temp_file_handle == -1) {
++        message = g_strdup_printf("Could not create temporary file: %s",
++            strerror(errno));
++        echo_message(Error, message);
++        g_free(value);
++        g_free(message);
++        g_free(text);
++        return FALSE;
++    }
++    if (write(temp_file_handle, text, strlen(text)) != strlen(text)) {
++        message = g_strdup_printf("Short write to temporary file: %s",
++            strerror(errno));
++        echo_message(Error, message);
++        g_free(value);
++        g_free(message);
++        g_free(text);
++        return FALSE;
++    }
++    close(temp_file_handle);
++    g_free(text);
++
++    /* spawn editor */
++    edit_url = g_strdup_printf("vimprobableedit:%s", temp_file_name);
++    success = open_handler_pid(edit_url, &child_pid);
++    g_free(edit_url);
++    if (!success) {
++        echo_message(Error, "External editor open failed (no handler for"
++            " vimprobableedit protocol?)");
++        unlink(temp_file_name);
++        g_free(value);
++        g_free(message);
++        return FALSE;
++    }
++
++    g_child_watch_add(child_pid, _resume_from_edit_source, temp_file_name);
++
++    /* temp_file_name is freed in _resume_from_editor */
++    g_free(value);
++    g_free(message);
++    g_free(tag);
++    return TRUE;
++}
++
+ 
+ /* pick up from where open_editor left the work to the glib event loop.
+ 
+-This is called when the external editor exits. 
++This is called when the external editor exits.
+ 
+ The data argument points to allocated memory containing the temporary file
+ name. */
+-void 
++void
+ _resume_from_editor(GPid child_pid, int child_status, gpointer data) {
+     FILE *fp;
+     GString *set_value_js = g_string_new(
+@@ -2064,6 +2131,82 @@ error_exit:
+     g_free(message);
+ }
+ 
++/* pick up from where edit_source left the work to the glib event loop.
++
++This is called when the external editor exits.
++
++The data argument points to allocated memory containing the temporary file
++name. */
++void
++_resume_from_edit_source(GPid child_pid, int child_status, gpointer data) {
++    FILE *fp;
++    GString *set_value_js = g_string_new(
++        "document.documentElement.innerHTML = \"");
++    g_spawn_close_pid(child_pid);
++    gchar *value = NULL, *message = NULL;
++    gchar *temp_file_name = data;
++    gchar buffer[BUF_SIZE] = "";
++    gchar *buf_ptr = buffer;
++    int char_read;
++
++    if (child_status) {
++        echo_message(Error, "External editor returned with non-zero status,"
++            " discarding edits.");
++        goto error_exit;
++    }
++
++    /* re-read the new contents of the file and put it into the HTML element */
++    if (!access(temp_file_name, R_OK) == 0) {
++        message = g_strdup_printf("Could not access temporary file: %s",
++            strerror(errno));
++        goto error_exit;
++    }
++    fp = fopen(temp_file_name, "r");
++    if (fp == NULL) {
++        /* this would be too weird to even emit an error message */
++        goto error_exit;
++    }
++    jsapi_evaluate_script("document.documentElement.innerHTML = '';",
++        &value, &message);
++    g_free(value);
++    g_free(message);
++
++    while (EOF != (char_read = fgetc(fp))) {
++        if (char_read == '\n') {
++            *buf_ptr++ = '\\';
++            *buf_ptr++ = 'n';
++        } else if (char_read == '"') {
++            *buf_ptr++ = '\\';
++            *buf_ptr++ = '"';
++        } else {
++            *buf_ptr++ = char_read;
++        }
++        /* ship out as the buffer when space gets tight.  This has
++        fuzz to save on thinking, plus we have enough space for the
++        trailing "; in any case. */
++        if (buf_ptr-buffer>=BUF_SIZE-10) {
++            *buf_ptr = 0;
++            g_string_append(set_value_js, buffer);
++            buf_ptr = buffer;
++        }
++    }
++    *buf_ptr++ = '"';
++    *buf_ptr++ = ';';
++    *buf_ptr = 0;
++    g_string_append(set_value_js, buffer);
++    fclose(fp);
++
++    jsapi_evaluate_script(set_value_js->str, &value, &message);
++
++error_exit:
++
++    g_string_free(set_value_js, TRUE);
++    unlink(temp_file_name);
++    g_free(temp_file_name);
++    g_free(value);
++    g_free(message);
++}
++
+ static gboolean
+ focus_input(const Arg *arg) {
+     static Arg a;
+diff --git a/vimprobable.h b/vimprobable.h
+index e0d6fc7..9f55055 100644
+--- a/vimprobable.h
++++ b/vimprobable.h
+@@ -193,7 +193,7 @@ enum ConfigFileError {
+ #define             CLOSED_URL_FILENAME         "%s/vimprobable/closed", client.config.config_base
+ 
+ /* Command size */
+-#define	            COMMANDSIZE	                47
++#define	            COMMANDSIZE	                48
+ 
+ /* maximum size of internal string variable handled by :set
+  * if you set this to anything lower than 8, colour values
+diff --git a/vimprobablerc.5 b/vimprobablerc.5
+index 4795f0f..2f4e632 100644
+--- a/vimprobablerc.5
++++ b/vimprobablerc.5
+@@ -218,6 +218,9 @@ Save the current website in the bookmarks
+ .IP source
+ Toggle HTML source view
+ 
++.IP esource
++View/edit HTML source in an external editor
++
+ .IP inspect
+ Opens the webinspector if the webinspector is enabled
+ 
+-- 
+2.1.4
+

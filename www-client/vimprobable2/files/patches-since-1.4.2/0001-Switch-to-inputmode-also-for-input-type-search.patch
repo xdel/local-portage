@@ -1,0 +1,56 @@
+From 75037dd201b81d4d74ce6a31ea6ff44cb1e2bc9f Mon Sep 17 00:00:00 2001
+From: Daniel Carl <danielcarl@gmx.de>
+Date: Tue, 4 Mar 2014 23:05:12 +0100
+Subject: [PATCH 01/20] Switch to inputmode also for input type search.
+
+---
+ hinting.js | 18 ++++++++++++++----
+ main.c     |  2 ++
+ 2 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/hinting.js b/hinting.js
+index 4997cae..0f86e7b 100644
+--- a/hinting.js
++++ b/hinting.js
+@@ -248,11 +248,21 @@ function Hints() {
+ 
+         this.clearHints();
+ 
+-        if (tag == "iframe" || tag == "frame" || tag == "textarea" || tag == "input" && (el.type == "text" || el.type == "password" || el.type == "checkbox" || el.type == "radio") || tag == "select") {
+-            el.focus();
+-            if (tag == "input" || tag == "textarea") {
+-                return "insert;";
++        if (tag == "input" || tag == "textarea" || tag == "select") {
++            if (el.type == "radio" || el.type == "checkbox") {
++                el.focus();
++                _clickElement(el);
++                return "done;";
++            }
++            if (el.type == "submit" || el.type == "reset" || el.type == "button" || el.type === "image") {
++                _clickElement(el);
++                return "done;";
+             }
++            el.focus();
++            return "insert;";
++        }
++        if (tag == "iframe" || tag == "frame") {
++            e.focus();
+             return "done;";
+         }
+ 
+diff --git a/main.c b/main.c
+index d70f88a..92853af 100644
+--- a/main.c
++++ b/main.c
+@@ -1480,6 +1480,8 @@ set(const Arg *arg) {
+         echo_message(Info | NoAutoHide, "-- PASS TROUGH (next) --");
+         break;
+     case ModeInsert: /* should not be called manually but automatically */
++        /* make sure we leaf focus from inputbox to show the new mode */
++        gtk_widget_grab_focus(GTK_WIDGET(client.gui.webview));
+         echo_message(Info | NoAutoHide, "-- INSERT --");
+         break;
+     default:
+-- 
+2.1.4
+

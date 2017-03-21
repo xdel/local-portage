@@ -1,0 +1,41 @@
+From d633d86957df163f13b10dcf3b703b313afb3dbb Mon Sep 17 00:00:00 2001
+From: Morgan Howe <mthowe@gmail.com>
+Date: Thu, 22 Jan 2015 16:35:28 +0800
+Subject: [PATCH 18/20] Preserve hint numbering across f, l, and y hint modes.
+
+This patch will make sure that hints are numbered the same in show_link
+and yank as they are in open mode.
+---
+ hinting.js | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/hinting.js b/hinting.js
+index 3896898..d93cfac 100644
+--- a/hinting.js
++++ b/hinting.js
+@@ -84,6 +84,13 @@ function Hints() {
+                 if (style.display == "none" || style.visibility != "visible") {
+                     continue;
+                 }
++                if (mode == "y" || mode == "l") {
++                        if (elem.getAttribute("href") == undefined && elem.getAttribute("role") != "link"
++                                        && elem.tagName.toLowerCase() != "img") {
++                            hintCount++;
++                            continue;
++                        }
++                }
+ 
+                 var leftpos = Math.max((rect.left + scrollX), scrollX);
+                 var toppos = Math.max((rect.top + scrollY), scrollY);
+@@ -434,6 +441,8 @@ function Hints() {
+         switch (mode) {
+             case "f":
+             case "F":
++            case "y":
++            case "l":
+                 if (text === "") {
+                     expr = "//*[@onclick or @onmouseover or @onmousedown or @onmouseup or @oncommand or @class='lk' or @role='link' or @href] | //input[not(@type='hidden')] | //a[href] | //area | //textarea | //button | //select";
+                 } else {
+-- 
+2.1.4
+

@@ -1,0 +1,16 @@
+--- a/src/Makefile.in	2016-05-28 19:33:32.639193239 +0300
++++ b/src/Makefile.in	2016-05-28 19:32:59.818919940 +0300
+@@ -48,7 +48,12 @@
+ endif
+ 
+ # CUDA settings. See output of "nvcc -h"
+-NVCC_FLAGS = -c -Xptxas -v -fmad=true @OPENSSL_CFLAGS@
++NVCC_FLAGS = -c -Xptxas -v -fmad=true @OPENSSL_CFLAGS@ --generate-code arch=compute_11,code=compute_11 \
++							--generate-code arch=compute_12,code=compute_12 \
++							--generate-code arch=compute_13,code=compute_13 \
++							--generate-code arch=compute_20,code=compute_20 \
++							--generate-code arch=compute_30,code=compute_30 \
++							--generate-code arch=compute_35,code=compute_35
+ 
+ CPPFLAGS = @CPPFLAGS@
+ CFLAGSX = -c @CFLAGS@ @CFLAGS_EXTRA@ @MEMDBG_CFLAGS@ @HAVE_CUDA@ @OPENSSL_CFLAGS@ @OPENMP_CFLAGS@ @HAVE_MPI@ @PTHREAD_CFLAGS@ @HT@ $(RELEASE_BLD) $(CPPFLAGS)

@@ -1,0 +1,87 @@
+From a6ed055527be5a66a635ac9da0a3b7bcf0cedddb Mon Sep 17 00:00:00 2001
+From: Morgan Howe <mthowe@gmail.com>
+Date: Fri, 26 Dec 2014 20:56:04 +0800
+Subject: [PATCH 17/20] Clean up a few warnings and const correctness issues.
+
+---
+ main.c      | 14 ++++++++++----
+ utilities.c |  2 +-
+ utilities.h |  2 +-
+ 3 files changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/main.c b/main.c
+index 0a24d92..26418f9 100644
+--- a/main.c
++++ b/main.c
+@@ -306,7 +306,7 @@ webview_download_cb(WebKitWebView *webview, WebKitDownload *download, gpointer u
+     if (filename == NULL || strlen(filename) == 0) {
+         filename = "vimprobable_download";
+     }
+-    path = g_build_filename(g_strdup_printf(downloads_path), filename, NULL);
++    path = g_build_filename(downloads_path, filename, NULL);
+     uri = g_strconcat("file://", path, NULL);
+     webkit_download_set_destination_uri(download, uri);
+     g_free(path);
+@@ -1223,7 +1223,8 @@ open_arg(const Arg *arg) {
+     char *s = arg->s, *p = NULL, *new;
+     Arg a = { .i = NavigationReload };
+     int len, space = 0;
+-    char *search_uri, *search_term;
++    const char *search_uri;
++    char *search_term;
+     struct stat statbuf;
+ 
+     if (client.state.embed) {
+@@ -1272,7 +1273,7 @@ open_arg(const Arg *arg) {
+                 g_free(search_term);
+             } else {
+                 if (!strstr(search_uri, "%s"))
+-                    new = g_strdup_printf(search_uri);
++                    new = g_strdup(search_uri);
+                 else {
+                     /* the search engine definition expected an argument */
+                     new = g_strdup_printf(search_uri, "");
+@@ -3150,8 +3151,13 @@ main(int argc, char *argv[]) {
+     else
+         config->configfile = g_strdup_printf(RCFILE);
+ 
+-    if (!g_thread_supported())
++#if !GLIB_CHECK_VERSION(2, 35, 0)
++    if (!g_thread_supported()) {
++# if !GLIB_CHECK_VERSION(2, 32, 0)
+         g_thread_init(NULL);
++# endif
++    }
++#endif
+ 
+     if (winid) {
+         if (strncmp(winid, "0x", 2) == 0) {
+diff --git a/utilities.c b/utilities.c
+index f1427f1..77bb7ae 100644
+--- a/utilities.c
++++ b/utilities.c
+@@ -717,7 +717,7 @@ void make_searchengines_list(Searchengine *searchengines, int length)
+ /* find a searchengine with a given handle and return its URI or NULL if
+  * nothing is found.
+  * The returned string is internal and must not be freed or modified. */
+-char *find_uri_for_searchengine(const char *handle)
++const char *find_uri_for_searchengine(const char *handle)
+ {
+     GList *l;
+ 
+diff --git a/utilities.h b/utilities.h
+index cafd590..4085988 100644
+--- a/utilities.h
++++ b/utilities.h
+@@ -31,7 +31,7 @@ Listelement * add_list(const char *element, Listelement *elementlist);
+ int count_list(Listelement *elementlist);
+ void free_list(Listelement *elementlist);
+ 
+-char *find_uri_for_searchengine(const char *handle);
++const char *find_uri_for_searchengine(const char *handle);
+ void make_searchengines_list(Searchengine *searchengines, int length);
+ void make_uri_handlers_list(URIHandler *uri_handlers, int length);
+ gboolean open_handler(char *uri);
+-- 
+2.1.4
+

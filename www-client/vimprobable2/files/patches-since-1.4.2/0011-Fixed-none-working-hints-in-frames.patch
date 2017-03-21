@@ -1,0 +1,42 @@
+From 762c13287637464b3c6c0a1388048e80fbaa4da7 Mon Sep 17 00:00:00 2001
+From: Daniel Carl <danielcarl@gmx.de>
+Date: Sat, 20 Dec 2014 23:14:02 +0100
+Subject: [PATCH 11/20] Fixed none working hints in frames.
+
+---
+ hinting.js | 18 ++++++++----------
+ 1 file changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/hinting.js b/hinting.js
+index 793160e..3896898 100644
+--- a/hinting.js
++++ b/hinting.js
+@@ -114,17 +114,15 @@ function Hints() {
+             doc.documentElement.appendChild(hintContainer);
+ 
+             /* recurse into any iframe or frame element */
+-            var frameTags = ["frame","iframe"];
+-            for (var f = 0; f < frameTags.length; ++f) {
+-                var frames = doc.getElementsByTagName(frameTags[f]);
+-                for (i = 0, nframes = frames.length; i < nframes; ++i) {
+-                    elem = frames[i];
+-                    rect = elem.getBoundingClientRect();
+-                    if (!elem.contentWindow || !rect || rect.left > maxX || rect.right < minX || rect.top > maxY || rect.bottom < minY) {
+-                        continue;
+-                    }
+-                    helper(elem.contentWindow, offsetX + rect.left, offsetY + rect.top);
++            var i, frame;
++            for (i = 0; i < win.frames.length; i++) {
++                frame = win.frames[i];
++                elem  = frame.frameElement;
++                rect = elem.getBoundingClientRect();
++                if (!elem.contentWindow || !rect || rect.left > maxX || rect.right < minX || rect.top > maxY || rect.bottom < minY) {
++                    continue;
+                 }
++                helper(elem.contentWindow, offsetX + rect.left, offsetY + rect.top);
+             }
+         }
+ 
+-- 
+2.1.4
+

@@ -1,0 +1,63 @@
+diff -ru a/icemulti/Makefile b/icemulti/Makefile
+--- a/icemulti/Makefile	2016-03-01 14:21:34.236846895 -0500
++++ b/icemulti/Makefile	2016-03-01 14:23:23.107637496 -0500
+@@ -1,6 +1,6 @@
+ include ../config.mk
+ LDLIBS = -lm -lstdc++
+-CXXFLAGS = -MD -O0 -ggdb -Wall -std=c++11
++override CXXFLAGS += -std=c++11
+ 
+ all: icemulti$(EXE)
+ 
+diff -ru a/icepack/Makefile b/icepack/Makefile
+--- a/icepack/Makefile	2016-03-01 14:21:34.236846895 -0500
++++ b/icepack/Makefile	2016-03-01 14:23:13.875079268 -0500
+@@ -1,6 +1,6 @@
+ include ../config.mk
+ LDLIBS = -lm -lstdc++
+-CXXFLAGS = -MD -O0 -ggdb -Wall -std=c++11 -I/usr/local/include
++override CXXFLAGS += -std=c++11
+ MXEGCC = /usr/local/src/mxe/usr/bin/i686-pc-mingw32-gcc
+ 
+ all: icepack$(EXE) iceunpack$(EXE)
+diff -ru a/icepll/Makefile b/icepll/Makefile
+--- a/icepll/Makefile	2016-03-01 14:21:34.236846895 -0500
++++ b/icepll/Makefile	2016-03-01 14:24:00.211862083 -0500
+@@ -1,6 +1,6 @@
+ include ../config.mk
+ LDLIBS = -lm -lstdc++
+-CXXFLAGS = -MD -O0 -ggdb -Wall -std=c++11 -I/usr/local/include
++override CXXFLAGS += -std=c++11
+ 
+ all: icepll$(EXE)
+ 
+--- b/iceprog/Makefile.orig	2016-10-07 12:23:10.415703819 -0400
++++ b/iceprog/Makefile	2016-10-07 12:23:49.732879014 -0400
+@@ -1,12 +1,12 @@
+ include ../config.mk
+ 
+ ifneq ($(shell uname -s),Darwin)
+-  LDLIBS = -L/usr/local/lib -lm
+-  CFLAGS = -MD -O0 -ggdb -Wall -std=c99 -I/usr/local/include
++  LDLIBS = -lm
++  override CFLAGS += -std=c99
+ else
+   LIBFTDI_NAME = $(shell $(PKG_CONFIG) --exists libftdi1 && echo ftdi1 || echo ftdi)
+-  LDLIBS = -L/usr/local/lib -l$(LIBFTDI_NAME) -lm
+-  CFLAGS = -MD -O0 -ggdb -Wall -std=c99 -I/usr/local/include
++  LDLIBS = -l$(LIBFTDI_NAME) -lm
++  override CFLAGS += -std=c99
+ endif
+ 
+ ifeq ($(STATIC),1) 
+diff -ru a/icetime/Makefile b/icetime/Makefile
+--- a/icetime/Makefile	2016-03-01 14:21:34.236846895 -0500
++++ b/icetime/Makefile	2016-03-01 14:22:08.563204400 -0500
+@@ -1,6 +1,6 @@
+ include ../config.mk
+ LDLIBS = -lm -lstdc++
+-CXXFLAGS = -MD -O0 -ggdb -Wall -std=c++11 -I/usr/local/include -DPREFIX='"$(PREFIX)"' -DCHIPDB_SUBDIR='"$(CHIPDB_SUBDIR)"'
++override CXXFLAGS += -std=c++11 -DPREFIX='"$(PREFIX)"' -DCHIPDB_SUBDIR='"$(CHIPDB_SUBDIR)"'
+ 
+ ifeq ($(STATIC),1)
+ LDFLAGS += -static

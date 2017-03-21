@@ -1,0 +1,63 @@
+From 69876d327e6256773fbd10b85ae86058b9aaa44a Mon Sep 17 00:00:00 2001
+From: Hannes Schueller <hannes@yllr.net>
+Date: Fri, 26 Dec 2014 12:11:49 +0100
+Subject: [PATCH 12/20] Qx to open quickmark in a new window
+
+Patch by Matthew Carter <jehiva@gmail.com>
+---
+ keymap.h       | 9 +++++++++
+ main.c         | 2 +-
+ vimprobable2.1 | 4 ++++
+ 3 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/keymap.h b/keymap.h
+index 0dda914..3c7dc05 100644
+--- a/keymap.h
++++ b/keymap.h
+@@ -25,6 +25,15 @@ Key keys[] = {
+     { 0,                    GDK_q,          GDK_7,          quickmark,  { .s = "7" } },
+     { 0,                    GDK_q,          GDK_8,          quickmark,  { .s = "8" } },
+     { 0,                    GDK_q,          GDK_9,          quickmark,  { .s = "9" } },
++    { 0,                    GDK_Q,          GDK_1,          quickmark,  { .s = "1", .i = 1 } },
++    { 0,                    GDK_Q,          GDK_2,          quickmark,  { .s = "2", .i = 1 } },
++    { 0,                    GDK_Q,          GDK_3,          quickmark,  { .s = "3", .i = 1 } },
++    { 0,                    GDK_Q,          GDK_4,          quickmark,  { .s = "4", .i = 1 } },
++    { 0,                    GDK_Q,          GDK_5,          quickmark,  { .s = "5", .i = 1 } },
++    { 0,                    GDK_Q,          GDK_6,          quickmark,  { .s = "6", .i = 1 } },
++    { 0,                    GDK_Q,          GDK_7,          quickmark,  { .s = "7", .i = 1 } },
++    { 0,                    GDK_Q,          GDK_8,          quickmark,  { .s = "8", .i = 1 } },
++    { 0,                    GDK_Q,          GDK_9,          quickmark,  { .s = "9", .i = 1 } },
+     { 0,                    0,              GDK_0,          scroll,     {ScrollJumpTo   | DirectionLeft} },
+     { 0,                    0,              GDK_dollar,     scroll,     {ScrollJumpTo   | DirectionRight} },
+     { 0,                    GDK_g,          GDK_g,          scroll,     {ScrollJumpTo   | DirectionTop} },
+diff --git a/main.c b/main.c
+index ef485c1..3ae2813 100644
+--- a/main.c
++++ b/main.c
+@@ -1555,7 +1555,7 @@ quickmark(const Arg *a) {
+         char *ptr = strrchr(buf, '\n');
+         *ptr = '\0';
+         if (strlen(buf)) {
+-            Arg x = { .s = buf };
++            Arg x = { .s = buf, .i = a->i ? TargetNew : TargetCurrent };
+             return open_arg(&x);
+         } else {
+             echo_message(Error, "Quickmark %d not defined", b);
+diff --git a/vimprobable2.1 b/vimprobable2.1
+index 8dcea29..d0e3b9e 100644
+--- a/vimprobable2.1
++++ b/vimprobable2.1
+@@ -307,6 +307,10 @@ Later you can recall the quickmark with
+ 
+ .I q<hotkey>
+ 
++or (to open the quickmark in a new window)
++
++.I Q<hotkey>
++
+ Example:
+ 
+ :set qmark=4
+-- 
+2.1.4
+

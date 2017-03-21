@@ -1,0 +1,85 @@
+--- a/src/configure	2016-05-28 22:55:01.000871082 +0300
++++ b/src/configure	2016-05-28 22:55:19.017688543 +0300
+@@ -10117,9 +10117,9 @@
+ if test "x$enable_rexgen" != xno ; then
+   ac_fn_c_check_header_mongrel "$LINENO" "librexgen/version.h" "ac_cv_header_librexgen_version_h" "$ac_includes_default"
+ if test "x$ac_cv_header_librexgen_version_h" = xyes; then :
+-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing rexgen_version_int" >&5
+-$as_echo_n "checking for library containing rexgen_version_int... " >&6; }
+-if ${ac_cv_search_rexgen_version_int+:} false; then :
++  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing rexgen_version" >&5
++$as_echo_n "checking for library containing rexgen_version... " >&6; }
++if ${ac_cv_search_rexgen_version+:} false; then :
+   $as_echo_n "(cached) " >&6
+ else
+   ac_func_search_save_LIBS=$LIBS
+@@ -10132,11 +10132,11 @@
+ #ifdef __cplusplus
+ extern "C"
+ #endif
+-char rexgen_version_int ();
++char rexgen_version ();
+ int
+ main ()
+ {
+-return rexgen_version_int ();
++return rexgen_version ();
+   ;
+   return 0;
+ }
+@@ -10149,25 +10149,25 @@
+     LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
+   fi
+   if ac_fn_c_try_link "$LINENO"; then :
+-  ac_cv_search_rexgen_version_int=$ac_res
++  ac_cv_search_rexgen_version=$ac_res
+ fi
+ rm -f core conftest.err conftest.$ac_objext \
+     conftest$ac_exeext
+-  if ${ac_cv_search_rexgen_version_int+:} false; then :
++  if ${ac_cv_search_rexgen_version+:} false; then :
+   break
+ fi
+ done
+-if ${ac_cv_search_rexgen_version_int+:} false; then :
++if ${ac_cv_search_rexgen_version+:} false; then :
+ 
+ else
+-  ac_cv_search_rexgen_version_int=no
++  ac_cv_search_rexgen_version=no
+ fi
+ rm conftest.$ac_ext
+ LIBS=$ac_func_search_save_LIBS
+ fi
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_rexgen_version_int" >&5
+-$as_echo "$ac_cv_search_rexgen_version_int" >&6; }
+-ac_res=$ac_cv_search_rexgen_version_int
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_rexgen_version" >&5
++$as_echo "$ac_cv_search_rexgen_version" >&6; }
++ac_res=$ac_cv_search_rexgen_version
+ if test "$ac_res" != no; then :
+   test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
+   if test "$cross_compiling" = yes; then :
+@@ -10178,7 +10178,7 @@
+ else
+   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+-int main() { return ! (rexgen_version_int() >= 0x010400); }
++int main() { return ! (rexgen_version() >= 0x010400); }
+ _ACEOF
+ if ac_fn_c_try_run "$LINENO"; then :
+   using_rexgen=yes
+diff -ru johntheripper-1.8.0.9999.orig/src/configure.ac johntheripper-1.8.0.9999/src/configure.ac
+--- johntheripper-1.8.0.9999.orig/src/configure.ac	2016-05-28 22:55:01.000871082 +0300
++++ johntheripper-1.8.0.9999/src/configure.ac	2016-05-28 22:55:19.021021904 +0300
+@@ -478,8 +478,8 @@
+ # Check for rexgen only if rexgen wanted
+ if test "x$enable_rexgen" != xno ; then
+   AC_CHECK_HEADER([librexgen/version.h],
+-    [AC_SEARCH_LIBS([rexgen_version_int],[rexgen librexgen],
+-      [AC_MSG_CHECKING([librexgen minimum version])] && [AC_TRY_RUN([int main() { return ! (rexgen_version_int() >= 0x010400); }],
++    [AC_SEARCH_LIBS([rexgen_version],[rexgen librexgen],
++      [AC_MSG_CHECKING([librexgen minimum version])] && [AC_TRY_RUN([int main() { return ! (rexgen_version() >= 0x010400); }],
+         AC_MSG_RESULT([usable]) && [using_rexgen=yes],
+     		AC_MSG_RESULT([TOO old. Rexgen not usable!]))]
+   )]

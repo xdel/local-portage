@@ -1,0 +1,36 @@
+--- a/src/librexgen/cmake_install.cmake	2016-05-28 21:38:05.000000000 +0300
++++ b/src/librexgen/cmake_install.cmake	2016-05-28 22:05:22.039233191 +0300
+@@ -33,17 +33,17 @@
+ ENDIF(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
+ 
+ IF(NOT CMAKE_INSTALL_COMPONENT OR "${CMAKE_INSTALL_COMPONENT}" STREQUAL "Unspecified")
+-  IF(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0" AND
+-     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0")
++  IF(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0" AND
++     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0")
+     FILE(RPATH_CHECK
+-         FILE "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0"
++         FILE "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0"
+          RPATH "")
+   ENDIF()
+-  FILE(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/home/jan/projects/rexgen/trunk/src/librexgen/librexgen.so.1.0")
+-  IF(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0" AND
+-     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0")
++  FILE(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}" TYPE SHARED_LIBRARY FILES "/home/jan/projects/rexgen/trunk/src/librexgen/librexgen.so.1.0")
++  IF(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0" AND
++     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0")
+     IF(CMAKE_INSTALL_DO_STRIP)
+-      EXECUTE_PROCESS(COMMAND "/usr/bin/strip" "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0")
++      EXECUTE_PROCESS(COMMAND "/usr/bin/strip" "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0")
+     ENDIF(CMAKE_INSTALL_DO_STRIP)
+   ENDIF()
+ ENDIF(NOT CMAKE_INSTALL_COMPONENT OR "${CMAKE_INSTALL_COMPONENT}" STREQUAL "Unspecified")
+--- a/src/librexgen/lua/rexgen.lua	2016-05-28 20:09:09.000000000 +0300
++++ b/src/librexgen/lua/rexgen.lua	2016-05-28 22:26:52.860088029 +0300
+@@ -1,5 +1,5 @@
+ #!${LUA_BINARY}
+-package.cpath = '${CMAKE_INSTALL_PREFIX}/lib/${librexgen-lua}${CMAKE_SHARED_LIBRARY_SUFFIX}'
++package.cpath = '${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/${librexgen-lua}${CMAKE_SHARED_LIBRARY_SUFFIX}'
+ local rexgen = require '${prj}-lua'
+ 
+ if (#arg ~= 1) then

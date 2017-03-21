@@ -1,0 +1,32 @@
+--- src/common/filesystem.c.orig	2012-09-03 13:38:19.000000000 +0100
++++ src/common/filesystem.c	2012-09-13 23:01:09.360323117 +0100
+@@ -1398,6 +1398,18 @@
+ 	}
+ 
+ 	FS_AddGameDirectory(gdir);
++
++	datadir = YQ2LIB;
++	len = snprintf(gdir, sizeof(gdir), "%s/%s/", datadir, dir);
++
++	printf("Using %s to fetch native libraries\n", gdir);
++
++	if ((len > 0) && (len < sizeof(gdir)) && (gdir[len - 1] == '/'))
++	{
++		gdir[len - 1] = 0;
++	}
++
++	FS_AddGameDirectory(gdir);
+ }
+ #endif
+ 
+--- src/backends/generic/vid.c.orig	2012-09-03 13:38:19.000000000 +0100
++++ src/backends/generic/vid.c	2012-09-14 12:34:46.723657895 +0100
+@@ -232,7 +232,7 @@
+ 	Com_Printf("----- refresher initialization -----\n");
+ 
+ 	path = Cvar_Get("basedir", ".", CVAR_NOSET)->string;
+-	snprintf(fn, MAX_OSPATH, "%s/%s", path, name);
++	snprintf(fn, MAX_OSPATH, "%s/%s", YQ2LIB, name);
+ 
+ 	Sys_LoadLibrary(fn, NULL, &reflib_library);
+ 

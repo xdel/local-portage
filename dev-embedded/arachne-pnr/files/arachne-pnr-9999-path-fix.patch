@@ -1,0 +1,26 @@
+diff --git a/Makefile b/Makefile
+index 57be0cd..7ebcf3f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -14,7 +14,7 @@
+ LIBS = -lm
+ 
+ DESTDIR ?=
+-PREFIX ?= /usr/local
++PREFIX ?= /usr
+ ICEBOX ?= $(PREFIX)/share/icebox
+ 
+ .PHONY: all
+diff --git a/tests/simple/run-test.sh b/tests/simple/run-test.sh
+index 7a455d7..b0db888 100644
+--- a/tests/simple/run-test.sh
++++ b/tests/simple/run-test.sh
+@@ -4,7 +4,7 @@
+ 
+ arachne_pnr="../../bin/arachne-pnr"
+ devices='1k 8k'
+-: ${ICEBOX:=/usr/local/share/icebox}
++: ${ICEBOX:=/usr/share/icebox}
+ 
+ rm -f txt.sum
+ 

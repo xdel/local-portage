@@ -1,0 +1,40 @@
+diff -Nur hsfmodem-7.80.02.05x86_64full_orig/modules/osdiag.c hsfmodem-7.80.02.05x86_64full/modules/osdiag.c
+--- hsfmodem-7.80.02.05x86_64full_orig/modules/osdiag.c	2006-08-14 19:38:52.000000000 +0700
++++ hsfmodem-7.80.02.05x86_64full/modules/osdiag.c	2010-10-26 18:06:30.000000000 +0700
+@@ -256,7 +256,11 @@
+ }
+ #endif /* DMP || DMP_RETAIL */
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36) 
++static long diag_unlocked_ioctl(struct file*  file, unsigned int cmd, unsigned long arg)
++#else
+ static int diag_ioctl(struct inode* inode, struct file*  file, unsigned int cmd, unsigned long arg)
++#endif
+ {
+     diag_unit_t *su = file->private_data;
+     diag_instance_t *pDiag = su->inst.pDiag;
+@@ -598,13 +602,17 @@
+ }
+ 
+ static struct file_operations diag_fops = {
+-    .owner	= THIS_MODULE,
+-    .ioctl	= diag_ioctl,
+-    .fasync	= diag_fasync,
+-    .poll	= diag_poll,
+-    .read	= diag_read,
+-    .open	= diag_open,
+-    .release	= diag_release
++    .owner		= THIS_MODULE,
++    .fasync		= diag_fasync,
++    .poll		= diag_poll,
++    .read		= diag_read,
++    .open		= diag_open,
++    .release		= diag_release,
++#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
++    .ioctl		= diag_ioctl,
++#else
++    .unlocked_ioctl	= diag_unlocked_ioctl
++#endif
+ };
+ 
+ static diag_instance_t *GetDiagInstance(int hwInstNum,

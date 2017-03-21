@@ -1,0 +1,13 @@
+Index: vimprobable2-1.4.2/Makefile
+===================================================================
+--- vimprobable2-1.4.2.orig/Makefile
++++ vimprobable2-1.4.2/Makefile
+@@ -27,7 +27,7 @@ CFLAGS += -g -ggdb -ansi -Wstrict-protot
+ CFLAGS += -Wno-long-long -Wall -Wmissing-declarations
+ endif
+ 
+-PREFIX ?= /usr/local
++PREFIX ?= /usr
+ BINDIR ?= $(PREFIX)/bin
+ MANDIR ?= $(PREFIX)/share/man
+ # Mode bits for normal not executable files

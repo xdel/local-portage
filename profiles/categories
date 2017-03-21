@@ -1,0 +1,9 @@
+app-admin
+dev-perl
+sci-electronics
+cross-h8300-elf
+cross-h8300-coff
+cross-h8300-coff-linux-newlib
+cross-h8300-coff-unknown-newlib
+cross-h8300-hitachi-coff
+cross-msp430-elf

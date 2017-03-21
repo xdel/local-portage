@@ -1,0 +1,165 @@
+--- ./m4/ac_xxx_prog_cxx_cxx0x.m4
++++ ./m4/ac_xxx_prog_cxx_cxx0x.m4
+@@ -0,0 +1,124 @@
++#   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
++#   Free Software Foundation, Inc.
++#   Copyright(C) 2010 Tsukasa Ooi.
++#
++#
++#   This program is free software; you can redistribute it and/or
++#   modify it under the terms of the GNU General Public License as
++#   published by the Free Software Foundation, either version 3 of
++#   the License, or (at your option) any later version.
++#
++#   This program is distributed in the hope that it will be useful,
++#   but WITHOUT ANY WARRANTY; without even the implied warranty of
++#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the 
++#   GNU General Public License for more details.
++#
++#   Under Section 7 of GPL version 3, you are granted additional
++#   permissions described in the Autoconf Configure Script Exception,
++#   version 3.0, as published by the Free Software Foundation.
++#
++#   You should have received a copy of the GNU General Public License
++#   and a copy of the Autoconf Configure Script Exception along with
++#   this program; see the file COPYING.  If not, see 
++#   <http://www.gnu.org/licenses/>.
++#
++#   Written by David MacKenzie, with help from
++#   Akim Demaille, Paul Eggert,
++#   Franc,ois Pinard, Karl Berry, Richard Pixley, Ian Lance Taylor,
++#   Roland McGrath, Noah Friedman, david d zuhn, and many others.
++#
++#   Modified by Tsukasa Ooi.
++#
++#  _AC_XXX_CXX_STD_TRY(STANDARD, STANDARD-DISPLAY-NAME, TEST-PROLOGUE,
++#   TEST-BODY, OPTION-LIST, ACTION-IF-AVAILABLE, ACTION-IF-UNAVAILABLE)
++# ----------------------------------------------------------------------------
++# Check whether the C++ compiler accepts features of STANDARD (e.g `C++0x')
++# by trying to compile a program of TEST-PROLOGUE and TEST-BODY.  If this
++# fails, try again with each compiler option in the space-separated OPTION-LIST;
++# if one helps, append it to CXX.  If eventually successful, run
++# ACTION-IF-AVAILABLE, else ACTION-IF-UNAVAILABLE.
++AC_DEFUN([_AC_XXX_CXX_STD_TRY],
++[AC_MSG_CHECKING([for $CXX option to accept $2])
++AC_CACHE_VAL(ac_xxx_cv_prog_cxx_$1,
++[ac_xxx_cv_prog_cxx_$1=no
++ac_save_CXX=$CXX
++AC_LANG_CONFTEST([AC_LANG_PROGRAM([$3], [$4])])
++for ac_arg in '' $5
++do
++  CXX="$ac_save_CXX $ac_arg"
++  AC_COMPILE_IFELSE([], [ac_xxx_cv_prog_cxx_$1=$ac_arg])
++  test "x$ac_xxx_cv_prog_cxx_$1" != "xno" && break
++done
++rm -f conftest.$ac_ext
++CXX=$ac_save_CXX
++])# AC_CACHE_VAL
++case "x$ac_xxx_cv_prog_cxx_$1" in
++  x)
++    AC_MSG_RESULT([none needed]) ;;
++  xno)
++    AC_MSG_RESULT([unsupported]) ;;
++  *)
++    CXX="$CXX $ac_xxx_cv_prog_cxx_$1"
++    AC_MSG_RESULT([$ac_xxx_cv_prog_cxx_$1]) ;;
++esac
++AS_IF([test "x$ac_xxx_cv_prog_cxx_$1" != xno], [$6], [$7])
++])# _AC_XXX_CXX_STD_TRY
++
++# _AC_XXX_PROG_CXX_CXX0X ([ACTION-IF-AVAILABLE], [ACTION-IF-UNAVAILABLE])
++# ----------------------------------------------------------------
++# If the C++ compiler is not in C++0x mode by default, try to add an
++# option to output variable CXX to make it so.  This macro tries
++# various options that select C++0x on some system or another.  It
++# considers the compiler to be in C++0x mode if it handles cstdint,
++# enum classes and static_assert.
++AC_DEFUN([_AC_XXX_PROG_CXX_CXX0X],
++[_AC_XXX_CXX_STD_TRY([cxx0x],[C++0x],[
++#include <cstdint>
++
++enum class V_I8  : std::int8_t  { Elem1 = INT8_C(8), Elem2 };
++enum class V_I16 : std::int16_t { Elem1 = INT16_C(16), Elem2 };
++enum class V_I32 : std::int32_t { Elem1 = INT32_C(32), Elem2 };
++enum class V_I64 : std::int64_t { Elem1 = INT64_C(64), Elem2 };
++enum class V_U8  : std::uint8_t   { Elem1 = UINT8_C(128), Elem2 };
++enum class V_U16 : std::uint16_t  { Elem1 = UINT16_C(256), Elem2 };
++enum class V_U32 : std::uint32_t  { Elem1 = UINT32_C(512), Elem2 };
++enum class V_U64 : std::uint64_t  { Elem1 = UINT64_C(1024), Elem2 };
++
++static_assert(static_cast<std::int8_t>(V_I8::Elem2) == INT8_C(9),
++	"enum class : std::int8_t check failed.");
++static_assert(static_cast<std::int16_t>(V_I16::Elem2) == INT16_C(17),
++	"enum class : std::int16_t check failed.");
++static_assert(static_cast<std::int32_t>(V_I32::Elem2) == INT32_C(33),
++	"enum class : std::int32_t check failed.");
++static_assert(static_cast<std::int64_t>(V_I64::Elem2) == INT64_C(65),
++	"enum class : std::int64_t check failed.");
++static_assert(static_cast<std::uint8_t>(V_U8::Elem2) == UINT8_C(129),
++	"enum class : std::uint8_t check failed.");
++static_assert(static_cast<std::uint16_t>(V_U16::Elem2) == UINT16_C(257),
++	"enum class : std::uint16_t check failed.");
++static_assert(static_cast<std::uint32_t>(V_U32::Elem2) == UINT32_C(513),
++	"enum class : std::uint32_t check failed.");
++static_assert(static_cast<std::uint64_t>(V_U64::Elem2) == UINT64_C(1025),
++	"enum class : std::uint64_t check failed.");]
++,[
++	return static_cast<int>(
++		(
++			static_cast<int64_t>(V_I64::Elem1) -
++			static_cast<int32_t>(V_I32::Elem1) -
++			static_cast<int16_t>(V_I16::Elem1) -
++			static_cast<int8_t> (V_I8 ::Elem1)
++		) - 
++		static_cast<int64_t>(
++			static_cast<uint64_t>(V_U64::Elem1) +
++			static_cast<uint32_t>(V_U32::Elem1) +
++			static_cast<uint16_t>(V_U16::Elem1) +
++			static_cast<uint8_t> (V_U8 ::Elem1)
++		) - 1
++	);],
++	[-std=gnu++0x -std=c++0x], [$1], [$2])[]dnl
++])# _AC_XXX_PROG_CXX_CXX0X
++
++AC_DEFUN([AC_XXX_PROG_CXX_CXX0X],
++[AC_REQUIRE([AC_PROG_CXX])dnl
++_AC_XXX_PROG_CXX_CXX0X([$1],[$2])
++])
+--- ./configure.in
++++ ./configure.in
+@@ -5,27 +5,30 @@
+ AM_CONFIG_HEADER(config.h)
+ 
+ dnl checks for programs.
+-AC_PROG_CXX
+ AC_PROG_INSTALL
+ AC_PROG_AWK
+ AC_PROG_LN_S
+ 
++AC_LANG([C++])
++AC_XXX_PROG_CXX_CXX0X
++AC_PROG_CXXCPP
++
++AC_CHECK_HEADERS([cstdint])
++
+ dnl GNU gettext
+ AC_CHECK_FUNCS(strchr)
+ AM_GNU_GETTEXT
+ AM_CONDITIONAL(USE_INTLDIR, test "$nls_cv_use_gnu_gettext" = yes)
+ 
+ dnl check if debugging support is requested
+-AC_MSG_CHECKING([wether to enable debugging])
++AC_MSG_CHECKING([whether to enable debugging])
+ AC_ARG_ENABLE(debug,[  --enable-debug          enable debugging],
+ 	if test "$enableval" = yes ;
+ 	then
+ 		AC_MSG_RESULT([yes])
+ 		AC_DEFINE(DEBUG,1,[enable code used only for debugging])
+-		CXXFLAGS="-O2 -Wall -g"
+ 	else
+ 		AC_MSG_RESULT([no])
+-		CXXFLAGS="-O2 -Wall"
+ 	fi
+ 	,
+ 	AC_MSG_RESULT([no])
+

@@ -1,0 +1,58 @@
+From b433658fecbe3a0972a01101e6e5831d88abf3a9 Mon Sep 17 00:00:00 2001
+From: Hannes Schueller <hannes@yllr.net>
+Date: Thu, 7 May 2015 22:11:12 +0200
+Subject: [PATCH 2/2] bugfix for segmentation fault when opening a link in a
+ new window in recent Webkit versions
+
+---
+ main.c | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/main.c b/main.c
+index e13bae5..d90c4c2 100644
+--- a/main.c
++++ b/main.c
+@@ -53,7 +53,9 @@ static void webview_load_committed_cb(WebKitWebView *webview, WebKitWebFrame *fr
+ static void webview_load_finished_cb(WebKitWebView *webview, WebKitWebFrame *frame, gpointer user_data);
+ static gboolean webview_mimetype_cb(WebKitWebView *webview, WebKitWebFrame *frame, WebKitNetworkRequest *request,
+                         char *mime_type, WebKitWebPolicyDecision *decision, gpointer user_data);
+-static void webview_open_js_window_cb(WebKitWebView* temp_view, GParamSpec param_spec);
++static void webview_open_js_window_cb(WebKitWebView *temp_view, WebKitWebFrame *frame, 
++        WebKitNetworkRequest *request, WebKitWebNavigationAction *action, 
++        WebKitWebPolicyDecision *policy, gpointer data);
+ static gboolean webview_new_window_cb(WebKitWebView *webview, WebKitWebFrame *frame, WebKitNetworkRequest *request,
+                         WebKitWebNavigationAction *action, WebKitWebPolicyDecision *decision, gpointer user_data);
+ static WebKitWebView* webview_open_in_new_window_cb(WebKitWebView *webview, WebKitWebFrame *frame, gpointer user_data);
+@@ -208,14 +210,14 @@ webview_load_finished_cb(WebKitWebView *webview, WebKitWebFrame *frame, gpointer
+ }
+ 
+ void
+-webview_open_js_window_cb(WebKitWebView* temp_view, GParamSpec param_spec) {
+-    /* retrieve the URI of the temporary webview */
+-    Arg a = { .i = TargetNew, .s = (char*)webkit_web_view_get_uri(temp_view) };
+-    /* clean up */
+-    webkit_web_view_stop_loading(temp_view);
+-    gtk_widget_destroy(GTK_WIDGET(temp_view));
++webview_open_js_window_cb(WebKitWebView *temp_view, WebKitWebFrame *frame, 
++        WebKitNetworkRequest *request, WebKitWebNavigationAction *action, 
++        WebKitWebPolicyDecision *policy, gpointer data) {
++    Arg a = { .i = TargetNew, .s = (char*)webkit_network_request_get_uri(request)};
+     /* open the requested window */
+     open_arg(&a);
++    /* clean up */
++    gtk_widget_destroy(GTK_WIDGET(temp_view));
+ }
+ 
+ static WebKitWebView *
+@@ -223,7 +225,7 @@ webview_open_in_new_window_cb(WebKitWebView *webview, WebKitWebFrame *frame, gpo
+     /* create a temporary webview to execute the script in */
+     WebKitWebView *temp_view = WEBKIT_WEB_VIEW(webkit_web_view_new());
+     /* wait until the new webview receives its new URI */
+-    g_object_connect(temp_view, "signal::notify::uri", G_CALLBACK(webview_open_js_window_cb), NULL, NULL);
++    g_signal_connect(temp_view, "navigation-policy-decision-requested", G_CALLBACK(webview_open_js_window_cb), NULL);
+     return temp_view;
+ }
+ 
+-- 
+2.5.0
+

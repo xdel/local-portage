@@ -1,0 +1,13 @@
+Index: vimprobable2-1.3.0/utilities.c
+===================================================================
+--- vimprobable2-1.3.0.orig/utilities.c	2013-09-30 09:12:40.452965234 -0500
++++ vimprobable2-1.3.0/utilities.c	2013-09-30 10:57:16.669106315 -0500
+@@ -838,7 +838,7 @@ open_handler_pid(char *uri, GPid *child_
+             	URIHandler *s = (URIHandler *)l->data;
+             	if (strlen(uri) >= strlen(s->handle) && strncmp(s->handle, uri, strlen(s->handle)) == 0) {
+                 	if (strlen(s->handler) > 0) {
+-                    	arg = (uri + strlen(s->handle));
++                    	arg = (uri + strlen(s->handle) + 1);
+                     	strncpy(temp2, s->handler, MAX_SETTING_SIZE);
+                     	temp = strtok(temp2, " ");
+                     	j = 0;

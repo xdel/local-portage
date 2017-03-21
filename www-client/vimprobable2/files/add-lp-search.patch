@@ -1,0 +1,14 @@
+Index: vimprobable2-1.4.2/config.h
+===================================================================
+--- vimprobable2-1.4.2.orig/config.h
++++ vimprobable2-1.4.2/config.h
+@@ -126,6 +126,9 @@ static Searchengine searchengines[] = {
+     { "m",	    "http://manpages.ubuntu.com/cgi-bin/search.py?q=%s" },
+     { "ii",	    "http://www.imdb.com/find?q=%s" },
+     { "l",	    "http://lxr.free-electrons.com/ident?i=%s" },
++    { "lpb",	    "http://pad.lv/%s" },
++    { "lpu",	    "http://pad.lv/~%s" },
++    { "lpp",	    "http://pad.lv/p/%s" },
+ };
+ 
+ static char defaultsearch[MAX_SETTING_SIZE] = "d";

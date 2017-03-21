@@ -1,0 +1,113 @@
+From a39bbab5dcd1a13feac3816993f9c6d83d071b0b Mon Sep 17 00:00:00 2001
+From: Hannes Schueller <hannes@yllr.net>
+Date: Fri, 26 Dec 2014 11:35:34 +0100
+Subject: [PATCH 06/20] introduction of private mode which will disable writing
+ to the history/cookies/closed files when active.
+
+Patch by Matthew Carter <jehiva@gmail.com>
+---
+ config.h        |  3 +++
+ main.c          | 18 ++++++++++++++++--
+ vimprobablerc.5 |  8 ++++++++
+ 3 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/config.h b/config.h
+index bcd7f14..41a1080 100644
+--- a/config.h
++++ b/config.h
+@@ -24,6 +24,7 @@ static const gboolean enableJava        = TRUE; /* FALSE disables Java applets *
+ static const gboolean enablePagecache   = FALSE; /* TRUE turns on the page cache. */
+ static const gboolean javascriptPopups  = FALSE; /* TRUE disables Webkit's popup blocker */
+ static gboolean escape_input_on_load    = TRUE; /* TRUE will disable automatic focusing of input fields via Javascript*/
++static gboolean private_mode            = FALSE; /* TRUE will disable writing to the history file, cookie file and closed file */
+ char temp_dir[MAX_SETTING_SIZE]         = "/tmp"; /* location of temporary files, default will be overridden if TEMPDIR is set */
+ 
+ char downloads_path[MAX_SETTING_SIZE]   = "";
+@@ -81,6 +82,7 @@ static URIHandler uri_handlers[] = {
+ #define             COOKIES_STORAGE_FILENAME    "%s/vimprobable/cookies", client.config.config_base
+ #define             COOKIES_STORAGE_READONLY    FALSE   /* if TRUE new cookies will be lost if you quit */
+ SoupCookieJarAcceptPolicy CookiePolicy = SOUP_COOKIE_JAR_ACCEPT_ALWAYS; /* by default, accept all cookies */
++SoupCookieJarAcceptPolicy CookiePolicyLastOn = SOUP_COOKIE_JAR_ACCEPT_ALWAYS; /* tracking variable for private mode */
+ 
+ 
+ /* font size */
+@@ -233,6 +235,7 @@ static Setting browsersettings[] = {
+     { "inputbox",        NULL,               "",                            FALSE,          TRUE,            FALSE,          FALSE  },
+     { "completioncase",  NULL,               "",                            FALSE,          TRUE,            FALSE,          FALSE  },
+     { "escapeinput",     NULL,               "",                           FALSE,          TRUE,            FALSE,          FALSE  },
++    { "private",         NULL,               "",                           FALSE,          TRUE,            FALSE,          FALSE  },
+     { "strictssl",       NULL,               "",                            FALSE,          TRUE,            FALSE,          FALSE  },
+     { "cabundle",        ca_bundle,          "",                            FALSE,          FALSE,           FALSE,          FALSE  },
+     { "tempdir",         temp_dir,           "",                            FALSE,          FALSE,           FALSE,          FALSE  },
+diff --git a/main.c b/main.c
+index b249665..014497a 100644
+--- a/main.c
++++ b/main.c
+@@ -1379,7 +1379,7 @@ quit(const Arg *arg) {
+     if (uri != NULL) {
+         /* write last URL into status file for recreation with "u" */
+         filename = g_strdup_printf("%s", client.config.config_base);
+-        filename = g_strdup_printf(CLOSED_URL_FILENAME);
++        filename = g_strdup_printf(private_mode ? "/dev/null" : CLOSED_URL_FILENAME);
+         f = fopen(filename, "w");
+         g_free((gpointer *)filename);
+         if (f != NULL) {
+@@ -1794,7 +1794,7 @@ history() {
+                 strncat(entry, title, strlen(title));
+             }
+             n = strlen(entry);
+-            filename = g_strdup_printf(HISTORY_STORAGE_FILENAME);
++            filename = g_strdup_printf(private_mode ? "/dev/null" : HISTORY_STORAGE_FILENAME);
+             f = fopen(filename, "r");
+             if (f != NULL) {
+                 new = (char *)malloc(HISTORY_MAX_ENTRIES * 512 * sizeof(char) + 1);
+@@ -2200,6 +2200,20 @@ process_set_line(char *line) {
+                 gtk_widget_set_visible(client.gui.inputbox, boolval);
+             } else if (strlen(my_pair.what) == 11 && strncmp("escapeinput", my_pair.what, 11) == 0) {
+                 escape_input_on_load = boolval;
++            } else if (strlen(my_pair.what) == 7 && strncmp("private", my_pair.what, 7) == 0) {
++                /* Store the state of the last 'on' cookie state before toggling it off */
++                if (boolval) {
++                    /* Only update this LastOn state if private mode was false before */
++                    if (!private_mode) {
++                        CookiePolicyLastOn = CookiePolicy;
++                    }
++                    CookiePolicy = SOUP_COOKIE_JAR_ACCEPT_NEVER;
++                } else {
++                    /* If here, we are not in private_mode, so restore the cookie policy */
++                    CookiePolicy = CookiePolicyLastOn;
++                }
++                soup_cookie_jar_set_accept_policy(client.net.session_cookie_jar, CookiePolicy);
++                private_mode = boolval; /* Lastly, set the private_mode for use in other areas */
+             } else if (strlen(my_pair.what) == 7 && strncmp("cookies", my_pair.what, 7) == 0) {
+                 /* cookie policy */
+                 if (strncmp(my_pair.value, "on", 2) == 0 || strncmp(my_pair.value, "true", 4) == 0 ||
+diff --git a/vimprobablerc.5 b/vimprobablerc.5
+index 4c2eff4..e37a6b2 100644
+--- a/vimprobablerc.5
++++ b/vimprobablerc.5
+@@ -66,6 +66,10 @@ their default value.
+ .IP completioncase=[true|false]
+ Case sensitive (true) or insensitive tab completion.
+ 
++.IP cookies=[true|false|no_third]
++Cookie policy: accept all cookies, no cookies or all but third party
++cookies.
++
+ .IP homepage=URL
+ Set the URL of the homepage.
+ 
+@@ -86,6 +90,10 @@ FALSE enables Webkit's internal popup blocker. Note: this may interfere
+ with the hint following feature's ability to open links in a new
+ window.
+ 
++.IP private=[true|false]       
++Enable or disable private mode. In private mode, no cookies and no 
++browsing history will be written.
++
+ .IP java=[true|false]       
+ Enable or disable Java applets.
+ 
+-- 
+2.1.4
+

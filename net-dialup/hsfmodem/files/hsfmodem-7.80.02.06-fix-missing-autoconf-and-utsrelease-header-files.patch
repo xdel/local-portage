@@ -1,0 +1,105 @@
+diff -uNr hsfmodem-7.80.02.05x86_64full.orig/modules/Makefile hsfmodem-7.80.02.05x86_64full/modules/Makefile
+--- hsfmodem-7.80.02.05x86_64full.orig/modules/Makefile	2010-07-10 21:50:39.000000000 +0700
++++ hsfmodem-7.80.02.05x86_64full/modules/Makefile	2010-07-10 22:10:02.419776452 +0700
+@@ -60,7 +60,7 @@
+ KERNELSRC_EXISTS := $(shell test -r ${CNXT_KERNELSRC}/include/linux/version.h && echo yes || echo no)
+ endif
+ 
+-UTS_FILE := $(shell if [ -e "${CNXT_KERNELSRC}/include/linux/utsrelease.h" ]; then echo "${CNXT_KERNELSRC}/include/linux/utsrelease.h"; else echo "${CNXT_KERNELSRC}/include/linux/version.h"; fi)
++UTS_FILE := $(shell if [ -e "${CNXT_KERNELSRC}/include/linux/utsrelease.h" ]; then echo "${CNXT_KERNELSRC}/include/linux/utsrelease.h"; else if [ -e "${CNXT_KERNELSRC}/include/generated/utsrelease.h" ]; then echo "${CNXT_KERNELSRC}/include/generated/utsrelease.h" else echo "${CNXT_KERNELSRC}/include/linux/version.h"; fi; fi )
+ 
+ KERNELVER := $(shell echo UTS_RELEASE | gcc -E ${DISTRO_CFLAGS} -I${CNXT_KERNELSRC}/include -include $(UTS_FILE) - | grep '^"' | tr -d '" 	')
+ 
+diff -uNr hsfmodem-7.80.02.05x86_64full.orig/modules/Makefile.orig hsfmodem-7.80.02.05x86_64full/modules/Makefile.orig
+--- hsfmodem-7.80.02.05x86_64full.orig/modules/Makefile.orig	2009-10-22 05:35:59.000000000 +0700
++++ hsfmodem-7.80.02.05x86_64full/modules/Makefile.orig	2010-07-10 22:09:52.589776428 +0700
+@@ -60,8 +60,7 @@
+ KERNELSRC_EXISTS := $(shell test -r ${CNXT_KERNELSRC}/include/linux/version.h && echo yes || echo no)
+ endif
+ 
+-UTS_FILE := $(shell if [ -e "${CNXT_KERNELSRC}/include/linux/utsrelease.h" ]; then echo "${CNXT_KERNELSRC}/include/linux/utsrelease.h"; else echo "${CNXT_KERNELSRC}/include/linux/version.h"; fi)
+-
++UTS_FILE := $(shell if [ -e "${CNXT_KERNELSRC}/include/linux/utsrelease.h" ]; then echo "${CNXT_KERNELSRC}/include/linux/utsrelease.h"; else if [ -e "${CNXT_KERNELSRC}/include/generated/utsrelease.h" ]; then echo "${CNXT_KERNELSRC}/include/generated/utsrelease.h" else echo "${CNXT_KERNELSRC}/include/linux/version.h"; fi; fi )
+ KERNELVER := $(shell echo UTS_RELEASE | gcc -E ${DISTRO_CFLAGS} -I${CNXT_KERNELSRC}/include -include $(UTS_FILE) - | grep '^"' | tr -d '" 	')
+ 
+ KMODS_DIR := /lib/modules/$(KERNELVER)
+diff -uNr hsfmodem-7.80.02.05x86_64full.orig/scripts/cnxtconfig.in hsfmodem-7.80.02.05x86_64full/scripts/cnxtconfig.in
+--- hsfmodem-7.80.02.05x86_64full.orig/scripts/cnxtconfig.in	2010-07-10 21:50:39.000000000 +0700
++++ hsfmodem-7.80.02.05x86_64full/scripts/cnxtconfig.in	2010-07-10 22:27:54.960776129 +0700
+@@ -851,7 +851,11 @@
+ 	if [ -e "${KERNELSRC}/include/linux/utsrelease.h" ]; then
+ 		right_version_file "${KERNELSRC}/include/linux/utsrelease.h"
+ 	else
+-		right_version_file "${KERNELSRC}/include/linux/version.h"
++		if [ -e "${KERNELSRC}/include/generated/utsrelease.h" ]; then
++			right_version_file "${KERNELSRC}/include/generated/utsrelease.h"
++		else
++			right_version_file "${KERNELSRC}/include/linux/version.h"
++		fi
+ 	fi
+ 
+ 	return $?
+@@ -1113,7 +1117,10 @@
+ 
+-	if ! files_present \
++	if ! ( files_present \
+ 		"${KERNELSRC}/include/linux/autoconf.h" \
+-		"${KERNELSRC}/include/linux/version.h"; then
++		"${KERNELSRC}/include/linux/version.h" \
++		||  files_present \
++		"${KERNELSRC}/include/generated/autoconf.h" \
++		"${KERNELSRC}/include/linux/version.h" ); then
+ 		echo ""
+ 		echo "WARNING: missing file ${missing_file}"
+ 		suspect_tree=true
+@@ -1155,7 +1162,8 @@
+ 				fi
+ 				rm -f "${KERNELSRC}/include/linux/.config" \
+ 						"${KERNELSRC}/include/linux/autoconf.h" \
+-						"${KERNELSRC}/include/linux/version.h"
++						"${KERNELSRC}/include/linux/version.h" \
++						"${KERNELSRC}/include/generated/autoconf.h"
+ 				if ! cp -p /boot/config-${OSKERNVERS} "${KERNELSRC}/.config"; then
+ 					echo ""
+ 					echo "Unable to copy files to temporary kernel tree"
+@@ -1172,7 +1180,7 @@
+ 				fi
+ 			fi
+ 		# SuSE has copies of autoconf.h and version.h available under /boot
+-		elif [ -d "${KERNELSRC}/include/linux" -a -f /boot/vmlinuz.autoconf.h -a -f /boot/vmlinuz.version.h ] && right_version_file /boot/vmlinuz.version.h; then
++		elif [ -d "${KERNELSRC}/include/linux" -o -d "${KERNELSRC}/include/generated" -a -f /boot/vmlinuz.autoconf.h -a -f /boot/vmlinuz.version.h ] && right_version_file /boot/vmlinuz.version.h; then
+ 			echo ""
+ 			echo "However, proper /boot/vmlinuz.{autoconf.h,version.h} were found."
+ 			if ask_yesno "Would you like to try using them (in a temporary kernel tree)? [yes] " 0; then
+@@ -1184,8 +1192,10 @@
+ 				fi
+ 				rm -f "${KERNELSRC}/include/linux/.config" \
+ 						"${KERNELSRC}/include/linux/autoconf.h" \
++						"${KERNELSRC}/include/generated/autoconf.h" \
+ 						"${KERNELSRC}/include/linux/version.h"
+-				if ! cp -p /boot/vmlinuz.autoconf.h "${KERNELSRC}/include/linux/autoconf.h" || \
++				if ! ( cp -p /boot/vmlinuz.autoconf.h "${KERNELSRC}/include/linux/autoconf.h" || \
++					cp -p /boot/vmlinuz.autoconf.h "${KERNELSRC}/include/generated/autoconf.h" ) || \
+ 					! cp -p /boot/vmlinuz.version.h "${KERNELSRC}/include/linux/version.h"; then
+ 					echo ""
+ 					echo "Unable to copy files to temporary kernel tree"
+@@ -1203,8 +1213,9 @@
+	fi
+ 
+	# are we ok now?
+-	if [ ! -f "${KERNELSRC}/include/linux/version.h" \
+-			-o ! -f "${KERNELSRC}/include/linux/autoconf.h" ]; then
++	if test ! -f "${KERNELSRC}/include/linux/version.h" \
++		-o ! -f "${KERNELSRC}/include/linux/autoconf.h" && \
++		test ! -f "${KERNELSRC}/include/linux/version.h" -o ! -f "${KERNELSRC}/include/generated/autoconf.h" ; then
+		remove_temp_kernel_tree
+		kernelrebuild_instructions
+		return 1
+@@ -2418,6 +2429,7 @@
+ 			dump_file /lib/modules/${OSKERNVERS}/build/.config
+ 			dump_file /lib/modules/${OSKERNVERS}/build/include/linux/version.h
+ 			dump_file /lib/modules/${OSKERNVERS}/build/include/linux/autoconf.h
++			dump_file /lib/modules/${OSKERNVERS}/build/include/generated/autoconf.h
+ 			dump_file /lib/modules/${OSKERNVERS}/build/include/linux/autoconf-up.h
+ 			dump_file /lib/modules/${OSKERNVERS}/build/include/linux/rhconfig.h
+ 			dump_file /lib/modules/${OSKERNVERS}/build/include/linux/modules/ksyms.ver

@@ -1,0 +1,15 @@
+--- a/eselect-java-0.3.0/src/scripts/run-java-tool.bash.in
++++ b/eselect-java-0.3.0/src/scripts/run-java-tool.bash.in
+@@ -2,9 +2,9 @@
+ 
+ tool=${0##*/}
+ 
+-if [ "${tool}" = "javaws" ] && [ -x "@GENTOO_PORTAGE_EPREFIX@/usr/bin/itweb-javaws" ]; then
+-	exec "@GENTOO_PORTAGE_EPREFIX@/usr/bin/itweb-javaws" "${@}"
+-fi
++#if [ "${tool}" = "javaws" ] && [ -x "@GENTOO_PORTAGE_EPREFIX@/usr/bin/itweb-javaws" ]; then
++#	exec "@GENTOO_PORTAGE_EPREFIX@/usr/bin/itweb-javaws" "${@}"
++#fi
+ 
+ user_vm="${HOME}/.gentoo@GENTOO_PORTAGE_EPREFIX@/java-config-2/current-user-vm"
+ system_vm="@GENTOO_PORTAGE_EPREFIX@/etc/java-config-2/current-system-vm"

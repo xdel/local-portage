@@ -1,0 +1,185 @@
+From a51496841562a5b0ebad0ca7e41d5e6c862e5217 Mon Sep 17 00:00:00 2001
+From: Hannes Schueller <hannes@yllr.net>
+Date: Fri, 26 Dec 2014 12:18:56 +0100
+Subject: [PATCH 14/20] whitespace fixes by Matthew Carter <jehiva@gmail.com>
+
+---
+ config.h |  2 +-
+ main.c   | 42 +++++++++++++++++++++---------------------
+ 2 files changed, 22 insertions(+), 22 deletions(-)
+
+diff --git a/config.h b/config.h
+index a2c81b2..c737a74 100644
+--- a/config.h
++++ b/config.h
+@@ -166,7 +166,7 @@ Command commands[COMMANDSIZE] = {
+     { "jumpright",                                      scroll,           {ScrollJumpTo   | DirectionRight} },
+     { "jumptop",                                        scroll,           {ScrollJumpTo   | DirectionTop} },
+     { "jumpbottom",                                     scroll,           {ScrollJumpTo   | DirectionBottom} },
+-    { "pageup",                                         scroll,           {ScrollMove     | DirectionTop      | UnitPage} },	
++    { "pageup",                                         scroll,           {ScrollMove     | DirectionTop      | UnitPage} },
+     { "pagedown",                                       scroll,           {ScrollMove     | DirectionBottom   | UnitPage} },
+     { "navigationback",   	                            navigate,         {NavigationBack} },
+     { "navigationforward",	                            navigate,         {NavigationForward} },
+diff --git a/main.c b/main.c
+index 584f576..ca0bebe 100644
+--- a/main.c
++++ b/main.c
+@@ -1078,7 +1078,7 @@ static gboolean
+ open_inspector(const Arg * arg) {
+     gboolean inspect_enabled;
+     WebKitWebSettings *settings;
+-    State *state = &client.state;    
++    State *state = &client.state;
+ 
+     settings = webkit_web_view_get_settings(client.gui.webview);
+     g_object_get(G_OBJECT(settings), "enable-developer-extras", &inspect_enabled, NULL);
+@@ -1254,7 +1254,7 @@ open_arg(const Arg *arg) {
+         new = NULL;
+         /* check for external handlers */
+         if (open_handler(s))
+-            return TRUE;        
++            return TRUE;
+         /* check for search engines */
+         p = strchr(s, ' ');
+         if (!p) {
+@@ -1429,7 +1429,7 @@ revive(const Arg *arg) {
+     return FALSE;
+ }
+ 
+-static 
++static
+ gboolean print_frame(const Arg *arg)
+ {
+     WebKitWebFrame *frame = webkit_web_view_get_main_frame(client.gui.webview);
+@@ -1692,7 +1692,7 @@ zoom(const Arg *arg) {
+     return TRUE;
+ }
+ 
+-gboolean 
++gboolean
+ fake_key_event(const Arg *a) {
+     if(!client.state.embed) {
+         return FALSE;
+@@ -1702,7 +1702,7 @@ fake_key_event(const Arg *a) {
+         echo_message(Error, "Couldn't find the XDisplay.");
+         return FALSE;
+     }
+-       
++
+     XKeyEvent xk;
+     xk.display = xdpy;
+     xk.subwindow = None;
+@@ -1722,12 +1722,12 @@ fake_key_event(const Arg *a) {
+         echo_message(Error, "Couldn't translate %s to keysym", a->s );
+         return FALSE;
+     }
+-    
++
+     if( (xk.keycode = XKeysymToKeycode(xdpy, keysym)) == NoSymbol ) {
+         echo_message(Error, "Couldn't translate keysym to keycode");
+         return FALSE;
+     }
+-   
++
+     xk.type = KeyPress;
+     if( !XSendEvent(xdpy, client.state.embed, True, KeyPressMask, (XEvent *)&xk) ) {
+         echo_message(Error, "XSendEvent failed");
+@@ -1958,7 +1958,7 @@ open_editor(const Arg *arg) {
+         g_free(message);
+         return FALSE;
+     }
+-   
++
+     /* mark the active text box as "under processing" */
+     jsapi_evaluate_script(
+         "editElem.disabled = true;"
+@@ -2056,7 +2056,7 @@ _resume_from_editor(GPid child_pid, int child_status, gpointer data) {
+     g_spawn_close_pid(child_pid);
+     gchar *value = NULL, *message = NULL;
+     gchar *temp_file_name = data;
+-    gchar buffer[BUF_SIZE] = ""; 
++    gchar buffer[BUF_SIZE] = "";
+     gchar *buf_ptr = buffer;
+     int char_read;
+ 
+@@ -2084,7 +2084,7 @@ _resume_from_editor(GPid child_pid, int child_status, gpointer data) {
+         /* this would be too weird to even emit an error message */
+         goto error_exit;
+     }
+-    jsapi_evaluate_script("editElem.value = '';", 
++    jsapi_evaluate_script("editElem.value = '';",
+         &value, &message);
+     g_free(value);
+     g_free(message);
+@@ -2382,16 +2382,16 @@ process_set_line(char *line) {
+             } else if (strlen(my_pair.what) == 7 && strncmp("cookies", my_pair.what, 7) == 0) {
+                 /* cookie policy */
+                 if (strncmp(my_pair.value, "on", 2) == 0 || strncmp(my_pair.value, "true", 4) == 0 ||
+-                        strncmp(my_pair.value, "ON", 2) == 0 || strncmp(my_pair.value, "TRUE", 4) == 0 || 
++                        strncmp(my_pair.value, "ON", 2) == 0 || strncmp(my_pair.value, "TRUE", 4) == 0 ||
+                         strncmp(my_pair.value, "all", 3) == 0 || strncmp(my_pair.value, "ALL", 3) == 0) {
+                     CookiePolicy = SOUP_COOKIE_JAR_ACCEPT_ALWAYS;
+-                } else if (strncmp(my_pair.value, "off", 3) == 0 || strncmp(my_pair.value, "false", 5) == 0 || 
+-                        strncmp(my_pair.value, "OFF", 3) == 0 || strncmp(my_pair.value, "FALSE", 5) == 0 || 
+-                        strncmp(my_pair.value, "never", 5) == 0 || strncmp(my_pair.value, "NEVER", 5) == 5 || 
++                } else if (strncmp(my_pair.value, "off", 3) == 0 || strncmp(my_pair.value, "false", 5) == 0 ||
++                        strncmp(my_pair.value, "OFF", 3) == 0 || strncmp(my_pair.value, "FALSE", 5) == 0 ||
++                        strncmp(my_pair.value, "never", 5) == 0 || strncmp(my_pair.value, "NEVER", 5) == 5 ||
+                         strncmp(my_pair.value, "none", 4) == 0 || strncmp(my_pair.value, "NONE", 4) == 0) {
+                     CookiePolicy = SOUP_COOKIE_JAR_ACCEPT_NEVER;
+-                } else if (strncmp(my_pair.value, "origin", 6) == 0 || strncmp(my_pair.value, "ORIGIN", 6) == 0 || 
+-                        strncmp(my_pair.value, "no_third", 8) == 0 || strncmp(my_pair.value, "NO_THIRD", 8) == 0 || 
++                } else if (strncmp(my_pair.value, "origin", 6) == 0 || strncmp(my_pair.value, "ORIGIN", 6) == 0 ||
++                        strncmp(my_pair.value, "no_third", 8) == 0 || strncmp(my_pair.value, "NO_THIRD", 8) == 0 ||
+                         strncmp(my_pair.value, "no third", 8) == 0 || strncmp(my_pair.value, "NO THIRD", 8) == 0) {
+                     CookiePolicy = SOUP_COOKIE_JAR_ACCEPT_NO_THIRD_PARTY;
+                 } else {
+@@ -2517,7 +2517,7 @@ search_tag(const Arg * a) {
+         t = strlen(s) - 1;
+         while (isspace(s[t]))
+             t--;
+-        if (s[t] != ']') continue;      
++        if (s[t] != ']') continue;
+         while (t > 0) {
+             if (s[t] == ']') {
+                 if (!intag)
+@@ -2532,7 +2532,7 @@ search_tag(const Arg * a) {
+                         while (k < intag)
+                             foundtag[i++] = s[k++];
+                         foundtag[i] = '\0';
+-                        /* foundtag now contains the tag */	
++                        /* foundtag now contains the tag */
+                         if (strlen(foundtag) < MAXTAGSIZE && strcmp(tag, foundtag) == 0) {
+                             i = 0;
+                             while (isspace(s[i])) i++;
+@@ -2983,7 +2983,7 @@ setup_cookies()
+  * for not, it's limited to handling cookies
+  */
+ void
+-new_generic_request(SoupSession *session, SoupMessage *soup_msg, gpointer unused) 
++new_generic_request(SoupSession *session, SoupMessage *soup_msg, gpointer unused)
+ {
+     SoupMessageHeaders *soup_msg_h;
+     SoupURI *uri;
+@@ -3025,7 +3025,7 @@ handle_response_headers(SoupMessage *soup_msg, gpointer unused)
+ 		{
+ 			SoupDate *soup_date;
+ 			cookie = soup_cookie_copy((SoupCookie *)resp_cookie->data);
+-	
++
+ 			if (client.config.cookie_timeout && cookie->expires == NULL) {
+ 				soup_date = soup_date_new_from_time_t(time(NULL) + client.config.cookie_timeout * 10);
+ 				soup_cookie_set_expires(cookie, soup_date);
+@@ -3041,7 +3041,7 @@ handle_response_headers(SoupMessage *soup_msg, gpointer unused)
+ 				soup_cookie_jar_add_cookie(client.net.file_cookie_jar, cookie);
+ 			}
+ 		}
+-	
++
+ 		soup_cookies_free(cookie_list);
+ 	}
+ 
+-- 
+2.1.4
+

@@ -1,0 +1,74 @@
+From cbf47b201a04aaf5165595c308dd76bb42b185a9 Mon Sep 17 00:00:00 2001
+From: Hannes Schueller <hannes@yllr.net>
+Date: Fri, 26 Dec 2014 11:19:24 +0100
+Subject: [PATCH 04/20] bugfix: only trigger a download when status code is in
+ the 2xx range
+
+---
+ main.c | 21 +++++++++++++--------
+ 1 file changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/main.c b/main.c
+index bc4659f..b249665 100644
+--- a/main.c
++++ b/main.c
+@@ -133,7 +133,7 @@ static char *get_cookies(SoupURI *soup_uri);
+ static void load_all_cookies(void);
+ static void new_generic_request(SoupSession *soup_ses, SoupMessage *soup_msg, gpointer unused);
+ static void update_cookie_jar(SoupCookieJar *jar, SoupCookie *old, SoupCookie *new);
+-static void handle_cookie_request(SoupMessage *soup_msg, gpointer unused);
++static void handle_response_headers(SoupMessage *soup_msg, gpointer unused);
+ #endif
+ 
+ Client client;
+@@ -234,9 +234,15 @@ webview_new_window_cb(WebKitWebView *webview, WebKitWebFrame *frame, WebKitNetwo
+ gboolean
+ webview_mimetype_cb(WebKitWebView *webview, WebKitWebFrame *frame, WebKitNetworkRequest *request,
+                         char *mime_type, WebKitWebPolicyDecision *decision, gpointer user_data) {
++    SoupMessage *msg = webkit_network_request_get_message(request);
++    guint http_status = msg->status_code;
++
+     if (webkit_web_view_can_show_mime_type(webview, mime_type) == FALSE) {
+-        webkit_web_policy_decision_download(decision);
+-        return TRUE;
++        if (SOUP_STATUS_IS_SUCCESSFUL(http_status)) {
++            webkit_web_policy_decision_download(decision);
++            return TRUE;
++        }
++        return FALSE;
+     } else {
+         return FALSE;
+     }
+@@ -2792,9 +2798,8 @@ setup_cookies()
+ 			G_CALLBACK(update_cookie_jar), NULL);
+ }
+ 
+-/* TA:  XXX - we should be using this callback for any header-requests we
+- *      receive (hence the name "new_generic_request" -- but for now, its use
+- *      is limited to handling cookies.
++/* This function could be used for any header requests we receive
++ * for not, it's limited to handling cookies
+  */
+ void
+ new_generic_request(SoupSession *session, SoupMessage *soup_msg, gpointer unused) 
+@@ -2812,7 +2817,7 @@ new_generic_request(SoupSession *session, SoupMessage *soup_msg, gpointer unused
+         g_free(cookie_str);
+     }
+ 
+-    g_signal_connect_after(G_OBJECT(soup_msg), "got-headers", G_CALLBACK(handle_cookie_request), NULL);
++    g_signal_connect_after(G_OBJECT(soup_msg), "got-headers", G_CALLBACK(handle_response_headers), NULL);
+ 
+     return;
+ }
+@@ -2827,7 +2832,7 @@ get_cookies(SoupURI *soup_uri) {
+ }
+ 
+ void
+-handle_cookie_request(SoupMessage *soup_msg, gpointer unused)
++handle_response_headers(SoupMessage *soup_msg, gpointer unused)
+ {
+ 	GSList *resp_cookie = NULL, *cookie_list;
+ 	SoupCookie *cookie;
+-- 
+2.1.4
+
