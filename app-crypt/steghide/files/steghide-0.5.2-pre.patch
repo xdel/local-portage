@@ -1,0 +1,1610 @@
+--- a/configure.in
++++ b/configure.in
+@@ -1,7 +1,7 @@
+ dnl Process this file with autoconf to produce a configure script.
+ AC_INIT(src/main.cc)
+ AC_CANONICAL_SYSTEM
+-AM_INIT_AUTOMAKE(steghide, 0.5.1)
++AM_INIT_AUTOMAKE(steghide, pre0.5.2)
+ AM_CONFIG_HEADER(config.h)
+ 
+ dnl checks for programs.
+--- a/po/POTFILES.in
++++ b/po/POTFILES.in
+@@ -59,6 +59,8 @@
+ src/JpegSampleValue.h
+ src/MCryptPP.cc
+ src/MCryptPP.h
++src/MarkerRestricted.cc
++src/MarkerRestricted.h
+ src/MHashKeyGen.cc
+ src/MHashKeyGen.h
+ src/MHashPP.cc
+--- a/src/Arguments.cc
++++ b/src/Arguments.cc
+@@ -21,6 +21,7 @@
+ #include <cstring>
+ #include <iostream>
+ #include <string>
++#include <vector>
+ 
+ #include "MCryptPP.h"
+ #include "Terminal.h"
+@@ -73,6 +74,7 @@
+ 		if (parse_Passphrase(curarg)) continue ;
+ 		if (parse_Checksum(curarg)) continue ;
+ 		if (parse_Compression(curarg)) continue ;
++		if (parse_Marker(curarg)) continue ;
+ 		if (parse_EmbedEmbFn(curarg)) continue ;
+ 		if (parse_Encryption(curarg)) continue ;
+ 		if (parse_Radius(curarg)) continue ;
+@@ -81,7 +83,14 @@
+ 		if (parse_Verbosity(curarg)) continue ;
+ 		if (parse_Debug(curarg)) continue ; // TODO - rename Debug -> Undocumented
+ 
+-		throw ArgError (_("unknown argument \"%s\"."), curarg->c_str()) ;
++		if (Command.getValue() == INFO) {
++			// if none of the parse_* functions recognizes curarg as argument, assume it's a filename for info
++			RestOfArguments.push_back (*curarg) ;
++			curarg++ ;
++		}
++		else {
++			throw ArgError (_("unknown argument \"%s\"."), curarg->c_str()) ;
++		}
+ 	}
+ 
+ 	// (command-specific) argument post-processing 
+@@ -135,22 +144,7 @@
+ 		++curarg ;
+ 
+ 		if (curarg == TheArguments.end()) {
+-			throw ArgError (_("you have to suppy a filename to the \"%s\" command."), CommandString.c_str()) ;
+-		}
+-		else {
+-			parse_Passphrase (curarg) ; // try: maybe -p is first argument
+-
+-			if (*curarg == "-") {
+-				CvrFn.setValue ("") ;
+-			}
+-			else {
+-				CvrFn.setValue (*curarg) ;
+-			}
+-			++curarg ;
+-
+-			if (curarg != TheArguments.end()) {
+-				parse_Passphrase (curarg) ;
+-			}
++			throw ArgError (_("you have to supply at least a filename to the \"%s\" command."), CommandString.c_str()) ;
+ 		}
+ 	}
+ 	else if (*curarg == "encinfo" || *curarg == "--encinfo") {
+@@ -592,6 +586,34 @@
+ 	return found ;
+ }
+ 
++bool Arguments::parse_Marker (ArgIt& curarg)
++{
++	bool found = false ;
++
++	if (*curarg == "-m" || *curarg == "--marker") {
++		found = true ;
++
++		if (Command.getValue() != EMBED && Command.getValue() != EXTRACT) {
++			throw ArgError (_("the argument \"%s\" can only be used with the \"%s\" and \"%s\" commands."), curarg->c_str(), "embed", "extract") ;
++		}
++
++		if (Marker.is_set()) {
++			throw ArgError (_("the marker argument can be used only once.")) ;
++		}
++
++		++curarg ;
++		if ((curarg != TheArguments.end()) && ((*curarg)[0] != '-')) {
++			if (Command.getValue() != EMBED) {
++				throw ArgError (_("the length specification of the marker argument can only be used with the embed command.")) ;
++			}
++			// save the length specification
++			Marker = *curarg ;
++			++curarg ;
++		}
++	}
++
++	return found ;
++}
+ bool Arguments::parse_Force (ArgIt& curarg)
+ {
+ 	bool found = false ;
+@@ -621,8 +643,8 @@
+ 	if (*curarg == "-q" || *curarg == "--quiet") {
+ 		found = true ;
+ 
+-		if (Command.getValue() != EMBED && Command.getValue() != EXTRACT) {
+-			throw ArgError (_("the argument \"%s\" can only be used with the \"%s\" and \"%s\" commands."), curarg->c_str(), "embed", "extract") ;
++		if (Command.getValue() != EMBED && Command.getValue() != EXTRACT && Command.getValue() != INFO) {
++			throw ArgError (_("the argument \"%s\" can only be used with the commands \"%s\", \"%s\" and \"%s\"."), curarg->c_str(), "embed", "extract", "info") ;
+ 		}
+ 
+ 		if (Verbosity.is_set()) {
+@@ -723,7 +745,14 @@
+ 		++curarg ;
+ 	}
+ 	else if (*curarg == "--check") {
+-		// TODO usual error checking (omitted due to message freeze)
++		if (Command.getValue() != EMBED) {
++			throw ArgError (_("the argument \"%s\" can only be used with the \"%s\" command."), curarg->c_str(), "embed") ;
++		}
++
++		if (Check.is_set()) {
++			throw ArgError (_("the check argument can be used only once.")) ;
++		}
++
+ 		Check.setValue (true) ;
+ 
+ 		found = true ;
+@@ -799,6 +828,7 @@
+ 	EncMode.setValue (Default_EncMode, false) ;
+ 	Checksum.setValue (Default_Checksum, false) ;
+ 	Compression.setValue (Default_Compression, false) ;
++	Marker.setValue ("", false) ;
+ 	EmbedEmbFn.setValue (Default_EmbedEmbFn, false) ;
+ 	ExtFn.setValue ("", false) ;
+ 	Passphrase.setValue ("", false) ;
+--- a/src/Arguments.h
++++ b/src/Arguments.h
+@@ -68,8 +68,9 @@
+ 	/// the stego file name, "" if stdout/stdin
+ 	ArgString		StgFn ;
+ 	ArgString		Passphrase ;
+-	ArgBool			Checksum ;
+ 	ArgInt			Compression ;
++	ArgString		Marker ;
++	ArgBool			Checksum ;
+ 	ArgBool			EmbedEmbFn ;
+ 	ArgEncAlgo		EncAlgo ;
+ 	ArgEncMode		EncMode ;
+@@ -84,6 +85,9 @@
+ 	ArgUInt			GmlGraphRecDepth ;
+ 	ArgUInt			GmlStartVertex ;
+ 
++	/// for the info command all unknown arguments are put herein
++	std::vector<std::string> RestOfArguments ;
++
+ 	std::string getPassphrase (bool doublecheck = false) ;
+ 
+ 	private:
+@@ -127,6 +131,7 @@
+ 	bool parse_Passphrase (ArgIt& curarg) ;
+ 	bool parse_Checksum (ArgIt& curarg) ;
+ 	bool parse_Compression (ArgIt& curarg) ;
++	bool parse_Marker (ArgIt& curarg) ;
+ 	bool parse_EmbedEmbFn (ArgIt& curarg) ;
+ 	bool parse_Encryption (ArgIt& curarg) ;
+ 	bool parse_Radius (ArgIt& curarg) ;
+--- a/src/AuFile.cc
++++ b/src/AuFile.cc
+@@ -228,3 +228,40 @@
+ 	retval.push_back (new DFSAPHeuristic (g, m)) ;
+ 	return retval ;
+ }
++
++bool AuFile::parseMarkerRestriction (std::string _spcstr, UWORD32* _pre, UWORD32* _post) const
++{
++	bool found = false ;
++
++	if (CvrStgFile::parseMarkerRestriction( _spcstr, _pre, _post )) {
++		found = true ; // _spcstr could be parsed by generic parser
++	}
++	else {
++		float nseconds = 0.0 ;
++		if ( std::string( _spcstr, _spcstr.size() - 2, 2 ) == "ms" ) {
++			// given in milliseconds
++			float tmp = 0.0 ;
++			sscanf ( std::string( _spcstr, 0, _spcstr.size() - 2 ).c_str(), "%f", &tmp) ;
++			nseconds = tmp / 1000.0 ;
++			found = true ;
++		}
++		else if ( std::string( _spcstr, _spcstr.size() - 1, 1 ) == "s" ) {
++			// given in seconds
++			sscanf ( std::string( _spcstr, 0, _spcstr.size() - 1 ).c_str(), "%f", &nseconds) ;
++			found = true ;
++		}
++
++		if ( found ) {
++			UWORD32 nsamples = (UWORD32) (nseconds * Header.samplerate) ;
++			*_pre = *_post = nsamples ;
++		}
++	}
++
++	return found ;
++}
++
++void AuFile::getDefaultMarkerRestriction (UWORD32* _pre, UWORD32* _post) const
++{
++	*_pre = 100 ; // FIXME - what is a good value here ? - do some experiments...
++	*_post = 100 ;
++}
+--- a/src/AuFile.h
++++ b/src/AuFile.h
+@@ -52,6 +52,9 @@
+ 	SampleValue* getSampleValue (SamplePos pos) const
+ 		{ return Data->getSampleValue(pos) ; } ;
+ 
++	bool parseMarkerRestriction (std::string _spcstr, UWORD32* _pre, UWORD32* _post) const ;
++	void getDefaultMarkerRestriction (UWORD32* _pre, UWORD32* _post) const ;
++
+ 	private:
+ 	enum ENCODING { MULAW8 = 1, PCM8 = 2, PCM16 = 3 } ;
+ 	class AuHeader {
+--- a/src/AudioSampleValue.h
++++ b/src/AudioSampleValue.h
+@@ -53,6 +53,8 @@
+ 	ValueType getValue (void) const { return Value ; } ;
+ 
+ 	SampleValue* getNearestTargetSampleValue (EmbValue t) const ;
++	SampleValue* getNearestBitTargetSampleValue (BIT b) const
++		{ return getNearestTargetSampleValue( b ) ; } ; // works only for modulus = 2 !
+ 	UWORD32 calcDistance (const SampleValue* s) const ;
+ 	std::string getName (void) const ;
+ 
+--- a/src/BitString.cc
++++ b/src/BitString.cc
+@@ -257,6 +257,18 @@
+ 	return *this ;
+ }
+ 
++BitString& BitString::xorreduce (const unsigned long len)
++{
++	myassert( len <= getLength() ) ;
++	BitString backup = BitString( *this ) ;
++	truncate( 0, len ) ;
++	do {
++		backup.truncate( len, backup.getLength() ) ; // cut off first len bits of backup
++		operator^=( backup ) ; // and xor with this BitString
++	} while (backup.getLength() >= len) ;
++	return *this ;
++}
++
+ BYTE BitString::getNAry (unsigned long p) const
+ {
+ 	unsigned long pbinary = p * ArityNBits ;
+@@ -416,9 +428,9 @@
+ 	for (unsigned long i = 0 ; i < Length ; i++) {
+ 		unsigned long bytepos = BYTEPOS (i) ;
+ 		unsigned int bitpos = BITPOS (i) ;
+-		BIT bit = (Data[bytepos] & (1 << bitpos)) >> bitpos ;
+-		bit ^= v[i] ;
+-		Data[bytepos] = (Data[bytepos] & ~(1 << bitpos)) | (bit << bitpos) ;
++		BIT bit = (Data[bytepos] & (1 << bitpos)) >> bitpos ; // get bit from this BitString...
++		bit ^= v[i] ; // ..xor it...
++		Data[bytepos] = (Data[bytepos] & ~(1 << bitpos)) | (bit << bitpos) ; // ... and write it back
+ 	}
+ 	return *this ;
+ }
+--- a/src/BitString.h
++++ b/src/BitString.h
+@@ -149,7 +149,7 @@
+ 	 * cut some bits out of this BitString
+ 	 * \param s the index of the first bit to be removed from this BitString
+ 	 * \param l the total number of bits to be removed
+-	 * \return the BitString containing of the bits [s...s+(l-1)] of this BitString
++	 * \return the BitString containing the bits [s...s+(l-1)] of this BitString
+ 	 *
+ 	 * After calling cutBits, this BitString consists of the bits 0,...,s-1,s+l,... .
+ 	 **/
+@@ -193,6 +193,15 @@
+ 	BitString& padRandom (const unsigned long mult) ;
+ 
+ 	/**
++	 * reduce the length of this BitString by xor operations
++	 * \param len the desired length
++	 *
++	 * This operation repeatedly xors the first len bits with blocks of length
++	 * len from the rest of the BitString until there are no more blocks.
++	 **/
++	BitString& xorreduce (const unsigned long len) ;
++
++	/**
+ 	 * get an n-ary digit from this BitString
+ 	 * \param p the position (in the n-ary representation of this BitString)
+ 	 * \return the p-th n-ary digit
+--- a/src/BmpPaletteSampleValue.cc
++++ b/src/BmpPaletteSampleValue.cc
+@@ -55,6 +55,28 @@
+ 	return ((SampleValue*) sv_mindist) ;
+ }
+ 
++SampleValue* BmpPaletteSampleValue::getNearestBitTargetSampleValue (BIT b) const
++{
++	BmpPaletteSampleValue* sv_mindist = NULL ;
++	UWORD32 mindist = UWORD32_MAX ;
++	for (unsigned int i = 0 ; i < Palette->getSize() ; i++) {
++		if ((calcEValue(i) & 1) == b) {
++			BmpPaletteSampleValue* destsv = new BmpPaletteSampleValue (i) ;
++			UWORD32 curdist = calcDistance (destsv) ;
++			if (curdist < mindist) {
++				delete sv_mindist ;
++				sv_mindist = destsv ;
++				mindist = curdist ;
++			}
++			else {
++				delete destsv ;
++			}
++		}
++	}
++	myassert (sv_mindist != NULL) ;
++	return ((SampleValue*) sv_mindist) ;
++}
++
+ std::string BmpPaletteSampleValue::getName () const
+ {
+ 	char buf[128] ;
+--- a/src/BmpPaletteSampleValue.h
++++ b/src/BmpPaletteSampleValue.h
+@@ -35,6 +35,7 @@
+ 	BmpPaletteSampleValue (BYTE i) ;
+ 
+ 	SampleValue* getNearestTargetSampleValue (EmbValue t) const ;
++	SampleValue* getNearestBitTargetSampleValue (BIT b) const ;
+ 	std::string getName (void) const ;
+ 
+ 	BYTE getIndex (void) const { return Index ; } ;
+--- a/src/BmpRGBSampleValue.cc
++++ b/src/BmpRGBSampleValue.cc
+@@ -47,6 +47,78 @@
+ 	return (UWORD32) (dr*dr + dg*dg + db*db) ;
+ }
+ 
++SampleValue *BmpRGBSampleValue::getNearestBitTargetSampleValue (BIT b) const
++{
++	std::vector<RGBTriple> candidates ;
++
++	BYTE cube[3][2] ;
++	cube[RED][UP] = Color.Red ; cube[RED][DOWN] = Color.Red ;
++	cube[GREEN][UP] = Color.Green ; cube[GREEN][DOWN] = Color.Green ;
++	cube[BLUE][UP] = Color.Blue ; cube[BLUE][DOWN] = Color.Blue ;
++
++	do {
++		cube[RED][UP] = plus(cube[RED][UP], 1) ;
++		cube[RED][DOWN] = minus(cube[RED][DOWN], 1) ;
++		cube[GREEN][UP] = plus(cube[GREEN][UP], 1) ;
++		cube[GREEN][DOWN] = minus(cube[GREEN][DOWN], 1) ;
++		cube[BLUE][UP] = plus(cube[BLUE][UP], 1) ;
++		cube[BLUE][DOWN] = minus(cube[BLUE][DOWN], 1) ;
++
++		addNBTSVCandidates (candidates, cube, RED, UP, GREEN, BLUE, b) ;
++		addNBTSVCandidates (candidates, cube, RED, DOWN, GREEN, BLUE, b) ;
++		addNBTSVCandidates (candidates, cube, GREEN, UP, RED, BLUE, b) ;
++		addNBTSVCandidates (candidates, cube, GREEN, DOWN, RED, BLUE, b) ;
++		addNBTSVCandidates (candidates, cube, BLUE, UP, RED, GREEN, b) ;
++		addNBTSVCandidates (candidates, cube, BLUE, DOWN, RED, GREEN, b) ;
++	} while (candidates.empty()) ;
++
++	// calculate minimal distance
++	UWORD32 mindist = UWORD32_MAX ;
++	for (std::vector<RGBTriple>::const_iterator cit = candidates.begin() ; cit != candidates.end() ; cit++) {
++		UWORD32 curdist = Color.calcDistance(*cit) ;
++		if (curdist < mindist) {
++			mindist = curdist ;
++		}
++	}
++
++	// choose only from those with the minimal distance
++	std::vector<RGBTriple> finalcandidates ;
++	for (std::vector<RGBTriple>::const_iterator cit = candidates.begin() ; cit != candidates.end() ; cit++) {
++		if (Color.calcDistance(*cit) == mindist) {
++			finalcandidates.push_back(*cit) ;
++		}
++	}
++
++	unsigned int rnd = (unsigned int) RndSrc.getValue (finalcandidates.size()) ;
++	return ((SampleValue*) new BmpRGBSampleValue (finalcandidates[rnd])) ;
++}
++
++void BmpRGBSampleValue::addNBTSVCandidates (std::vector<RGBTriple>& cands, const BYTE cube[3][2], COLOR fc, DIRECTION fd, COLOR i1, COLOR i2, BIT b) const
++{
++	for (BYTE value1 = cube[i1][DOWN] ; value1 < cube[i1][UP] ; value1++) {
++		for (BYTE value2 = cube[i2][DOWN] ; value2 < cube[i2][UP] ; value2++) {
++			// create an RGBTriple
++			BYTE color[3] ;
++			color[fc] = cube[fc][fd] ;
++			color[i1] = value1 ;
++			color[i2] = value2 ;
++			RGBTriple rgb (color[RED], color[GREEN], color[BLUE]) ;
++			if ((calcEValue( rgb ) & 1) == b) {
++				// add rgb to candidates...
++				bool found = false ;
++				for (std::vector<RGBTriple>::const_iterator cit = cands.begin() ; cit != cands.end() ; cit++) {
++					if (*cit == rgb) {
++						found = true ;
++					}
++				}
++				if (!found) {
++					cands.push_back (rgb) ;
++				}
++			}
++		}
++	}
++}
++
+ SampleValue *BmpRGBSampleValue::getNearestTargetSampleValue (EmbValue t) const
+ {
+ 	std::vector<RGBTriple> candidates ;
+--- a/src/BmpRGBSampleValue.h
++++ b/src/BmpRGBSampleValue.h
+@@ -36,6 +36,7 @@
+ 
+ 	UWORD32 calcDistance (const SampleValue *s) const ;
+ 	SampleValue* getNearestTargetSampleValue (EmbValue t) const ;
++	SampleValue* getNearestBitTargetSampleValue (BIT b) const ;
+ 	std::string getName (void) const ;
+ 
+ 	BYTE getRed (void) const { return Color.Red ; } ;
+@@ -75,6 +76,8 @@
+ 	 * \param fd the fixed side of the fixed color
+ 	 **/
+ 	void addNTSVCandidates (std::vector<RGBTriple>& cands, const BYTE cube[3][2], COLOR fc, DIRECTION fd, COLOR i1, COLOR i2, EmbValue t) const ;
++
++	void addNBTSVCandidates (std::vector<RGBTriple>& cands, const BYTE cube[3][2], COLOR fc, DIRECTION fd, COLOR i1, COLOR i2, BIT b) const ;
+ } ;
+ 
+ #endif // ndef SH_BMPRGBSAMPLEVALUE_H
+--- a/src/CvrStgFile.cc
++++ b/src/CvrStgFile.cc
+@@ -128,7 +128,27 @@
+ 	return Utils::formatHRSize (getCapacity()) ;
+ }
+ 
+-#ifdef DEBUG
++bool CvrStgFile::parseMarkerRestriction (std::string _spcstr, UWORD32* _pre, UWORD32* _post) const
++{
++	bool found = false ;
++
++	if (isdigit( _spcstr[_spcstr.size() - 1] )) {
++		// given as number of samples
++		int tmp = 0 ;
++		sscanf (_spcstr.c_str(), "%d", &tmp) ;
++		*_pre = tmp ;
++		*_post = tmp ;
++		found = true ;
++	}
++	return found ;
++}
++
++void CvrStgFile::getDefaultMarkerRestriction (UWORD32* _pre, UWORD32* _post) const
++{
++	*_pre = 0 ;
++	*_post = 0 ;
++}
++
+ std::map<SampleKey,unsigned long>* CvrStgFile::getFrequencies ()
+ {
+ 	unsigned long n = getNumSamples() ;
+@@ -150,8 +170,6 @@
+ 	}
+ }
+ 
+-#endif // def DEBUG
+-
+ CvrStgFile::FILEFORMAT CvrStgFile::guessff (BinaryIO *io)
+ {
+ 	char buf[4] = { '\0', '\0', '\0', '\0' } ;
+--- a/src/CvrStgFile.h
++++ b/src/CvrStgFile.h
+@@ -97,10 +97,10 @@
+ 	/**
+ 	 * get the name of this cvrstgfile
+ 	 **/
+-	const std::string& getName (void) const
++	virtual const std::string& getName (void) const
+ 		{ return getBinIO()->getName() ; } ;
+ 
+-	bool is_std (void) const
++	virtual bool is_std (void) const
+ 		{ return getBinIO()->is_std() ; } ;
+ 
+ 	/**
+@@ -141,7 +141,24 @@
+ 	 **/
+ 	virtual EmbValue getEmbeddedValue (const SamplePos pos) const ;
+ 
+-#ifdef DEBUG
++	/**
++	 * get the amount of space to be skipped by introducing markers at beginning and end
++	 * \param _spcstr the string that will be parsed ("" for default values)
++	 * \param _pre will be filled with space at beginning (if parsing is succesful)
++	 * \param _post will be filled with space at end (if parsing is sucessful)
++	 * \return true if parsing was sucessful
++	 *
++	 * This method should be overwritten in derived classes to parse data format specific
++	 * strings, like "30 ms" for audio files and to set _pre and _post to data format specific
++	 * default formats if _spcstr == "".
++	 **/
++	virtual bool parseMarkerRestriction (std::string _spcstr, UWORD32* _pre, UWORD32* _post) const ;
++
++	/**
++	 * get the default amount of space (for this file format) to be skipped by introducing markers at beginning and end
++	 **/
++	virtual void getDefaultMarkerRestriction (UWORD32* _pre, UWORD32* _post) const ;
++
+ 	/**
+ 	 * return a map that contains the absolute sample frequencies indexed by sample key
+ 	 **/
+@@ -153,7 +170,6 @@
+ 	 * of printing a frequency table.
+ 	 **/
+ 	virtual void printFrequencies (const std::map<SampleKey,unsigned long>& freqs) ;
+-#endif
+ 
+ 	protected:
+ 	void setSamplesPerVertex (unsigned short spv)
+--- a/src/Embedder.cc
++++ b/src/Embedder.cc
+@@ -29,6 +29,7 @@
+ #include "Embedder.h"
+ #include "Edge.h"
+ #include "Graph.h"
++#include "MarkerRestricted.h"
+ #include "Matching.h"
+ #include "ProgressOutput.h"
+ #include "Selector.h"
+@@ -43,6 +44,7 @@
+ Embedder::Embedder ()
+ {
+ 	// read embfile
++	std::vector<BYTE> emb ;
+ 	VerboseMessage vrs ;
+ 	if (Args.EmbFn.getValue() == "") {
+ 		vrs.setMessage (_("reading secret data from standard input...")) ;
+@@ -52,14 +54,19 @@
+ 		vrs.setNewline (false) ;
+ 	}
+ 	vrs.printMessage() ;
+-
+-	std::vector<BYTE> emb ;
+-	BinaryIO embio (Args.EmbFn.getValue(), BinaryIO::READ) ;
+-	while (!embio.eof()) {
+-		emb.push_back (embio.read8()) ;
++	try {
++		BinaryIO embio (Args.EmbFn.getValue(), BinaryIO::READ) ;
++		while (!embio.eof()) {
++			emb.push_back (embio.read8()) ;
++		}
++		embio.close() ;
++	}
++	catch (SteghideError &e) {
++		if (Args.Verbosity.getValue() == VERBOSE) {
++			std::cerr << std::endl ;	// to make error message start on new line
++		}
++		throw e ;
+ 	}
+-	embio.close() ;
+-
+ 	VerboseMessage vdone (_(" done")) ;
+ 	if (Args.EmbFn.getValue() != "") {
+ 		vdone.printMessage() ;
+@@ -86,16 +93,40 @@
+ 	else {
+ 		vrc.setMessage (_("reading cover file \"%s\"..."), Args.CvrFn.getValue().c_str()) ;
+ 	}
+-	vrc.setNewline (false) ;
+-	vrc.printMessage() ;
+ 
+-	CvrStgFile::readFile (Args.CvrFn.getValue()) ;
++	try {
++		vrc.setNewline (false) ;
++		vrc.printMessage() ;
++
++		CvrStgFile::readFile (Args.CvrFn.getValue()) ;
++
++		ToEmbed.setArity (Globs.TheCvrStgFile->getEmbValueModulus()) ;
++		if ((ToEmbed.getNAryLength() * Globs.TheCvrStgFile->getSamplesPerVertex()) > Globs.TheCvrStgFile->getNumSamples()) {
++			throw SteghideError (_("the cover file is too short to embed the data.")) ;
++		}
++	}
++	catch (SteghideError& e) {
++		if (Args.Verbosity.getValue() == VERBOSE) {
++			std::cerr << std::endl ;	// to make error message start on new line
++		}
++		throw e ;
++	}
+ 
+ 	vdone.printMessage() ;
+ 
+-	ToEmbed.setArity (Globs.TheCvrStgFile->getEmbValueModulus()) ;
+-	if ((ToEmbed.getNAryLength() * Globs.TheCvrStgFile->getSamplesPerVertex()) > Globs.TheCvrStgFile->getNumSamples()) {
+-		throw SteghideError (_("the cover file is too short to embed the data.")) ;
++	// use markers ?
++	if (Args.Marker.is_set()) {
++		UWORD32 prespace = 0, postspace = 0 ;
++		if (Args.Marker.getValue() == "") {
++			Globs.TheCvrStgFile->getDefaultMarkerRestriction( &prespace, &postspace ) ;
++		}
++		else {
++			if (!Globs.TheCvrStgFile->parseMarkerRestriction( Args.Marker.getValue(), &prespace, &postspace )) {
++				throw ArgError( _("the format of the space specification \"%s\" is invalid."), Args.Marker.getValue().c_str() ) ;
++			}
++		}
++
++		Globs.TheCvrStgFile = new MarkerRestricted( Globs.TheCvrStgFile, Args.Passphrase.getValue(), prespace, postspace ) ;
+ 	}
+ 
+ 	// create graph
+@@ -104,11 +135,19 @@
+ 	VerboseMessage v (_("creating the graph...")) ;
+ 	v.setNewline (false) ;
+ 	v.printMessage() ;
+-	new Graph (Globs.TheCvrStgFile, ToEmbed, sel) ;
++	try {
++		new Graph (Globs.TheCvrStgFile, ToEmbed, sel) ;
++	}
++	catch (SteghideError& e) {
++		if (Args.Verbosity.getValue() == VERBOSE) {
++			std::cerr << std::endl ;	// to make error message start on new line
++		}
++		throw e ;
++	}
+ 	Globs.TheGraph->printVerboseInfo() ;
+ 	if (Args.Check.getValue()) {
+ 		if (!Globs.TheGraph->check()) {
+-			CriticalWarning w ("integrity checking of graph data structures failed!") ; // TODO: internationalize this
++			CriticalWarning w (_("integrity checking of graph data structures failed!")) ;
+ 			w.printMessage() ;
+ 		}
+ 	}
+@@ -165,7 +204,14 @@
+ 		prout = new ProgressOutput () ;
+ 	}
+ 
+-	const Matching* M = calculateMatching (prout) ;
++	const Matching* M = NULL ;
++	try {
++		M = calculateMatching (prout) ;
++	}
++	catch (SteghideError &e) {
++		std::cerr << std::endl ;	// to make error message start on new line
++		throw e ;
++	}
+ 
+ 	// embed matched edges
+ 	const std::list<Edge*> medges = M->getEdges() ;
+@@ -198,7 +244,15 @@
+ 		}
+ 	}
+ 
+-	Globs.TheCvrStgFile->write() ;
++	try {
++		Globs.TheCvrStgFile->write() ;
++	}
++	catch (SteghideError &e) {
++		if (Args.Verbosity.getValue() == VERBOSE) {
++			std::cerr << std::endl ;	// to make error message start on new line
++		}
++		throw e ;
++	}
+ 
+ 	if (displaydone) {
+ 		Message wsd (_("done")) ;
+@@ -228,7 +282,7 @@
+ 
+ 	if (Args.Check.getValue()) {
+ 		if (!matching->check()) {
+-			CriticalWarning w ("integrity checking of matching data structures failed!") ; // TODO: internationalize this
++			CriticalWarning w (_("integrity checking of matching data structures failed!")) ;
+ 			w.printMessage() ;
+ 		}
+ 	}
+--- a/src/Extractor.cc
++++ b/src/Extractor.cc
+@@ -31,6 +31,7 @@
+ 
+ EmbData* Extractor::extract ()
+ {
++	// TODO: marker: first, try to extract without markers, if CorruptData... is thrown, try with marker, search from beginning and end
+ 	VerboseMessage vrs ;
+ 	if (Args.StgFn.getValue() == "") {
+ 		vrs.setMessage (_("reading stego file from standard input...")) ;
+@@ -41,7 +42,15 @@
+ 	vrs.setNewline (false) ;
+ 	vrs.printMessage() ;
+ 
+-	Globs.TheCvrStgFile = CvrStgFile::readFile (StegoFileName) ;
++	try {
++		Globs.TheCvrStgFile = CvrStgFile::readFile (StegoFileName) ;
++	}
++	catch (SteghideError &e) {
++		if (Args.Verbosity.getValue() == VERBOSE) {
++			std::cerr << std::endl ;	// to make error message start on new line
++		}
++		throw e ;
++	}
+ 
+ 	VerboseMessage vd (_(" done")) ;
+ 	vd.printMessage() ;
+@@ -53,45 +62,61 @@
+ 	ve.setNewline (false) ;
+ 	ve.printMessage() ;
+ 
+-	unsigned long sv_idx = 0 ;
+-	while (!embdata->finished()) {
+-		unsigned short bitsperembvalue = AUtils::log2_ceil<unsigned short> (Globs.TheCvrStgFile->getEmbValueModulus()) ;
+-		unsigned long embvaluesrequested = AUtils::div_roundup<unsigned long> (embdata->getNumBitsRequested(), bitsperembvalue) ;
+-		if (sv_idx + (Globs.TheCvrStgFile->getSamplesPerVertex() * embvaluesrequested) >= Globs.TheCvrStgFile->getNumSamples()) {
+-			if (Globs.TheCvrStgFile->is_std()) {
+-				throw CorruptDataError (_("the stego data from standard input is too short to contain the embedded data.")) ;
++	try {
++		unsigned long sv_idx = 0 ;
++		while (!embdata->finished()) {
++			unsigned short bitsperembvalue = AUtils::log2_ceil<unsigned short> (Globs.TheCvrStgFile->getEmbValueModulus()) ;
++			unsigned long embvaluesrequested = AUtils::div_roundup<unsigned long> (embdata->getNumBitsRequested(), bitsperembvalue) ;
++			if (sv_idx + (Globs.TheCvrStgFile->getSamplesPerVertex() * embvaluesrequested) >= Globs.TheCvrStgFile->getNumSamples()) {
++				if (Globs.TheCvrStgFile->is_std()) {
++					throw CorruptDataError (_("the stego data from standard input is too short to contain the embedded data.")) ;
++				}
++				else {
++					throw CorruptDataError (_("the stego file \"%s\" is too short to contain the embedded data."), Globs.TheCvrStgFile->getName().c_str()) ;
++				}
+ 			}
+-			else {
+-				throw CorruptDataError (_("the stego file \"%s\" is too short to contain the embedded data."), Globs.TheCvrStgFile->getName().c_str()) ;
++			BitString bits (Globs.TheCvrStgFile->getEmbValueModulus()) ;
++			for (unsigned long i = 0 ; i < embvaluesrequested ; i++) {
++				EmbValue ev = 0 ;
++				for (unsigned int j = 0 ; j < Globs.TheCvrStgFile->getSamplesPerVertex() ; j++, sv_idx++) {
++					ev = (ev + Globs.TheCvrStgFile->getEmbeddedValue (sel[sv_idx])) % Globs.TheCvrStgFile->getEmbValueModulus() ;
++				}
++				bits.appendNAry(ev) ;
+ 			}
++			embdata->addBits (bits) ;
+ 		}
+-		BitString bits (Globs.TheCvrStgFile->getEmbValueModulus()) ;
+-		for (unsigned long i = 0 ; i < embvaluesrequested ; i++) {
+-			EmbValue ev = 0 ;
+-			for (unsigned int j = 0 ; j < Globs.TheCvrStgFile->getSamplesPerVertex() ; j++, sv_idx++) {
+-				ev = (ev + Globs.TheCvrStgFile->getEmbeddedValue (sel[sv_idx])) % Globs.TheCvrStgFile->getEmbValueModulus() ;
+-			}
+-			bits.appendNAry(ev) ;
++	}
++	catch (SteghideError &e) {
++		if (Args.Verbosity.getValue() == VERBOSE) {
++			std::cerr << std::endl ;	// to make error message start on new line
+ 		}
+-		embdata->addBits (bits) ;
++		throw e ;
+ 	}
+ 
+ 	vd.printMessage() ;
+ 
+-	// TODO (postponed due to message freeze): rename into "verifying crc32 checksum..."
+-	VerboseMessage vc (_("checking crc32 checksum...")) ;
++	VerboseMessage vc (_("verifying crc32 checksum...")) ;
+ 	vc.setNewline (false) ;
+ 	vc.printMessage() ;
+-	if (embdata->checksumOK()) {
+-		VerboseMessage vok (_(" ok")) ;
+-		vok.printMessage() ;
+-	}
+-	else {
+-		VerboseMessage vfailed (_(" FAILED!")) ;
+-		vfailed.printMessage() ;
+ 
+-		CriticalWarning w (_("crc32 checksum failed! extracted data is probably corrupted.")) ;
+-		w.printMessage() ;
++	try {
++		if (embdata->checksumOK()) {
++			VerboseMessage vok (_(" ok")) ;
++			vok.printMessage() ;
++		}
++		else {
++			VerboseMessage vfailed (_(" FAILED!")) ;
++			vfailed.printMessage() ;
++
++			CriticalWarning w (_("crc32 checksum failed! extracted data is probably corrupted.")) ;
++			w.printMessage() ;
++		}
++	}
++	catch (SteghideError &e) {
++		if (Args.Verbosity.getValue() == VERBOSE) {
++			std::cerr << std::endl ;	// to make error message start on new line
++		}
++		throw e ;
+ 	}
+ 
+ 	return embdata ;
+--- a/src/JpegSampleValue.h
++++ b/src/JpegSampleValue.h
+@@ -28,6 +28,8 @@
+ 	JpegSampleValue (int c) ;
+ 
+ 	SampleValue* getNearestTargetSampleValue (EmbValue t) const ;
++	SampleValue* getNearestBitTargetSampleValue (BIT b) const
++		{ return getNearestTargetSampleValue( b ) ; } ; // works only for modulus = 2 !
+ 	UWORD32 calcDistance (const SampleValue *s) const ;
+ 	std::string getName (void) const ;
+ 
+--- a/src/MHashPP.h
++++ b/src/MHashPP.h
+@@ -27,6 +27,10 @@
+ 
+ class BitString ;
+ 
++/**
++ * \class MHashPP
++ * \brief a wrapper around the hashing functions in the mhash library
++ **/
+ class MHashPP {
+ 	public:
+ 	enum Command { endhash } ;
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -17,7 +17,7 @@
+ SampleValueAdjacencyList.h Selector.h Session.h SteghideError.h Terminal.h \
+ Utils.h Vertex.h WavChunk.h WavChunkHeader.h WavChunkUnused.h WavFile.h \
+ WavFormatChunk.h WavPCMSampleValue.h common.h error.h msg.h wrapper_hash_map.h \
+-wrapper_hash_set.h SMDConstructionHeuristic.h gettext.h
++wrapper_hash_set.h SMDConstructionHeuristic.h gettext.h MarkerRestricted.h
+ steghide_SOURCES = \
+ Arg.cc Arguments.cc AssertionFailed.cc AuFile.cc AuSampleValues.cc \
+ DFSAPHeuristic.cc BFSAPHeuristic.cc BinaryIO.cc BitString.cc BmpFile.cc \
+@@ -30,7 +30,8 @@
+ RandomSource.cc SampleValue.cc SampleValueAdjacencyList.cc Selector.cc \
+ Session.cc SteghideError.cc Terminal.cc Utils.cc Vertex.cc WavChunk.cc \
+ WavChunkHeader.cc WavChunkUnused.cc WavFile.cc WavFormatChunk.cc \
+-WavPCMSampleValue.cc error.cc main.cc msg.cc SMDConstructionHeuristic.cc
++WavPCMSampleValue.cc error.cc main.cc msg.cc SMDConstructionHeuristic.cc \
++MarkerRestricted.cc
+ LIBS = @LIBINTL@ @LIBS@
+ localedir = $(datadir)/locale
+ LIBTOOL = $(SHELL) libtool
+--- a/src/SampleValue.h
++++ b/src/SampleValue.h
+@@ -77,6 +77,18 @@
+ 	virtual SampleValue* getNearestTargetSampleValue (EmbValue t) const = 0 ;
+ 
+ 	/**
++	 * get the nearest sample value whose embedded bit is b
++	 *
++	 * This is a version of getNearestTargetSampleValue for modulus 2 (will be
++	 * replaced by getNearestTargetSampleValue (EmbValue t, modulus m) in next
++	 * major version).
++	 *
++	 * This _MUST_ be overwritten if the modulus is not two.
++	 **/
++	virtual SampleValue* getNearestBitTargetSampleValue (BIT b) const
++		{ return getNearestTargetSampleValue( (EmbValue) b ) ; } ;
++
++	/**
+ 	 * calculate the distance between the sample value s and this sample value
+ 	 * \param s a sample value of the same type as this
+ 	 * \return the distance
+@@ -105,6 +117,15 @@
+ 		{ return EValue ; } ;
+ 
+ 	/**
++	 * get the modulo 2 embedded value
++	 *
++	 * This is a dirty hack and must be changed if a modulus m \neq 2^b are possible. This
++	 * is necessary for the markers (this will be replaced by getEValue (m) in next major version)
++	 **/
++	bool getEmbeddedBit (void) const
++		{ return (EValue & 1) ; } ;
++
++	/**
+ 	 * get the key for this sample
+ 	 * \return a key which must be different for two different samples values.
+ 	 **/
+@@ -130,7 +151,7 @@
+ 	void print (unsigned short spc = 0) const ;
+ 
+ 	protected:
+-	/// the bit that is embedded in this sample value - must be set in constructor of derived class
++	/// the value that is embedded in this sample value - must be set in constructor of derived class
+ 	EmbValue EValue ;
+ 
+ 	/// the key of this sample value - must be different for two different sample values - must be set in constructor of derived class
+--- a/src/Session.cc
++++ b/src/Session.cc
+@@ -43,58 +43,7 @@
+ 		case EXTRACT: {
+ 			Extractor ext (Args.StgFn.getValue(), Args.Passphrase.getValue()) ;
+ 			EmbData* embdata = ext.extract() ;
+-
+-			// write data
+-			std::string fn ;
+-			if (Args.ExtFn.is_set()) {
+-				if (Args.ExtFn.getValue() == "") {
+-					// write extracted data to stdout
+-					fn = "" ;
+-				}
+-				else {
+-					// file name given by extracting user overrides embedded file name
+-					fn = Args.ExtFn.getValue() ;
+-				}
+-			}
+-			else {
+-				// write extracted data to file with embedded file name
+-				myassert (Args.ExtFn.getValue() == "") ;
+-				fn = embdata->getFileName() ;
+-				if (fn.length() == 0) {
+-					throw SteghideError (_("please specify a file name for the extracted data (there is no name embedded in the stego file).")) ;
+-				}
+-			}
+-
+-			VerboseMessage vwe ;
+-			bool printdone = true ;
+-			if (fn == "") {
+-				vwe.setMessage (_("writing extracted data to standard output...")) ;
+-				printdone = false ;
+-			}
+-			else {
+-				vwe.setMessage (_("writing extracted data to \"%s\"..."), fn.c_str()) ;
+-				vwe.setNewline (false) ;
+-			}
+-			vwe.printMessage() ;
+-
+-			BinaryIO io (fn, BinaryIO::WRITE) ;
+-			std::vector<BYTE> data = embdata->getData() ;
+-			for (std::vector<BYTE>::iterator i = data.begin() ; i != data.end() ; i++) {
+-				io.write8 (*i) ;
+-			}
+-			io.close() ;
+-
+-			if (printdone) {
+-				VerboseMessage vdone (_(" done")) ;
+-				vdone.printMessage() ;
+-			}
+-
+-			if (Args.Verbosity.getValue() < VERBOSE) {
+-				if (fn != "") {
+-					Message m (_("wrote extracted data to \"%s\"."), fn.c_str()) ;
+-					m.printMessage() ;
+-				}
+-			}
++			writeExtData (*embdata) ;
+ 		break ; }
+ 
+ 		case INFO: {
+@@ -131,64 +80,146 @@
+ 
+ void Session::printInfo ()
+ {
+-	// if file format not supported: exception will be catched in main
+-	CvrStgFile* file = CvrStgFile::readFile (Args.CvrFn.getValue()) ;
+-
+-	if (Args.CvrFn.getValue() == "") {
+-		printf (_("data from standard input:\n")) ;
+-	}
+-	else {
+-		printf ("\"%s\":\n", stripDir(Args.CvrFn.getValue()).c_str()) ;
+-	}
+-
+-	std::list<CvrStgFile::Property> props = file->getProperties() ;
+-	props.push_back (CvrStgFile::Property (_("capacity"), file->getHRCapacity())) ;
+-	for (std::list<CvrStgFile::Property>::const_iterator it = props.begin() ; it != props.end() ; it++) {
+-		printf ("  %s: %s\n", it->getKey().c_str(), it->getValue().c_str()) ;
+-	}
+-
+-	bool printembinfo = Args.Passphrase.is_set() ;
+-	if (!printembinfo) {
+-		Question q (_("Try to get information about embedded data ?")) ;
+-		q.printMessage() ;
+-		printembinfo = q.getAnswer() ;
+-	}
+-
+-	if (printembinfo) {
++	for (std::vector<std::string>::iterator fnit = Args.RestOfArguments.begin() ;
++			fnit != Args.RestOfArguments.end() ; fnit++) { // go through all unknown command line arguments
+ 		try {
+-			std::string pp ;
+-			if (Args.Passphrase.is_set()) {
+-				pp = Args.Passphrase.getValue() ;
+-			}
+-			else {
+-				pp = Args.getPassphrase() ; // ask user for it
++			if (*fnit == "-") { // stdin is "-" for user but "" internally
++				*fnit = "";
+ 			}
+ 
+-			Extractor e (Args.CvrFn.getValue(), pp) ;
+-			EmbData* embdata = e.extract() ;
++			CvrStgFile* file = CvrStgFile::readFile (*fnit) ;
+ 
+-			if (embdata->getFileName() == "") {
+-				printf (_("  embedded data:\n")) ;
++			if (*fnit == "") {
++				printf (_("data from standard input:\n")) ;
+ 			}
+ 			else {
+-				printf (_("  embedded file \"%s\":\n"), embdata->getFileName().c_str()) ;
++				printf ("\"%s\":\n", stripDir(*fnit).c_str()) ;
+ 			}
+ 
+-			printf (_("    size: %s\n"), Utils::formatHRSize(embdata->getData().size()).c_str()) ;
+-			std::string encstring ;
+-			if (embdata->getEncAlgo() == EncryptionAlgorithm(EncryptionAlgorithm::NONE)) {
+-				encstring += _("no") ;
++			std::list<CvrStgFile::Property> props = file->getProperties() ;
++			props.push_back (CvrStgFile::Property (_("capacity"), file->getHRCapacity())) ;
++			for (std::list<CvrStgFile::Property>::const_iterator it = props.begin() ; it != props.end() ; it++) {
++				printf ("  %s: %s\n", it->getKey().c_str(), it->getValue().c_str()) ;
+ 			}
+-			else {
+-				encstring += embdata->getEncAlgo().getStringRep() + ", " + embdata->getEncMode().getStringRep() ;
++
++			bool printembinfo = Args.Passphrase.is_set() ;
++			if (!printembinfo && !(Args.Verbosity.getValue() == QUIET)) {
++				Question q (_("Try to get information about embedded data ?")) ;
++				q.printMessage() ;
++				printembinfo = q.getAnswer() ;
+ 			}
+-			printf (_("    encrypted: %s\n"), encstring.c_str()) ;
+-			printf (_("    compressed: %s\n"), ((embdata->getCompression() > 0) ? _("yes") : _("no"))) ;
+ 
+-			delete embdata ;
++			if (printembinfo) {
++				try {
++					std::string pp ;
++					if (Args.Passphrase.is_set()) {
++						pp = Args.Passphrase.getValue() ;
++					}
++					else {
++						pp = Args.getPassphrase() ; // ask user for it
++					}
++
++					Extractor e (*fnit, pp) ;
++					EmbData* embdata = e.extract() ;
++
++					if (embdata->getFileName() == "") {
++						printf (_("  embedded data:\n")) ;
++					}
++					else {
++						printf (_("  embedded file \"%s\":\n"), embdata->getFileName().c_str()) ;
++					}
++
++					printf (_("    size: %s\n"), Utils::formatHRSize(embdata->getData().size()).c_str()) ;
++					std::string encstring ;
++					if (embdata->getEncAlgo() == EncryptionAlgorithm(EncryptionAlgorithm::NONE)) {
++						encstring += _("no") ;
++					}
++					else {
++						encstring += embdata->getEncAlgo().getStringRep() + ", " + embdata->getEncMode().getStringRep() ;
++					}
++					printf (_("    encrypted: %s\n"), encstring.c_str()) ;
++					printf (_("    compressed: %s\n"), ((embdata->getCompression() > 0) ? _("yes") : _("no"))) ;
++
++					if (Args.Verbosity.getValue() != QUIET) {
++						Question q (_("Do you want to extract the embedded data ?")) ;
++						q.printMessage() ;
++						if (q.getAnswer()) {
++							writeExtData (*embdata) ;
++						}
++					}
++
++					delete embdata ;
++				}
++				catch (CorruptDataError e) {
++					printf (_("could not extract any data with that passphrase!\n")) ;
++				}
++			}
++		}
++		catch (SteghideError e) { // catch exceptions in loop to be able to continue with the next file if an error occurs
++			e.printMessage() ;
++		}
++	}
++}
++
++void Session::writeExtData (const EmbData& ed) const
++{
++	// write data
++	std::string fn ;
++	if (Args.ExtFn.is_set()) {
++		if (Args.ExtFn.getValue() == "") {
++			// write extracted data to stdout
++			fn = "" ;
+ 		}
+-		catch (CorruptDataError e) {
+-			printf (_("could not extract any data with that passphrase!\n")) ;
++		else {
++			// file name given by extracting user overrides embedded file name
++			fn = Args.ExtFn.getValue() ;
++		}
++	}
++	else {
++		// write extracted data to file with embedded file name
++		myassert (Args.ExtFn.getValue() == "") ;
++		fn = ed.getFileName() ;
++		if (fn.length() == 0) {
++			throw SteghideError (_("please specify a file name for the extracted data (there is no name embedded in the stego file).")) ;
++		}
++	}
++
++	VerboseMessage vwe ;
++	bool printdone = true ;
++	if (fn == "") {
++		vwe.setMessage (_("writing extracted data to standard output...")) ;
++		printdone = false ;
++	}
++	else {
++		vwe.setMessage (_("writing extracted data to \"%s\"..."), fn.c_str()) ;
++		vwe.setNewline (false) ;
++	}
++	vwe.printMessage() ;
++
++	try {
++		BinaryIO io (fn, BinaryIO::WRITE) ;
++		std::vector<BYTE> data = ed.getData() ;
++		for (std::vector<BYTE>::iterator i = data.begin() ; i != data.end() ; i++) {
++			io.write8 (*i) ;
++		}
++		io.close() ;
++	}
++	catch (SteghideError &e) {
++		if (Args.Verbosity.getValue() == VERBOSE) {
++			std::cerr << std::endl ;	// to make error message start on new line
++		}
++		throw e ;
++	}
++
++	if (printdone) {
++		VerboseMessage vdone (_(" done")) ;
++		vdone.printMessage() ;
++	}
++
++	if (Args.Verbosity.getValue() < VERBOSE) {
++		if (fn != "") {
++			Message m (_("wrote extracted data to \"%s\"."), fn.c_str()) ;
++			m.printMessage() ;
+ 		}
+ 	}
+ }
+@@ -247,7 +278,7 @@
+ 		" embed, --embed          embed data\n"
+ 		" extract, --extract      extract data\n"
+ 		" info, --info            display information about a cover- or stego-file\n"
+-		"   info <filename>       display information about <filename>\n"
++		"   info <filenames>      display information about <filenames>\n"
+ 		" encinfo, --encinfo      display a list of supported encryption algorithms\n"
+ 		" version, --version      display version information\n"
+ 		" license, --license      display steghide's license\n"
+@@ -266,8 +297,10 @@
+ 		"   -e <a>[<m>]|<m>[<a>]  specify an encryption algorithm and/or mode\n"
+ 		"   -e none               do not encrypt data before embedding\n"
+ 		" -z, --compress          compress data before embedding (default)\n"
+-		"   -z <l>                 using level <l> (1 best speed...9 best compression)\n"
++		"   -z <l>                using level <l> (1 best speed...9 best compression)\n"
+ 		" -Z, --dontcompress      do not compress data before embedding\n"
++		" -m, --marker            embed markers for synchronization\n"
++		"   -m [<l>]              leave a space with length <l> at begin and end\n"
+ 		" -K, --nochecksum        do not embed crc32 checksum of embedded data\n"
+ 		" -N, --dontembedname     do not embed the name of the original file\n"
+ 		" -f, --force             overwrite existing files\n"
+@@ -286,6 +319,7 @@
+ 		" -v, --verbose           display detailed information\n"
+ 
+ 		"\noptions for the info command:\n"
++		" -q, --quiet             be non-interactive (do not ask the user anything)\n"
+ 		" -p, --passphrase        specify passphrase\n"
+ 		"   -p <passphrase>       use <passphrase> to get info about embedded data\n"
+ 
+--- a/src/Session.h
++++ b/src/Session.h
+@@ -24,6 +24,7 @@
+ #include <map>
+ #include <string>
+ 
++#include "EmbData.h"
+ #include "common.h"
+ 
+ class Session {
+@@ -33,12 +34,15 @@
+ 	void run (void) ;
+ 
+ 	private:
++	void writeExtData (const EmbData& ed) const ;
++
+ 	std::string stripDir (std::string s) const ;
+ 	void printInfo (void) ;
+ 	void printEncInfo (void) ;
+ 	void printVersion (void) ;
+ 	void printHelp (void) ;
+ 	void printLicense (void) ;
++
+ #ifdef DEBUG
+ 	void printFrequencies (void) ;
+ 	/**
+--- a/src/WavFile.cc
++++ b/src/WavFile.cc
+@@ -197,6 +197,43 @@
+ 	return retval ;
+ }
+ 
++bool WavFile::parseMarkerRestriction (std::string _spcstr, UWORD32* _pre, UWORD32* _post) const
++{
++	bool found = false ;
++
++	if (CvrStgFile::parseMarkerRestriction( _spcstr, _pre, _post )) {
++		found = true ; // _spcstr could be parsed by generic parser
++	}
++	else {
++		float nseconds = 0.0 ;
++		if ( std::string( _spcstr, _spcstr.size() - 2, 2 ) == "ms" ) {
++			// given in milliseconds
++			float tmp = 0.0 ;
++			sscanf ( std::string( _spcstr, 0, _spcstr.size() - 2 ).c_str(), "%f", &tmp) ;
++			nseconds = tmp / 1000.0 ;
++			found = true ;
++		}
++		else if ( std::string( _spcstr, _spcstr.size() - 1, 1 ) == "s" ) {
++			// given in seconds
++			sscanf ( std::string( _spcstr, 0, _spcstr.size() - 1 ).c_str(), "%f", &nseconds) ;
++			found = true ;
++		}
++
++		if ( found ) {
++			UWORD32 nsamples = (UWORD32) (nseconds * FormatChunk->getSamplesPerSecond()) ;
++			*_pre = *_post = nsamples ;
++		}
++	}
++
++	return found ;
++}
++
++void WavFile::getDefaultMarkerRestriction (UWORD32* _pre, UWORD32* _post) const
++{
++	*_pre = 100 ; // FIXME - find good value here
++	*_post = 100 ;
++}
++
+ /* reads the wav file data from disk */
+ void WavFile::readdata (void)
+ {
+--- a/src/WavFile.h
++++ b/src/WavFile.h
+@@ -50,6 +50,9 @@
+ 
+ 	unsigned short getBitsPerSample (void) const ;
+ 
++	bool parseMarkerRestriction (std::string _spcstr, UWORD32* _pre, UWORD32* _post) const ;
++	void getDefaultMarkerRestriction (UWORD32* _pre, UWORD32* _post) const ;
++
+ 	private:
+ 	static const signed short	FormatPCM = 1 ;
+ 
+--- a/src/WavFormatChunk.h
++++ b/src/WavFormatChunk.h
+@@ -41,6 +41,9 @@
+ 	UWORD16 getFormatTag (void) const
+ 		{ return FormatTag ; } ;
+ 
++	UWORD32 getSamplesPerSecond (void) const
++		{ return SamplesPerSec ; } ;
++
+ 	UWORD16 getBitsPerSample (void) const
+ 		{ return BitsPerSample ; } ;
+ 
+--- a/src/WavPCMSampleValue.h
++++ b/src/WavPCMSampleValue.h
+@@ -32,6 +32,8 @@
+ 	WavPCMSampleValue (int v) ;
+ 
+ 	SampleValue* getNearestTargetSampleValue (EmbValue t) const ;
++	SampleValue* getNearestBitTargetSampleValue (BIT b) const
++		{ return getNearestTargetSampleValue( b ) ; } ; // works only for modulus = 2 !
+ 	UWORD32 calcDistance (const SampleValue *s) const ;
+ 	std::string getName (void) const ;
+ 
+--- a/tests/BitStringTest.cc
++++ b/tests/BitStringTest.cc
+@@ -280,6 +280,8 @@
+ 		bs2.append(false).append(true).append(false).append(true) ;
+ 		addTestResult (bs1 == bs2) ;
+ 	}
++
++	// TODO - add clone() calls
+ }
+ 
+ void BitStringTest::testCutting ()
+--- a/tests/BitStringTest.h
++++ b/tests/BitStringTest.h
+@@ -45,6 +45,7 @@
+ 	void testCutting (void) ;
+ 	void testCompression (void) ;
+ 	void testArity (void) ;
++	void testXorReduction (void) ;
+ 
+ 	private:
+ 	BitString *bs_0, *bs_1, *bs_10, *bs_001, *bs_100, *bs_1010, *bs_1110, *bs_01011, *bs_10010, *bs_10101110, *bs_101011101 ;
+--- a/tests/Makefile.am
++++ b/tests/Makefile.am
+@@ -39,6 +39,7 @@
+ ../src/Selector.o ../src/Session.o ../src/SteghideError.o ../src/Terminal.o \
+ ../src/Utils.o ../src/Vertex.o ../src/WavChunk.o ../src/WavChunkHeader.o \
+ ../src/WavChunkUnused.o ../src/WavFile.o ../src/WavFormatChunk.o \
+-../src/WavPCMSampleValue.o ../src/error.o ../src/msg.o ../src/SMDConstructionHeuristic.o
++../src/WavPCMSampleValue.o ../src/error.o ../src/msg.o ../src/SMDConstructionHeuristic.o \
++../src/MarkerRestricted.o
+ LIBS = @LIBINTL@ @LIBS@
+ MAINTAINERCLEANFILES = Makefile.in
+--- /dev/null
++++ b/po/remove-potcdate.sed
+@@ -0,0 +1,11 @@
++/^"POT-Creation-Date: .*"$/{
++x
++s/P/P/
++ta
++g
++d
++bb
++:a
++x
++:b
++}
+--- /dev/null
++++ b/src/MarkerRestricted.cc
+@@ -0,0 +1,162 @@
++/*
++ * steghide 0.5.1 - a steganography program
++ * Copyright (C) 1999-2003 Stefan Hetzl <shetzl@chello.at>
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version 2
++ * of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
++ *
++ */
++
++#include "BitString.h"
++#include "MarkerRestricted.h"
++#include "MHashPP.h"
++#include "SampleValue.h"
++
++MarkerRestricted::MarkerRestricted (CvrStgFile* _orig, std::string _pp, UWORD32 _prespace, UWORD32 _postspace)
++	: m_Original(_orig), m_PreSpace(_prespace), m_PostSpace(_postspace)
++{
++	setSamplesPerVertex( m_Original->getSamplesPerVertex() ) ;
++	setRadius( m_Original->getRadius() ) ;
++	setEmbValueModulus( m_Original->getEmbValueModulus() ) ;
++	setBinIO( NULL ) ;
++
++	{ // create and embed premarker
++		BitString salt ;
++		for (unsigned int i = 0 ; i < m_SizeSalt ; i++) {
++			salt.append( m_Original->getSampleValue( m_PreSpace + i )->getEmbeddedBit() ) ;
++		}
++		MHashPP hash( MHASH_MD5 ) ;
++		hash << salt << _pp << MHashPP::endhash ;
++		BitString marker = hash.getHashBits() ;
++		marker.xorreduce( m_SizeMarker ) ;
++
++		for (unsigned int i = 0 ; i < m_SizeMarker ; i++) {
++			unsigned long pos = m_PreSpace + m_SizeSalt + i ;
++			SampleValue* oldsv = m_Original->getSampleValue( pos ) ;
++			m_Original->replaceSample( pos, oldsv->getNearestBitTargetSampleValue( marker[i] )) ;
++		}
++	}
++
++	{ // create and embed postmarker
++		BitString postsalt ;
++		for (unsigned int i = 0 ; i < m_SizeSalt ; i++) {
++			postsalt.append( m_Original->getSampleValue( m_Original->getNumSamples() - m_PostSpace - i )->getEmbeddedBit() ) ;
++		}
++		MHashPP hash( MHASH_MD5 ) ;
++		hash << postsalt << _pp << MHashPP::endhash ;
++		BitString marker = hash.getHashBits() ;
++		marker.xorreduce( m_SizeMarker ) ;
++
++		for (unsigned int i = 0 ; i < m_SizeMarker ; i++) {
++			unsigned long pos = m_Original->getNumSamples() - m_PostSpace - m_SizeSalt - i ;
++			SampleValue* oldsv = m_Original->getSampleValue( pos ) ;
++			m_Original->replaceSample( pos, oldsv->getNearestBitTargetSampleValue( marker[i] )) ;
++		}
++	}
++}
++
++MarkerRestricted::MarkerRestricted (CvrStgFile* _orig, std::string _pp)
++	: m_Original( _orig )
++{
++	setSamplesPerVertex( m_Original->getSamplesPerVertex() ) ;
++	setRadius( m_Original->getRadius() ) ;
++	setEmbValueModulus( m_Original->getEmbValueModulus() ) ;
++	setBinIO( NULL ) ;
++
++	m_PreLimit = m_SizeSearchSpace ;
++	m_PostLimit = m_Original->getNumSamples() - m_SizeSearchSpace - 1 ;
++
++	{ // search premarker
++		BitString searchframe ;
++		UWORD32 nextpos = 0 ;
++		for ( ; nextpos < m_SizeSalt + m_SizeMarker ; nextpos++) {
++			searchframe.append( m_Original->getSampleValue( nextpos )) ;
++		}
++		bool found = false ;
++		while (!found) {
++			if (nextpos >= m_PreLimit) {
++				if (m_Original->is_std()) {
++					throw SteghideError (_("could not find marker in the first %lu samples of standard input."), m_PreLimit) ;
++				}
++				else {
++					throw SteghideError (_("could not find marker in the first %lu samples of \"%s\"."), m_PreLimit, m_Original->getName().c_str()) ;
++				}
++			}
++			BitString salt = searchframe.getBits( 0, m_SizeSalt ) ;
++			MHashPP hash( MHASH_MD5 ) ;
++			hash << salt << _pp << MHashPP::endhash ;
++			BitString shouldbemarker = hash.getHashBits().xorreduce( m_SizeMarker ) ;
++			BitString embeddedmarker = searchframe.getBits( m_SizeSalt, m_SizeMarker ) ;
++
++			if (embeddedmarker == shouldbemarker) {
++				found = true ;
++				m_PreSpace = nextpos - m_SizeSalt - m_SizeMarker ;
++			}
++			else { // move search frame one bit further
++				searchframe.cutBits( 0, 1 ) ;
++				searchframe.append( m_Original->getSampleValue( nextpos )->getEmbeddedBit() ) ;
++				nextpos++ ;
++			}
++		}
++	}
++
++	{ // search postmarker
++		BitString searchframe ;
++		UWORD32 nextpos = m_Original->getNumSamples() ;
++		for ( ; nextpos > m_Original->getNumSamples() - m_SizeSalt - m_SizeMarker ; nextpos--) {
++			searchframe.append( m_Original->getSampleValue( nextpos )) ;
++		}
++		bool found = false ;
++		while (!found) {
++			if (nextpos <= m_PostLimit) {
++				if (m_Original->is_std()) {
++					throw SteghideError (_("could not find marker in the last %lu samples of standard input."), m_PostLimit) ;
++				}
++				else {
++					throw SteghideError (_("could not find marker in the last %lu samples of \"%s\"."), m_PostLimit, m_Original->getName().c_str()) ;
++				}
++			}
++			BitString salt = searchframe.getBits( 0, m_SizeSalt ) ;
++			MHashPP hash( MHASH_MD5 ) ;
++			hash << salt << _pp << MHashPP::endhash ;
++			BitString shouldbemarker = hash.getHashBits().xorreduce( m_SizeMarker ) ;
++			BitString embeddedmarker = searchframe.getBits( m_SizeSalt, m_SizeMarker ) ;
++
++			if (embeddedmarker == shouldbemarker) {
++				found = true ;
++				m_PostSpace = (m_Original->getNumSamples() - nextpos) - m_SizeSalt - m_SizeMarker - 1 ;
++			}
++			else { // move search frame one bit further
++				searchframe.cutBits( 0, 1 ) ;
++				searchframe.append( m_Original->getSampleValue( nextpos )->getEmbeddedBit() ) ;
++				nextpos-- ;
++			}
++		}
++	}
++}
++
++unsigned long MarkerRestricted::getNumSamples() const
++{
++	return (m_Original->getNumSamples() - m_PreSpace - m_PostSpace - 2 * (m_SizeSalt + m_SizeMarker)) ;
++}
++
++SampleValue* MarkerRestricted::getSampleValue (const SamplePos pos) const
++{
++	return m_Original->getSampleValue( m_PreSpace + m_SizeSalt + m_SizeMarker + pos ) ;
++}
++
++void MarkerRestricted::replaceSample (const SamplePos pos, const SampleValue* s)
++{
++	m_Original->replaceSample( m_PreSpace + m_SizeSalt + m_SizeMarker + pos, s ) ;
++}
+--- /dev/null
++++ b/src/MarkerRestricted.h
+@@ -0,0 +1,103 @@
++/*
++ * steghide 0.5.1 - a steganography program
++ * Copyright (C) 1999-2003 Stefan Hetzl <shetzl@chello.at>
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version 2
++ * of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
++ *
++ */
++
++#include "CvrStgFile.h"
++
++/**
++ * \class MarkerRestricted
++ * \brief a CvrStgFile restricted in length by embedded markers
++ *
++ * This class is a wrapper around CvrStgFile that restricts the originial file
++ * in length by cutting off some space at the beginning and at the end. The amount
++ * of cutted space is determined by embedding markers.
++ *
++ * The original file is partitioned in the following way:
++ * original: |--------|-------|---------|--......--|----------|--------|---------|
++ * name:      prespace presalt premarker embed area postmarker postsalt postspace
++ *
++ * A marker is calculated as the MD5 hash of the concatenation of all bits embedded
++ * in the salt area with the passphrase. This MD5 hash is then xored to the desired length
++ * of the marker (m_SizeMarker) and embedded in the marker area.
++ **/
++class MarkerRestricted : public CvrStgFile {
++	public:
++	/**
++	 * construct from original file and passphrase and embed markers in original
++	 * \param _orig the original file (that will be restricted)
++	 * \param _pp the passphrase
++	 * \param _prespace the amount of space to be skipped at begin (in samples)
++	 * \param _postspace the amount of space to be skipped at end (in samples)
++	 *
++	 * This constructor is used for embedding.
++	 **/
++	MarkerRestricted (CvrStgFile* _orig, std::string _pp, UWORD32 _prespace, UWORD32 _postspace) ;
++
++	/**
++	 * construct from original and passphrase by searching for markers
++	 * \param _orig the original file (that will be restricted)
++	 * \param _pp the passphrase
++	 *
++	 * This constructor is used for extracting.
++	 **/
++	MarkerRestricted (CvrStgFile* _orig, std::string _pp) ;
++
++	unsigned long getNumSamples (void) const ;
++	SampleValue* getSampleValue (const SamplePos pos) const ;
++	void replaceSample (const SamplePos pos, const SampleValue* s) ;
++
++	virtual void read (BinaryIO *io) { m_Original->read(io) ; } ;
++	virtual void write (void) { m_Original->write() ; } ;
++	void transform (const std::string& fn) { m_Original->transform(fn) ; } ;
++
++	virtual std::list<CvrStgFile::Property> getProperties (void) const { return m_Original->getProperties() ; } ;
++
++	virtual std::vector<SampleValueAdjacencyList*> calcSVAdjacencyLists (const std::vector<SampleValue*>& svs) const
++		{ return m_Original->calcSVAdjacencyLists(svs) ; } ;
++
++	virtual std::vector<MatchingAlgorithm*> getMatchingAlgorithms (Graph* g, Matching* m) const
++		{ return m_Original->getMatchingAlgorithms(g,m) ; } ;
++
++	virtual const std::string& getName (void) const
++		{ return m_Original->getName() ; } ;
++
++	virtual bool is_std (void) const
++		{ return m_Original->is_std() ; } ;
++
++	// FIXME - this is not really correct because the samples that are
++	// in the prespace and postspace are also counted, but it is not used
++	// for MarkerRestricted anyway -> just to keep the compiler happy
++	virtual std::map<SampleKey,unsigned long>* getFrequencies (void)
++		{ return m_Original->getFrequencies() ; } ;
++		
++	private:
++	static const unsigned int m_SizeSalt = 64 ;
++	static const unsigned int m_SizeMarker = 64 ;
++	static const UWORD32 m_SizeSearchSpace = 1000 ; // FIXME - find good value for this...
++
++	CvrStgFile* m_Original ;
++	/// the number of skipped samples at begin
++	UWORD32 m_PreSpace ;
++	/// the number of skipped samples at end
++	UWORD32 m_PostSpace ;
++	/// the number of samples at begin that are searched for the marker
++	UWORD32 m_PreLimit ;
++	/// the number of samples at end that are searched for the marker
++	UWORD32 m_PostLimit ;
++} ;

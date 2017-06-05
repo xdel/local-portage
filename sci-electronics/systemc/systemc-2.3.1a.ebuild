@@ -41,7 +41,7 @@ src_configure() {
 
 src_install() {
 	dodoc AUTHORS ChangeLog INSTALL NEWS README RELEASENOTES
-	rm docs/SystemC_Open_Source_License.pdf || die
+	# rm docs/SystemC_Open_Source_License.pdf || die
 	rm docs/Makefile* || die
 	use doc && dodoc -r docs/*
 	cd src

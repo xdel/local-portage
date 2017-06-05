@@ -442,3 +442,37 @@
   prevent the function from redefining profile-defined variables such as
   LIBDIR_*.
 
+*glibc-2.23-r3 (12 Nov 2016)
+
+  12 Nov 2016; Mike Frysinger <vapier@gentoo.org> +glibc-2.23-r3.ebuild:
+  add a lot of upstream patches for 2.23
+
+*glibc-2.24 (12 Nov 2016)
+
+  12 Nov 2016; Mike Frysinger <vapier@gentoo.org> +glibc-2.24.ebuild:
+  version bump to 2.24
+
+  15 Nov 2016; Mike Frysinger <vapier@gentoo.org> glibc-2.23-r3.ebuild,
+  glibc-2.24.ebuild:
+  add upstream fix for default ssp detection w/gcc-6.2 #582690
+
+  25 Nov 2016; Mike Frysinger <vapier@gentoo.org>
+  files/eblits/pkg_pretend.eblit:
+  permit downgrades between r# versions
+
+  The ABI should not be changed by Gentoo patchsets, so allow people to
+  move between -r# versions.
+
+  07 Dec 2016; Mike Frysinger <vapier@gentoo.org>
+  files/eblits/src_configure.eblit:
+  hack initial mips cross headers for 2.21+
+
+  The mips preconfigure script has changed (again), so update the hacks
+  for the early cross-compile glibc headers phase.
+
+  URL: https://crbug.com/647033
+
+  08 Dec 2016; Mike Frysinger <vapier@gentoo.org> glibc-2.23-r3.ebuild,
+  glibc-2.24.ebuild:
+  grab some upstream fixes for alpha #581790
+

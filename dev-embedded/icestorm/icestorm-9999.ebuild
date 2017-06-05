@@ -24,9 +24,13 @@ DEPEND="
 
 src_prepare() {
 	epatch "${FILESDIR}"/${P}-path-fix.patch
-	epatch "${FILESDIR}"/${P}-cflags.patch
+	sed -i 's/\/usr\/local/\/usr\//g' Makefile */Makefile config.mk
+	epatch "${FILESDIR}"/${P}-config-mk.patch
+	epatch "${FILESDIR}"/${P}-iceprog.patch
 	if ! use ftdi; then
 		epatch "${FILESDIR}"/${P}-no-iceprog.patch
+	else
+		epatch "${FILESDIR}"/${P}-libftdi1-fix.patch
 	fi
 
 	eapply_user

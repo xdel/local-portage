@@ -18,7 +18,7 @@ SRC_URI="mirror://sourceforge/freetype/${P/_/}.tar.bz2
 
 LICENSE="|| ( FTL GPL-2+ )"
 SLOT="2"
-KEYWORDS="~alpha amd64 arm ~arm64 hppa ia64 ~m68k ~mips ppc ppc64 ~s390 ~sh sparc x86 ~ppc-aix ~amd64-fbsd ~sparc-fbsd ~x86-fbsd ~amd64-linux ~arm-linux ~x86-linux ~ppc-macos ~x64-macos ~x86-macos ~m68k-mint ~sparc-solaris ~sparc64-solaris ~x64-solaris ~x86-solaris ~x86-winnt"
+KEYWORDS="~alpha amd64 arm arm64 hppa ia64 ~m68k ~mips ppc ppc64 ~s390 ~sh sparc x86 ~ppc-aix ~x64-cygwin ~amd64-fbsd ~sparc-fbsd ~x86-fbsd ~amd64-linux ~arm-linux ~x86-linux ~ppc-macos ~x64-macos ~x86-macos ~m68k-mint ~sparc-solaris ~sparc64-solaris ~x64-solaris ~x86-solaris ~x86-winnt"
 IUSE="X +adobe-cff bindist bzip2 +cleartype_hinting debug doc fontforge harfbuzz
 	infinality png static-libs utils"
 RESTRICT="!bindist? ( bindist )" # bug 541408
@@ -44,8 +44,8 @@ PATCHES=(
 	# This is the same as the 01 patch from infinality
 	"${FILESDIR}"/${PN}-2.7-enable-valid.patch
 
-	"${FILESDIR}"/${PN}-2.7-bugzilla-308961-cmex-workaround.patch
-	"${FILESDIR}"/${PN}-2.7-subpixel.patch
+	# "${FILESDIR}"/${PN}-2.7-bugzilla-308961-cmex-workaround.patch
+	# "${FILESDIR}"/${PN}-2.7-subpixel.patch
 
 	"${FILESDIR}"/${PN}-2.4.11-sizeof-types.patch # 459966
 

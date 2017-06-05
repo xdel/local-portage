@@ -40,6 +40,7 @@ RUBY_COMMON_DEPEND="virtual/ruby-ssl
 	>=dev-ruby/activesupport-4.2.6:4.2
 	>=dev-ruby/actionpack-4.2.6:4.2
 	>=dev-ruby/activerecord-4.2.6:4.2
+	dev-ruby/backports
 	dev-ruby/bcrypt-ruby
 	dev-ruby/bit-struct
 	dev-ruby/builder:3
@@ -51,13 +52,12 @@ RUBY_COMMON_DEPEND="virtual/ruby-ssl
 	dev-ruby/metasm:1.0.2
 	>=dev-ruby/metasploit_data_models-2.0.0
 	dev-ruby/meterpreter_bins:0.0.22
-	dev-ruby/metasploit-payloads:1.1.13
-	dev-ruby/metasploit_payloads-mettle:0.0.6
 	>=dev-ruby/metasploit-credential-2.0.0
 	>=dev-ruby/metasploit-concern-2.0.0
 	>=dev-ruby/metasploit-model-2.0.0
 	dev-ruby/msgpack
 	dev-ruby/net-ssh:*
+	dev-ruby/nexpose
 	dev-ruby/nokogiri
 	dev-ruby/octokit
 	dev-ruby/openssl-ccm:1.2.1
@@ -65,8 +65,8 @@ RUBY_COMMON_DEPEND="virtual/ruby-ssl
 	dev-ruby/recog:2.0.14
 	dev-ruby/redcarpet
 	=dev-ruby/rkelly-remix-0.0.6
-	=dev-ruby/metasploit-payloads-1.1.26
-	=dev-ruby/metasploit_payloads-mettle-0.0.8
+	=dev-ruby/metasploit-payloads-1.2.29
+	=dev-ruby/metasploit_payloads-mettle-0.1.9
 	dev-ruby/nessus_rest
 	dev-ruby/openvas-omp
 	dev-ruby/rcov
@@ -80,7 +80,7 @@ RUBY_COMMON_DEPEND="virtual/ruby-ssl
 	dev-ruby/rex-socket
 	dev-ruby/rex-sslscan
 	dev-ruby/windows_error
-	dev-ruby/rex-arch
+	=dev-ruby/rex-arch-0.1.4
 	dev-ruby/rex-java
 	dev-ruby/rex-ole
 	dev-ruby/rex-powershell
@@ -89,11 +89,12 @@ RUBY_COMMON_DEPEND="virtual/ruby-ssl
 	dev-ruby/rex-struct2
 	dev-ruby/rex-text
 	dev-ruby/rex-zip
+	dev-ruby/ruby_smb
 	dev-ruby/sqlite3
 	>=dev-ruby/pg-0.11
-	dev-ruby/packetfu:1.1.11
+	dev-ruby/packetfu:1.1.13a
 	>=dev-ruby/rubyzip-1.1
-	dev-ruby/rb-readline-r7
+	dev-ruby/rb-readline
 	dev-ruby/robots
 	dev-ruby/sshkey
 	dev-ruby/tzinfo:*

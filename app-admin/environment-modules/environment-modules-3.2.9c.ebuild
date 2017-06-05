@@ -3,6 +3,8 @@
 
 EAPI=4
 
+inherit eutils
+
 MY_PV=3.2.9
 DESCRIPTION="Provides for an easy dynamic modification of a user's environment via modulefiles."
 HOMEPAGE="http://modules.sourceforge.net/"
@@ -24,6 +26,7 @@ S="${WORKDIR}/modules-${MY_PV}"
 
 src_prepare() {
 	epatch "${FILESDIR}/${PN}-${MY_PV}-bindir.patch"
+	epatch "${FILESDIR}/tcl-8.5.patch"
 	(
 		echo "# Add ${PN} bindir to be checked for broken linkage"
 		echo "SEARCH_DIRS=\"/usr/share/Modules/bin\""

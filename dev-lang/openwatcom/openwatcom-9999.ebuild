@@ -35,11 +35,11 @@ src_install() {
 
 	INSTALL_DIR=/opt/openwatcom
 
-	local env_file=05${PN}
-	cat > ${env_file} <<-EOF
-		WATCOM=${INSTALL_DIR}
-		INCLUDE=${INSTALL_DIR}/lh
-		PATH=${INSTALL_DIR}/binl
-	EOF
-	doenvd ${env_file} || die "doenvd ${env_file} failed"
+#	local env_file=05${PN}
+#	cat > ${env_file} <<-EOF
+#		WATCOM=${INSTALL_DIR}
+#		INCLUDE=${INSTALL_DIR}/lh
+#		PATH=${INSTALL_DIR}/binl
+#	EOF
+#	doenvd ${env_file} || die "doenvd ${env_file} failed"
 }

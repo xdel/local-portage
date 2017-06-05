@@ -29,9 +29,9 @@ DEPEND="!minimal? ( >=dev-libs/openssl-1.0.1:0 )
 	mozilla? ( dev-libs/nss dev-libs/nspr )
 	kerberos? ( virtual/krb5 )
 	wow? ( dev-libs/gmp )
-	pcap? ( net-libs/libpcap )"
+	pcap? ( net-libs/libpcap )
+	rexgen? ( app-crypt/rexgen )"
 #	commoncrypto? ( )
-#	rexgen? ( )
 RDEPEND="${DEPEND}"
 
 pkg_setup() {
@@ -52,7 +52,6 @@ src_configure() {
 	append-cflags -DJOHN_SYSTEMWIDE=1
 
 	econf \
-		--disable-native-macro \
 		--disable-native-tests \
 		$(use_enable mpi) \
 		$(use_enable opencl) \

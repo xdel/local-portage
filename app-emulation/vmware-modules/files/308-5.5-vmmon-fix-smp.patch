@@ -1,0 +1,31 @@
+--- a/vmmon-only/linux/driver.c
++++ b/vmmon-only/linux/driver.c
+@@ -1275,7 +1275,7 @@
+ 
+ #include <linux/compiler-gcc.h>
+ 
+-__always_inline static Bool
++inline static Bool
+ LinuxDriverSyncReadTSCs(uint64 *delta) // OUT: TSC max - TSC min
+ {
+    TSCDelta tscDelta;
+--- a/vmmon-only/linux/vmmonInt.h
++++ b/vmmon-only/linux/vmmonInt.h
+@@ -31,7 +31,7 @@
+ #ifdef VMW_HAVE_SMP_CALL_3ARG
+ #define compat_smp_call_function(fn, info, wait) smp_call_function(fn, info, wait)
+ #else
+-#define compat_smp_call_function(fn, info, wait) smp_call_function(fn, info, 1, wait)
++#define compat_smp_call_function(fn, info, wait) smp_call_function(fn, info, wait)
+ #endif
+ 
+ 
+@@ -85,7 +85,7 @@
+               smp_call_function_single(cpu, fn, info, wait)
+ #   else
+ #      define compat_smp_call_function_single(cpu, fn, info, wait) \
+-              smp_call_function_single(cpu, fn, info, 1, wait)
++              smp_call_function_single(cpu, fn, info, wait)
+ #   endif // VMW_HAVE_SMP_CALL_3ARG
+ #else // VERSION >= 2.6.20
+ #      define compat_smp_call_function_single(cpu, fn, info, wait) (-ENOSYS)

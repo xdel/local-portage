@@ -1,4 +1,4 @@
-# Copyright 1999-2015 Gentoo Foundation
+# Copyright 1999-2017 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: mysql-multilib.eclass
@@ -211,7 +211,7 @@ DEPEND="${DEPEND}
 # For other stuff to bring us in
 # dev-perl/DBD-mysql is needed by some scripts installed by MySQL
 PDEPEND="${PDEPEND} perl? ( >=dev-perl/DBD-mysql-2.9004 )
-	 ~virtual/mysql-${MYSQL_PV_MAJOR}[embedded=,static=]
+	 server? ( ~virtual/mysql-${MYSQL_PV_MAJOR}[embedded=,static=] )
 	 virtual/libmysqlclient:${SLOT}[${MULTILIB_USEDEP},static-libs=]"
 
 # my_config.h includes ABI specific data
@@ -942,7 +942,7 @@ mysql-multilib-r1_pkg_config() {
 		# --initialize-insecure will not set root password
 		# --initialize would set a random one in the log which we don't need as we set it ourselves
 		cmd=( "${EROOT}usr/sbin/mysqld" )
-		initialize_options="--initialize-insecure  '--init-file=${sqltmp}'"
+		initialize_options="--initialize-insecure  --init-file='${sqltmp}'"
 		sqltmp="" # the initialize will take care of it
 	else
 		cmd=( "${EROOT}usr/share/mysql/scripts/mysql_install_db" )
