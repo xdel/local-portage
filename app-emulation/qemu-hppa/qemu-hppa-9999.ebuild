@@ -161,6 +161,7 @@ DEPEND="${CDEPEND}
 	dev-lang/perl
 	=dev-lang/python-2*
 	sys-apps/texinfo
+	sys-firmware/seabios-hppa
 	virtual/pkgconfig
 	kernel_linux? ( >=sys-kernel/linux-headers-2.6.35 )
 	gtk? ( nls? ( sys-devel/gettext ) )
@@ -324,6 +325,8 @@ src_prepare() {
 	check_targets IUSE_SOFTMMU_TARGETS softmmu
 	check_targets IUSE_USER_TARGETS linux-user
 
+	rm pc-bios/hppa-firmware.img
+	ln -s /usr/share/qemu/hppa-firmware.img pc-bios/hppa-firmware.img
 	# Alter target makefiles to accept CFLAGS set via flag-o
 	sed -i -r \
 		-e 's/^(C|OP_C|HELPER_C)FLAGS=/\1FLAGS+=/' \
