@@ -11,3 +11,12 @@ cross-i686-pc-linux-gnu
 cross-aarch64-unknown-linux-gnu
 cross-armv7a-hardfloat-linux-gnueabi
 cross-riscv64-unknown-linux-gnu
+cross-armv4tl-softfloat-linux-gnueabi
+cross-armv6tl-softfloat-linux-gnueabi
+cross-aarch64-linux-gnu
+cross-hppa64-linux-gnu
+cross-hppa-linux-gnu
+cross-mips64-linux-gnu
+cross-mips-linux-gnu
+cross-sparc64-linux-gnu
+cross-sparc-linux-gnu

@@ -1,14 +1,15 @@
 --- a/config.mk
 +++ b/config.mk
-@@ -1,8 +1,8 @@
- CXX ?= clang++
- CC ?= clang
+@@ -15,9 +15,9 @@
+ endif
+ WARN_LEVEL ?= all
+ 
 -LDLIBS = -lm -lstdc++
--CFLAGS = -MD -O0 -ggdb -Wall -std=c99 -I/usr//include
--CXXFLAGS = -MD -O0 -ggdb -Wall -std=c++11 -I/usr//include
-+override LDLIBS += -lm -lstdc++
-+override CFLAGS += -Wall -std=c99 -I/usr/include
-+override CXXFLAGS += -Wall -std=c++11 -I/usr/include
- PKG_CONFIG ?= pkg-config
+-CFLAGS += -MD -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(C_STD) -I$(PREFIX)/include
+-CXXFLAGS += -MD -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(CXX_STD) -I$(PREFIX)/include
++override LDLIBS = -lm -lstdc++
++override CFLAGS += -MD -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(C_STD) -I$(PREFIX)/include
++override CXXFLAGS += -MD -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(CXX_STD) -I$(PREFIX)/include
+ 
  DESTDIR ?=
- PREFIX ?= /usr/
+ CHIPDB_SUBDIR ?= icebox

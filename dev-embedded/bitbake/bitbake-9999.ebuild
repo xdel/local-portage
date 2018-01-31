@@ -9,7 +9,7 @@ PYTHON_REQ_USE="sqlite"
 inherit distutils-r1 vcs-snapshot
 
 if [[ ${PV} == "9999" ]] ; then
-	EGIT_REPO_URI="git://git.openembedded.org/bitbake.git"
+	EGIT_REPO_URI="https://github.com/openembedded/bitbake.git"
 	inherit git-2
 	KEYWORDS=""
 else
@@ -27,13 +27,3 @@ IUSE="doc"
 RDEPEND="dev-python/ply
 	dev-python/progressbar"
 DEPEND="doc? ( dev-libs/libxslt )"
-
-src_prepare() {
-	if ! use doc ; then
-		sed -i -e 's:doctype = "html":doctype = "none":' \
-			-e 's:("share/doc/bitbake-%s/manual.*))::' setup.py || die
-		echo "none:" >> doc/manual/Makefile || die
-	else
-	    sed -i -e "s:\(share/doc/bitbake-%s.* %\) __version__:\1 \"${PV}\":" setup.py || die
-	fi
-}

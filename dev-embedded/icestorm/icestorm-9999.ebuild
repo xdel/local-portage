@@ -24,7 +24,7 @@ DEPEND="
 
 src_prepare() {
 	epatch "${FILESDIR}"/${P}-path-fix.patch
-	sed -i 's/\/usr\/local/\/usr\//g' Makefile */Makefile config.mk
+	sed -i 's/\/usr\/local/\/usr/g' Makefile */Makefile config.mk
 	epatch "${FILESDIR}"/${P}-config-mk.patch
 	epatch "${FILESDIR}"/${P}-iceprog.patch
 	if ! use ftdi; then

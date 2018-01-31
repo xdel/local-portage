@@ -8,7 +8,7 @@ inherit eutils
 if [[ ${PV} == "9999" ]] ; then
 	inherit autotools git-2
 	KEYWORDS=""
-	EGIT_REPO_URI="git://${PN}.git.sourceforge.net/gitroot/${PN}/${PN}"
+	EGIT_REPO_URI="git://repo.or.cz/${PN}.git"
 else
 	KEYWORDS="~amd64 ~x86"
 	SRC_URI="mirror://sourceforge/project/${PN}/${PN}/${PV}/${P}.tar.bz2"
@@ -34,6 +34,7 @@ RDEPEND="${DEPEND}"
 REQUIRED_USE="blaster? ( || ( ftdi ftd2xx ) ) ftdi? ( !ftd2xx )"
 
 src_prepare() {
+    epatch "${FILESDIR}"/${PN}-XCF.patch
 	if [[ ${PV} == "9999" ]] ; then
 		sed -i -e "/@include version.texi/d" doc/${PN}.texi || die
 		AT_NO_RECURSIVE=yes eautoreconf

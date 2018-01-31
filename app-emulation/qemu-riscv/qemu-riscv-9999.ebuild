@@ -14,6 +14,7 @@ inherit eutils flag-o-matic linux-info toolchain-funcs multilib python-r1 \
 if [[ ${PV} = *9999* ]]; then
 	EGIT_REPO_URI="https://github.com/riscv/riscv-qemu.git"
 	inherit git-2
+	EGIT_BRANCH="riscv-next"
 	SRC_URI=""
 fi
 
@@ -31,10 +32,11 @@ static-user systemtap tci test +threads usb usbredir +uuid vde +vhost-net \
 virgl virtfs +vnc vte xattr xen xfs"
 
 COMMON_TARGETS="aarch64 alpha arm cris i386 m68k microblaze microblazeel mips
-mips64 mips64el mipsel or32 ppc ppc64 riscv32 riscv64 s390x sh4 sh4eb sparc sparc64 unicore32
+mips64 mips64el mipsel nios2 or1k ppc ppc64 riscv32 riscv64 s390x sh4 sh4eb sparc sparc64
 x86_64"
-IUSE_SOFTMMU_TARGETS="${COMMON_TARGETS} lm32 moxie ppcemb tricore xtensa xtensaeb"
-IUSE_USER_TARGETS="${COMMON_TARGETS} armeb mipsn32 mipsn32el ppc64abi32 ppc64le sparc32plus tilegx"
+IUSE_SOFTMMU_TARGETS="${COMMON_TARGETS} lm32 moxie ppcemb tricore unicore32 xtensa xtensaeb"
+IUSE_USER_TARGETS="${COMMON_TARGETS} armeb hppa mipsn32 mipsn32el ppc64abi32 ppc64le 
+sparc32plus tilegx"
 
 use_softmmu_targets=$(printf ' qemu_softmmu_targets_%s' ${IUSE_SOFTMMU_TARGETS})
 use_user_targets=$(printf ' qemu_user_targets_%s' ${IUSE_USER_TARGETS})
@@ -453,7 +455,6 @@ qemu_src_configure() {
 		conf_opts+=(
 			--disable-linux-user
 			--enable-system
-			--with-system-pixman
 			--audio-drv-list="${audio_opts}"
 		)
 		use gtk && conf_opts+=( --with-gtkabi=$(usex gtk2 2.0 3.0) )
@@ -594,13 +595,9 @@ src_install() {
 	insinto "/etc/qemu"
 	doins "${FILESDIR}/bridge.conf"
 
-	# Remove the docdir placed qmp-commands.txt
-	mv "${ED}/usr/share/doc/${PF}/html/qmp-commands.txt" "${S}/docs/" || die
-
 	cd "${S}"
 	dodoc Changelog MAINTAINERS docs/specs/pci-ids.txt
 	newdoc pc-bios/README README.pc-bios
-	dodoc docs/qmp-*.txt
 
 	if [[ -n ${softmmu_targets} ]]; then
 		# Remove SeaBIOS since we're using the SeaBIOS packaged one

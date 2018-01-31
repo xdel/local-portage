@@ -1,0 +1,111 @@
+--- a/skychart/library/getdss/Makefile	2015-07-29 17:40:01.000000000 +0000
++++ b/skychart/library/getdss/Makefile	2017-11-13 12:47:38.456666657 +0000
+@@ -11,13 +11,13 @@
+ LDFLAGS=  -Wl,-single_module -dynamiclib  -lc -lm -lstdc++ -mmacosx-version-min=10.6
+ else
+ SO_Name = libgetdss.so
+-LDFLAGS= -shared -Wl,-soname,$(SO_Name) $(arch_flags)
++LDFLAGS += -shared -Wl,-soname,$(SO_Name) $(arch_flags)
+ endif
+ 
+ OBJS = getdss_lib.o dss.o extr_fit.o getpiece.o \
+ 	hdcmprss.o bitinput.o decode.o dodecode.o hinv.o \
+ 	platelst.o qtreedec.o
+-LIBS = -lm -lstdc++
++LIBS += -lm -lstdc++
+ 
+ all: $(SO_Name)
+ 
+--- a/skychart/library/plan404/Makefile	2015-07-29 17:40:01.000000000 +0000
++++ b/skychart/library/plan404/Makefile	2017-11-13 12:48:59.643333330 +0000
+@@ -6,14 +6,14 @@
+ CC            = gcc
+ endif
+ #CFLAGS        = -O3 -ffast-math (fast-math removed for better compatibility )
+-CFLAGS        = -O3 -fPIC $(arch_flags)
++CFLAGS        += -fPIC $(arch_flags)
+ ifneq ($(findstring Darwin,$(OSTYPE)),)
+ SO_Name       = libplan404.dylib
+ CFLAGS        = -O3 -fPIC $(arch_flags) -Wno-implicit-function-declaration
+ LIBFLAGS      = -Wl,-single_module -dynamiclib  -lc -lm -mmacosx-version-min=10.6
+ else
+ SO_Name       = libplan404.so
+-LIBFLAGS      = -shared -Wl,-soname,$(SO_Name) -lc -lm
++LIBFLAGS      += -shared -Wl,-soname,$(SO_Name) -lc -lm
+ endif
+ ifneq ($(findstring W32,$(OSTYPE)),)
+ SO_Name       = libplan404.dll
+@@ -40,7 +40,7 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ 
+ $(SO_Name): $(OBJ)
+-	$(CC) $(CFLAGS) $(LIBFLAGS) -o $@ $(OBJ)
++	$(CC) $(CFLAGS) $(LDFLAGS) $(LIBFLAGS) -o $@ $(OBJ)
+ 
+ clean:
+ 	rm -f $(OBJ) $(SO_Name)
+--- a/skychart/library/wcs/Makefile	2015-07-29 17:40:01.000000000 +0000
++++ b/skychart/library/wcs/Makefile	2017-11-13 12:49:36.603333332 +0000
+@@ -1,4 +1,4 @@
+-CFLAGS= -w -fPIC $(arch_flags)
++CFLAGS += -w -fPIC $(arch_flags)
+ OSTYPE = $(shell uname)
+ ifneq ($(findstring BSD,$(OSTYPE)),)
+ CC            = cc
+@@ -32,7 +32,7 @@
+ all: $(SO_Name)
+ 
+ $(SO_Name): $(OBJS)
+-	$(CC) $(CFLAGS) $(LIBFLAGS) -o $@ $(OBJS)
++	$(CC) $(CFLAGS) $(LDFLAGS) $(LIBFLAGS) -o $@ $(OBJS)
+ 
+ cdcwcs.o:	fitsfile.h wcs.h
+ actread.o:	fitsfile.h wcscat.h wcs.h fitshead.h wcslib.h
+--- a/skychart/library/Makefile.in	2015-12-18 10:06:30.000000000 +0000
++++ b/skychart/library/Makefile.in	2017-11-13 12:53:33.543333331 +0000
+@@ -17,30 +17,16 @@
+         $(MAKE) -C getdss -f Makefile.win32 all 
+         $(MAKE) -C plan404 -f Makefile.win32 all 
+         $(MAKE) -C wcs -f Makefile.win32 all
+- else
+- ifeq ($(OS_TARGET),win64)
++else
++ifeq ($(OS_TARGET),win64)
+         $(MAKE) -C getdss -f Makefile.win64 all 
+         $(MAKE) -C plan404 -f Makefile.win64 all 
+         $(MAKE) -C wcs -f Makefile.win64 all
+- else
+- ifeq ($(OS_TARGET),Darwin)
+- ifeq ($(CPU_TARGET),i386)
+-        $(MAKE) -C getdss all arch_flags=-m32
+-        $(MAKE) -C plan404 all arch_flags=-m32
+-        $(MAKE) -C wcs all arch_flags=-m32
+- else
+- ifeq ($(CPU_TARGET),x86_64)
+-        $(MAKE) -C getdss all arch_flags=-m64
+-        $(MAKE) -C plan404 all arch_flags=-m64
+-        $(MAKE) -C wcs all arch_flags=-m64
+- else
++else
+ 	$(MAKE) -C getdss all
+         $(MAKE) -C plan404 all
+         $(MAKE) -C wcs all
+- endif
+- endif
+- endif
+- endif
++endif
+ endif
+ 
+ clean: catalog_clean
+@@ -54,10 +40,8 @@
+         $(MAKE) -C plan404 -f Makefile.win64 clean
+         $(MAKE) -C wcs -f Makefile.win64 clean
+ else
+-ifeq ($(OS_TARGET),Darwin)
+ 	$(MAKE) -C getdss clean
+ 	$(MAKE) -C plan404 clean
+ 	$(MAKE) -C wcs clean
+ endif
+ endif
+-endif

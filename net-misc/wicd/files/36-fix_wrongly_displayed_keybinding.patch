@@ -1,0 +1,16 @@
+Description: Esc is show as key to cancel changed settings, but only "Q" works
+Author: Axel Beckert <abe@debian.org>
+
+Index: wicd/curses/wicd-curses.py
+===================================================================
+--- wicd.orig/curses/wicd-curses.py	2016-01-17 18:36:45.666221400 +0100
++++ wicd/curses/wicd-curses.py	2016-01-17 18:38:23.542706743 +0100
+@@ -770,7 +770,7 @@
+         ], self.handle_keys)
+         self.confCols = OptCols([
+             ('S', _('Save')),
+-            ('esc', _('Cancel'))
++            ('Q', _('Cancel'))
+         ], self.handle_keys)
+ 
+     def lock_screen(self):
