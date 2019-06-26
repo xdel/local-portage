@@ -1,8 +1,0 @@
-DEFINED_PHASES=compile install unpack
-DEPEND=>=dev-vcs/git-1.8.2.1[curl]
-EAPI=5
-KEYWORDS=netcrave
-LICENSE=GPL-2
-SLOT=0
-_eclasses_=git-r3	0d4635eeb5a96cd5315597a47eba25c9
-_md5_=6fcaaa076d1dfd1430c99e27ada53833

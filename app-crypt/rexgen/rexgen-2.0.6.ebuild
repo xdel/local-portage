@@ -44,9 +44,5 @@ src_configure() {
 		$(cmake-utils_use python USE_PYTHON)
 		$(cmake-utils_use lua USE_LUA)
 	)
-	# Hacking around library suffix 
-	case ${ARCH} in
-		amd64) mycmakeargs="${mycmakeargs} -DLIB_SUFFIX=64";;
-	esac
 	cmake-utils_src_configure
 }

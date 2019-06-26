@@ -29,7 +29,7 @@ IUSE="python lua"
 DEPEND="sys-devel/flex
 		dev-util/cmake
 		dev-libs/icu
-		>=sys-devel/bison-3.3
+		sys-devel/bison
 		python? ( ${PYTHON_DEPS} )
 		lua? ( dev-lang/lua:= )"
 
@@ -38,15 +38,10 @@ RDEPEND="${DEPEND}"
 CMAKE_USE_DIR="${S}/src"
 
 src_configure() {
-	epatch "${FILESDIR}/add-missing-lib-prefix-${PV}.patch"
-	# epatch "${FILESDIR}/glibc-2.26.patch"
+	epatch "${FILESDIR}/add-missing-lib-prefix.patch"
 	local mycmakeargs=(
 		$(cmake-utils_use python USE_PYTHON)
 		$(cmake-utils_use lua USE_LUA)
 	)
-	# Hacking around library suffix 
-	case ${ARCH} in
-		amd64) mycmakeargs="${mycmakeargs} -DLIB_SUFFIX=64";;
-	esac
 	cmake-utils_src_configure
 }

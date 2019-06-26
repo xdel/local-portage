@@ -22,10 +22,9 @@ src_prepare() {
 }
 
 src_compile() {
-	local target
-	for target in '-C palo' '-C ipl' 'iplboot'; do
-		emake AR=$(tc-getAR) CC=$(tc-getCC) LD=$(tc-getLD) ${target}
-	done
+	emake AR=$(tc-getAR) CC=$(tc-getCC) LD=$(tc-getLD) -C palo
+	emake AR=hppa-linux-gnu-ar CC=hppa-linux-gnu-gcc LD=hppa-linux-gnu-ld -C ipl
+	emake AR=$(tc-getAR) CC=$(tc-getCC) LD=$(tc-getLD) iplboot
 }
 
 src_install() {

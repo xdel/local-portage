@@ -1,36 +1,56 @@
---- a/src/librexgen/cmake_install.cmake	2016-05-28 21:38:05.000000000 +0300
-+++ b/src/librexgen/cmake_install.cmake	2016-05-28 22:05:22.039233191 +0300
-@@ -33,17 +33,17 @@
- ENDIF(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -37,6 +37,17 @@
+   ADD_DEFINITIONS("-D_GNU_SOURCE")
+ endif("${CYGWIN}")
  
- IF(NOT CMAKE_INSTALL_COMPONENT OR "${CMAKE_INSTALL_COMPONENT}" STREQUAL "Unspecified")
--  IF(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0" AND
--     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0")
-+  IF(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0" AND
-+     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0")
-     FILE(RPATH_CHECK
--         FILE "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0"
-+         FILE "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0"
-          RPATH "")
-   ENDIF()
--  FILE(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/home/jan/projects/rexgen/trunk/src/librexgen/librexgen.so.1.0")
--  IF(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0" AND
--     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0")
-+  FILE(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}" TYPE SHARED_LIBRARY FILES "/home/jan/projects/rexgen/trunk/src/librexgen/librexgen.so.1.0")
-+  IF(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0" AND
-+     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0")
-     IF(CMAKE_INSTALL_DO_STRIP)
--      EXECUTE_PROCESS(COMMAND "/usr/bin/strip" "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/librexgen.so.1.0")
-+      EXECUTE_PROCESS(COMMAND "/usr/bin/strip" "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/librexgen.so.1.0")
-     ENDIF(CMAKE_INSTALL_DO_STRIP)
-   ENDIF()
- ENDIF(NOT CMAKE_INSTALL_COMPONENT OR "${CMAKE_INSTALL_COMPONENT}" STREQUAL "Unspecified")
---- a/src/librexgen/lua/rexgen.lua	2016-05-28 20:09:09.000000000 +0300
-+++ b/src/librexgen/lua/rexgen.lua	2016-05-28 22:26:52.860088029 +0300
-@@ -1,5 +1,5 @@
- #!${LUA_BINARY}
--package.cpath = '${CMAKE_INSTALL_PREFIX}/lib/${librexgen-lua}${CMAKE_SHARED_LIBRARY_SUFFIX}'
-+package.cpath = '${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/${librexgen-lua}${CMAKE_SHARED_LIBRARY_SUFFIX}'
- local rexgen = require '${prj}-lua'
++get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
++
++if ("${LIB64}" STREQUAL "TRUE")
++    set(LIBSUFFIX 64)
++else()
++    set(LIBSUFFIX "")
++endif()
++
++set(INSTALL_LIB_DIR     lib${LIBSUFFIX} CACHE PATH "Installation directory for libraries")
++mark_as_advanced(INSTALL_LIB_DIR)
++
+ SET(CMAKE_EXE_LINKER_FLAGS_PROFILE "${CMAKE_EXE_LINKER_FLAGS_PROFILE} -pg")
+ SET(CMAKE_SHARED_LINKER_FLAGS_PROFILE "${CMAKE_SHARED_LINKER_FLAGS_PROFILE} -pg")
  
- if (#arg ~= 1) then
+--- a/src/librexgen/lua/CMakeLists.txt
++++ b/src/librexgen/lua/CMakeLists.txt
+@@ -35,8 +35,8 @@
+ 
+ install(TARGETS ${librexgen_lua}
+ 		RUNTIME DESTINATION "bin"
+-		LIBRARY DESTINATION "lib"
+-		ARCHIVE DESTINATION "lib"
++		LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
++		ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
+ 		)
+ 
+ SET(INSTALL_INCLUDE_DIR "include/${librexgen}")
+--- a/src/librexgen/CMakeLists.txt
++++ b/src/librexgen/CMakeLists.txt
+@@ -98,8 +98,8 @@
+ 
+ install(TARGETS ${librexgen}
+ 		RUNTIME DESTINATION "bin"
+-		LIBRARY DESTINATION "lib"
+-		ARCHIVE DESTINATION "lib"
++		LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
++		ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
+ 		)
+ 
+ SET(INSTALL_INCLUDE_DIR "include/${librexgen}")
+--- a/src/rexgen/CMakeLists.txt
++++ b/src/rexgen/CMakeLists.txt
+@@ -23,5 +23,6 @@
+ 		OUTPUT rexgen.1.gz
+ 		COMMAND gzip "${CMAKE_CURRENT_SOURCE_DIR}/rexgen.1" -c >rexgen.1.gz)
+ 	add_custom_target(man ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/rexgen.1.gz")
+-	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/rexgen.1.gz" DESTINATION "man/man1")
++	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/rexgen.1.gz" DESTINATION
++		"share/man/man1")
+ endif(MSVC)

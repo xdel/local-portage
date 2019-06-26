@@ -112,5 +112,5 @@ src_install() {
 	doins run/*.chr
 
 	# documentation
-	dodoc doc/*
+	dodoc -r doc
 }
