@@ -3,7 +3,7 @@
 
 # @ECLASS: bsdmk.eclass
 # @MAINTAINER:
-# maintainer-needed@gentoo.org
+# bsd@gentoo.org
 # @BLURB: Some functions for BSDmake
 
 inherit toolchain-funcs portability flag-o-matic
@@ -38,7 +38,9 @@ mkmake() {
 
 	tc-export CC CXX LD RANLIB
 
-	${BMAKE} ${MAKEOPTS} ${EXTRA_EMAKE} ${mymakeopts} NO_WERROR= STRIP= "$@"
+	set -- ${BMAKE} ${MAKEOPTS} ${EXTRA_EMAKE} ${mymakeopts} NO_WERROR= STRIP= "$@"
+	echo "${@}"
+	"${@}"
 }
 
 # @FUNCTION: mkinstall
@@ -51,7 +53,9 @@ mkinstall() {
 
 	# STRIP= will replace the default value of -s, leaving to portage the
 	# task of stripping executables.
-	${BMAKE} ${mymakeopts} NO_WERROR= STRIP= MANSUBDIR= DESTDIR="${D}" "$@" install
+	set -- ${BMAKE} ${mymakeopts} NO_WERROR= STRIP= MANSUBDIR= DESTDIR="${D}" "$@" install
+	echo "${@}"
+	"${@}"
 }
 
 # @FUNCTION: dummy_mk

@@ -1,5 +1,5 @@
---- a/iceprog/iceprog.c
-+++ b/iceprog/iceprog.c
+--- a/iceprog/mpsse.c
++++ b/iceprog/mpsse.c
 @@ -24,7 +24,7 @@
  
  #define _GNU_SOURCE

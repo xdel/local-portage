@@ -1,0 +1,10 @@
+DEFINED_PHASES=install unpack
+DESCRIPTION=UPEK Biometric Services SDK for PC
+EAPI=3
+HOMEPAGE=http://www.upek.com/solutions/eikon/default.asp
+IUSE=+headers
+KEYWORDS=~x86 ~amd64
+LICENSE=UPEK_EULA
+SLOT=0
+SRC_URI=http://www.n-view.net/Appliance/fingerprint/download/fingerprint-gui-1.03.tar.gz
+_md5_=3204f2513ef4a1f51f228657c5e3bc77

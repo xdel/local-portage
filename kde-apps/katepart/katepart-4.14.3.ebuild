@@ -19,3 +19,9 @@ RESTRICT="test"
 KMEXTRA="
 	addons/ktexteditor
 "
+
+src_prepare() {
+	kde4-meta_src_prepare
+
+	epatch "${FILESDIR}"/gcc-7.patch
+}

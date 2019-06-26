@@ -1,0 +1,12 @@
+DEFINED_PHASES=configure install postinst prepare unpack
+DEPEND=dev-libs/boehm-gc >=dev-libs/expat-1.95.4 bzip2? ( >=app-arch/bzip2-1.0.2 ) ssl? ( >=dev-libs/openssl-0.9.6g ) X? ( x11-libs/libX11 x11-libs/libXt ) zlib? ( >=sys-libs/zlib-1.1.4 ) lua? ( >=dev-lang/lua-5 ) gpm? ( >=sys-libs/ncurses-5.2 >=sys-libs/gpm-1.20.0-r5 ) guile? ( >=dev-scheme/guile-1.6.4-r1[deprecated,discouraged] ) idn? ( net-dns/libidn ) perl? ( sys-devel/libperl ) python? ( dev-lang/python ) ruby? ( dev-lang/ruby dev-ruby/rubygems ) samba? ( net-fs/samba ) javascript? ( dev-lang/spidermonkey ) dev-vcs/git >=app-portage/elt-patches-20170815 !<sys-devel/gettext-0.18.1.1-r3 || ( >=sys-devel/automake-1.16.1:1.16 >=sys-devel/automake-1.15.1:1.15 ) >=sys-devel/autoconf-2.69 >=sys-devel/libtool-2.4
+DESCRIPTION=Advanced and well-established text-mode web browser
+EAPI=4
+HOMEPAGE=http://elinks.cz/
+IUSE=bittorrent bzip2 debug finger ftp fsp gopher gpm guile idn ipv6 javascript lua +mouse nls nntp perl python ruby samba ssl unicode X zlib
+LICENSE=GPL-2
+RDEPEND=dev-libs/boehm-gc >=dev-libs/expat-1.95.4 bzip2? ( >=app-arch/bzip2-1.0.2 ) ssl? ( >=dev-libs/openssl-0.9.6g ) X? ( x11-libs/libX11 x11-libs/libXt ) zlib? ( >=sys-libs/zlib-1.1.4 ) lua? ( >=dev-lang/lua-5 ) gpm? ( >=sys-libs/ncurses-5.2 >=sys-libs/gpm-1.20.0-r5 ) guile? ( >=dev-scheme/guile-1.6.4-r1[deprecated,discouraged] ) idn? ( net-dns/libidn ) perl? ( sys-devel/libperl ) python? ( dev-lang/python ) ruby? ( dev-lang/ruby dev-ruby/rubygems ) samba? ( net-fs/samba ) javascript? ( dev-lang/spidermonkey )
+RESTRICT=test
+SLOT=0
+_eclasses_=autotools	1bf086cdd7356f5c9a4acd9727bd2065	desktop	b1d22ac8bdd4679ab79c71aca235009d	epatch	a1bf4756dba418a7238f3be0cb010c54	estack	43ddf5aaffa7a8d0482df54d25a66a1f	eutils	6e6c2737b59a4b982de6fb3ecefd87f8	flag-o-matic	55aaa148741116aa54ad0d80e361818e	git-2	249c1a0962573f4ce2c28f0d5b6b35d4	libtool	f143db5a74ccd9ca28c1234deffede96	ltprune	08f9e1d9ee0af8f5d9a7854efbcd8c0e	multilib	b2f01ad412baf81650c23fcf0975fa33	preserve-libs	ef207dc62baddfddfd39a164d9797648	toolchain-funcs	f164325a2cdb5b3ea39311d483988861	vcs-clean	2a0f74a496fa2b1552c4f3398258b7bf
+_md5_=0cd45330965d189bc04f59c23027d514

@@ -1,0 +1,11 @@
+DEFINED_PHASES=install setup
+DEPEND=mysql? ( >=dev-java/jdbc-mysql-5 ) postgres? ( >=dev-java/jdbc-postgresql-8.2 ) >=virtual/jdk-1.5
+DESCRIPTION=Commandline tool to process openstreetmap data
+EAPI=4
+HOMEPAGE=http://wiki.openstreetmap.org/index.php/Osmosis
+IUSE=mysql postgres
+KEYWORDS=~amd64 ~x86
+LICENSE=GPL-3
+SLOT=0
+SRC_URI=http://bretth.dev.openstreetmap.org/osmosis-build/osmosis-0.45.tgz
+_md5_=2ebf9c247f3abbcaf490a07b42b27751

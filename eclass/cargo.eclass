@@ -1,4 +1,4 @@
-# Copyright 1999-2016 Gentoo Foundation
+# Copyright 1999-2018 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: cargo.eclass
@@ -6,21 +6,26 @@
 # rust@gentoo.org
 # @AUTHOR:
 # Doug Goldstein <cardoe@gentoo.org>
+# @SUPPORTED_EAPIS: 6 7
 # @BLURB: common functions and variables for cargo builds
 
 if [[ -z ${_CARGO_ECLASS} ]]; then
 _CARGO_ECLASS=1
 
+CARGO_DEPEND=""
+[[ ${CATEGORY}/${PN} != dev-util/cargo ]] && CARGO_DEPEND="virtual/cargo"
+
 case ${EAPI} in
-	6) : ;;
+	6) DEPEND="${CARGO_DEPEND}";;
+	7) BDEPEND="${CARGO_DEPEND}";;
 	*) die "EAPI=${EAPI:-0} is not supported" ;;
 esac
+
+inherit multiprocessing
 
 EXPORT_FUNCTIONS src_unpack src_compile src_install
 
 IUSE="${IUSE} debug"
-
-[[ ${CATEGORY}/${PN} != dev-util/cargo ]] && DEPEND=">=dev-util/cargo-0.13.0"
 
 ECARGO_HOME="${WORKDIR}/cargo_home"
 ECARGO_VENDOR="${ECARGO_HOME}/gentoo"
@@ -29,12 +34,18 @@ ECARGO_VENDOR="${ECARGO_HOME}/gentoo"
 # @DESCRIPTION:
 # Generates the URIs to put in SRC_URI to help fetch dependencies.
 cargo_crate_uris() {
-	for crate in $*; do
-		local name version url
+	local crate
+	for crate in "$@"; do
+		local name version url pretag
 		name="${crate%-*}"
 		version="${crate##*-}"
+		pretag="^[a-zA-Z]+"
+		if [[ $version =~ $pretag ]]; then
+			version="${name##*-}-${version}"
+			name="${name%-*}"
+		fi
 		url="https://crates.io/api/v1/crates/${name}/${version}/download -> ${crate}.crate"
-		echo $url
+		echo "${url}"
 	done
 }
 
@@ -47,7 +58,7 @@ cargo_src_unpack() {
 	mkdir -p "${ECARGO_VENDOR}" || die
 	mkdir -p "${S}" || die
 
-	local archive
+	local archive shasum pkg
 	for archive in ${A}; do
 		case "${archive}" in
 			*.crate)
@@ -93,7 +104,7 @@ cargo_src_unpack() {
 cargo_gen_config() {
 	debug-print-function ${FUNCNAME} "$@"
 
-	cat <<- EOF > ${ECARGO_HOME}/config
+	cat <<- EOF > "${ECARGO_HOME}/config"
 	[source.gentoo]
 	directory = "${ECARGO_VENDOR}"
 
@@ -111,7 +122,7 @@ cargo_src_compile() {
 
 	export CARGO_HOME="${ECARGO_HOME}"
 
-	cargo build -v $(usex debug "" --release) \
+	cargo build -j $(makeopts_jobs) $(usex debug "" --release) \
 		|| die "cargo build failed"
 }
 
@@ -121,7 +132,7 @@ cargo_src_compile() {
 cargo_src_install() {
 	debug-print-function ${FUNCNAME} "$@"
 
-	cargo install --root="${D}/usr" $(usex debug --debug "") \
+	cargo install -j $(makeopts_jobs) --root="${D}/usr" $(usex debug --debug "") \
 		|| die "cargo install failed"
 	rm -f "${D}/usr/.crates.toml"
 

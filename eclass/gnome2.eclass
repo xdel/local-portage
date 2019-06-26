@@ -4,6 +4,7 @@
 # @ECLASS: gnome2.eclass
 # @MAINTAINER:
 # gnome@gentoo.org
+# @SUPPORTED_EAPIS: 4 5 6
 # @BLURB: Provides phases for Gnome/Gtk+ based packages.
 # @DESCRIPTION:
 # Exports portage base functions used by ebuilds written for packages using the
@@ -337,8 +338,12 @@ gnome2_pkg_preinst() {
 gnome2_pkg_postinst() {
 	xdg_pkg_postinst
 	gnome2_gconf_install
-	gnome2_icon_cache_update
-	gnome2_schemas_update
+	if [[ -n ${GNOME2_ECLASS_ICONS} ]]; then
+		gnome2_icon_cache_update
+	fi
+	if [[ -n ${GNOME2_ECLASS_GLIB_SCHEMAS} ]]; then
+		gnome2_schemas_update
+	fi
 	gnome2_scrollkeeper_update
 	gnome2_gdk_pixbuf_update
 
@@ -357,8 +362,12 @@ gnome2_pkg_postinst() {
 # Handle scrollkeeper, GSettings, Icons, desktop and mime database updates.
 gnome2_pkg_postrm() {
 	xdg_pkg_postrm
-	gnome2_icon_cache_update
-	gnome2_schemas_update
+	if [[ -n ${GNOME2_ECLASS_ICONS} ]]; then
+		gnome2_icon_cache_update
+	fi
+	if [[ -n ${GNOME2_ECLASS_GLIB_SCHEMAS} ]]; then
+		gnome2_schemas_update
+	fi
 	gnome2_scrollkeeper_update
 
 	if [[ ${#GNOME2_ECLASS_GIO_MODULES[@]} -gt 0 ]]; then

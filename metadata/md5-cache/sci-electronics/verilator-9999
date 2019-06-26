@@ -1,0 +1,11 @@
+DEFINED_PHASES=compile configure install prepare unpack
+DEPEND=dev-perl/SystemPerl dev-perl/Verilog-Perl doc? ( app-text/texlive ) >=app-portage/elt-patches-20170815 !<sys-devel/gettext-0.18.1.1-r3 || ( >=sys-devel/automake-1.16.1:1.16 >=sys-devel/automake-1.15.1:1.15 ) >=sys-devel/autoconf-2.69 >=sys-devel/libtool-2.4 dev-vcs/git
+DESCRIPTION=Verilog compiler and simulator
+EAPI=4
+HOMEPAGE=http://www.veripool.org/wiki/verilator
+IUSE=doc +modulefile
+LICENSE=|| ( Artistic-2 LGPL-3 )
+RDEPEND=dev-perl/SystemPerl dev-perl/Verilog-Perl doc? ( app-text/texlive )
+SLOT=9999
+_eclasses_=autotools	1bf086cdd7356f5c9a4acd9727bd2065	git-2	249c1a0962573f4ce2c28f0d5b6b35d4	libtool	f143db5a74ccd9ca28c1234deffede96	multilib	b2f01ad412baf81650c23fcf0975fa33	toolchain-funcs	f164325a2cdb5b3ea39311d483988861
+_md5_=bcbaa739a9cf5929e26d20ce7d10bca6

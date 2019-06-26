@@ -1,0 +1,11 @@
+--- a/guile-gtk-2.1/gtk-glue.c
++++ b/guile-gtk-2.1/gtk-glue.c
+@@ -3576,7 +3576,7 @@
+   int c_source;
+   GdkInputCondition c_condition;
+   sgtk_protshell* c_callback;
+-  SCM_ASSERT ((SCM_NIMP (p_source) && SCM_TYP16 (p_source) == scm_tc16_fport && SCM_OPPORTP (p_source)), p_source, SCM_ARG1, s_gtk_input_add_full);
++  SCM_ASSERT ((SCM_NIMP (p_source) && SCM_TYP16 (p_source) == scm_file_port_type && SCM_OPPORTP (p_source)), p_source, SCM_ARG1, s_gtk_input_add_full);
+   c_condition = sgtk_scm2flags (p_condition, &sgtk_gdk_input_condition_info, SCM_ARG2, s_gtk_input_add_full);
+   SCM_ASSERT ((scm_is_true (scm_procedure_p(p_callback))), p_callback, SCM_ARG3, s_gtk_input_add_full);
+   c_source = sgtk_port2fileno (p_source);

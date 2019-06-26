@@ -2,12 +2,12 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=2
+EAPI=5
 
 ESVN_REPO_URI="http://src.chromium.org/svn/trunk/tools/depot_tools"
-PYTHON_DEPEND="2"
+PYTHON_COMPAT=( python2_7 )
 
-inherit eutils python subversion
+inherit eutils python-r1 subversion
 
 DESCRIPTION="Scripts to manage integration with Chromium repository and development process"
 HOMEPAGE="http://dev.chromium.org/developers/how-tos/depottools"

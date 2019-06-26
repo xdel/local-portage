@@ -1,55 +1,38 @@
-diff -ur a/Source/JavaScriptCore/API/JSStringRef.cpp b/Source/JavaScriptCore/API/JSStringRef.cpp
---- a/Source/JavaScriptCore/API/JSStringRef.cpp	2016-04-10 06:48:36.000000000 +0000
-+++ b/Source/JavaScriptCore/API/JSStringRef.cpp	2018-01-31 18:18:59.830000002 +0000
-@@ -37,7 +37,7 @@
- JSStringRef JSStringCreateWithCharacters(const JSChar* chars, size_t numChars)
- {
-     initializeThreading();
--    return OpaqueJSString::create(chars, numChars).leakRef();
-+    return OpaqueJSString::create(reinterpret_cast<const UChar*>(chars), numChars).leakRef();
- }
+--- webkitgtk-2.16.1/Source/JavaScriptCore/API/JSStringRef.h.orig	2017-02-20 17:20:08.000000000 +0100
++++ webkitgtk-2.16.1/Source/JavaScriptCore/API/JSStringRef.h	2017-04-22 14:35:00.926530142 +0200
+@@ -32,6 +32,7 @@
+ #include <stdbool.h>
+ #endif
+ #include <stddef.h> /* for size_t */
++#include <uchar.h>
  
- JSStringRef JSStringCreateWithUTF8CString(const char* string)
-@@ -62,7 +62,7 @@
- JSStringRef JSStringCreateWithCharactersNoCopy(const JSChar* chars, size_t numChars)
- {
-     initializeThreading();
--    return OpaqueJSString::create(StringImpl::createWithoutCopying(chars, numChars)).leakRef();
-+    return OpaqueJSString::create(StringImpl::createWithoutCopying(reinterpret_cast<const UChar*>(chars), numChars)).leakRef();
- }
- 
- JSStringRef JSStringRetain(JSStringRef string)
-@@ -83,7 +83,7 @@
- 
- const JSChar* JSStringGetCharactersPtr(JSStringRef string)
- {
--    return string->characters();
-+    return reinterpret_cast<const JSChar*>(string->characters());
- }
- 
- size_t JSStringGetMaximumUTF8CStringSize(JSStringRef string)
-diff -ur a/Source/JavaScriptCore/runtime/DateConversion.cpp b/Source/JavaScriptCore/runtime/DateConversion.cpp
---- a/Source/JavaScriptCore/runtime/DateConversion.cpp	2013-08-03 16:10:38.000000000 +0000
-+++ b/Source/JavaScriptCore/runtime/DateConversion.cpp	2018-01-31 18:20:13.993333335 +0000
-@@ -107,7 +107,8 @@
- #if OS(WINDOWS)
-             TIME_ZONE_INFORMATION timeZoneInformation;
-             GetTimeZoneInformation(&timeZoneInformation);
--            const WCHAR* timeZoneName = t.isDST() ? timeZoneInformation.DaylightName : timeZoneInformation.StandardName;
-+	    const WCHAR* winTimeZoneName = t.isDST() ? timeZoneInformation.DaylightName : timeZoneInformation.StandardName;
-+	    String timeZoneName(reinterpret_cast<const UChar*>(winTimeZoneName));
+ #ifdef __cplusplus
+ extern "C" {
+@@ -46,7 +47,7 @@
+  character. As with all scalar types, endianness depends on the underlying
+  architecture.
+ */
+-    typedef unsigned short JSChar;
++    typedef char16_t JSChar;
  #else
-             struct tm gtm = t;
-             char timeZoneName[70];
-diff -ur a/Source/WebKit2/Shared/API/c/WKString.cpp b/Source/WebKit2/Shared/API/c/WKString.cpp
---- a/Source/WebKit2/Shared/API/c/WKString.cpp	2016-04-10 06:48:37.000000000 +0000
-+++ b/Source/WebKit2/Shared/API/c/WKString.cpp	2018-01-31 18:21:27.016666668 +0000
-@@ -55,7 +55,7 @@
- size_t WKStringGetCharacters(WKStringRef stringRef, WKChar* buffer, size_t bufferLength)
- {
-     COMPILE_ASSERT(sizeof(WKChar) == sizeof(UChar), WKStringGetCharacters_sizeof_WKChar_matches_UChar);
--    return (toImpl(stringRef)->getCharacters(static_cast<UChar*>(buffer), bufferLength));
-+    return (toImpl(stringRef)->getCharacters(reinterpret_cast<UChar*>(buffer), bufferLength));
- }
+     typedef wchar_t JSChar;
+ #endif
+--- webkitgtk-2.16.1/Source/WebKit2/Shared/API/c/WKString.h.orig	2017-02-20 17:20:17.000000000 +0100
++++ webkitgtk-2.16.1/Source/WebKit2/Shared/API/c/WKString.h	2017-04-22 14:35:56.853196170 +0200
+@@ -28,6 +28,7 @@
  
- size_t WKStringGetMaximumUTF8CStringSize(WKStringRef stringRef)
+ #include <WebKit/WKBase.h>
+ #include <stddef.h>
++#include <uchar.h>
+ 
+ #ifndef __cplusplus
+ #include <stdbool.h>
+@@ -39,7 +40,7 @@
+ 
+ #if !defined(WIN32) && !defined(_WIN32) \
+     && !((defined(__CC_ARM) || defined(__ARMCC__)) && !defined(__linux__)) /* RVCT */
+-    typedef unsigned short WKChar;
++    typedef char16_t WKChar;
+ #else
+     typedef wchar_t WKChar;
+ #endif

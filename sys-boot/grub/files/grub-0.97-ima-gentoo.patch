@@ -1,0 +1,4258 @@
+Index: grub-0.97/configure.ac
+===================================================================
+--- grub-0.97/configure.ac	(revision 17)
++++ grub-0.97/configure.ac	(working copy)
+@@ -13,7 +13,7 @@
+ dnl USE OF THIS SOFTWARE.
+ 
+ AC_PREREQ(2.57)
+-AC_INIT([GRUB], [0.97], [bug-grub@gnu.org])
++AC_INIT([GRUB], [0.97-ima-1.1.0.0], [bug-grub@gnu.org])
+ AC_CONFIG_SRCDIR([stage2/stage2.c])
+ AC_CONFIG_HEADER([config.h])
+ AM_INIT_AUTOMAKE
+@@ -660,6 +660,25 @@
+ CCASFLAGS='$(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)'
+ AC_SUBST(CCASFLAGS)
+ 
++dnl Integrity Measurement Architecture is applied to stage1, stage2 and util
++AC_ARG_ENABLE(ima,
++  [  --enable-ima         Enable IMA])
++if test x"$enable_ima" = xyes; then
++  # Flags:
++  #   ENABLE_IMA  Enable IMA (Transitive Trust)
++  #   IMA_IGNORE_BIOS_RC3      Ignore RC=3 for IBM/Lenovo v1.1b BIOS.
++  #   IMA_USE_HLEE_F2          Use TCG_HashLogExtendEvent Input Parameter Block Format 2 for IBM/Lenovo v1.1b BIOS and v1.2 BIOS
++  #   IMA_INFRA_MODE           Measure stage1(MBR) again to support remote attestation
++  STAGE1_CFLAGS="$STAGE1_CFLAGS -DENABLE_IMA=1 -DIMA_IGNORE_BIOS_RC3=1 -DIMA_USE_HLEE_F2=1 -DIMA_INFRA_MODE=1"
++  STAGE2_CFLAGS="$STAGE2_CFLAGS -DENABLE_IMA=1 -DIMA_IGNORE_BIOS_RC3=1 -DIMA_USE_HLEE_F2=1 -DIMA_INFRA_MODE=1"
++  CFLAGS="$CFLAGS -DIMA_INFRA_MODE=1"
++fi
++dnl IMA discovery mode
++AC_ARG_ENABLE(imatest,
++  [  --enable-imatest         Enable IMA discovery at Stage2])
++if test x"$enable_imatest" = xyes; then
++  STAGE2_CFLAGS="$STAGE2_CFLAGS -DIMA_TEST=1"
++fi
+ 
+ dnl Output.
+ AC_CONFIG_FILES([Makefile stage1/Makefile stage2/Makefile \
+Index: grub-0.97/stage1/stage1.h
+===================================================================
+--- grub-0.97/stage1/stage1.h	(revision 17)
++++ grub-0.97/stage1/stage1.h	(working copy)
+@@ -83,4 +83,8 @@
+ /* The drive number of an invalid drive.  */
+ #define GRUB_INVALID_DRIVE	0xFF
+ 
++#ifdef ENABLE_IMA
++#include "../stage2/ima.h"
++#endif /* ENABLE_IMA */
++
+ #endif /* ! STAGE1_HEADER */
+Index: grub-0.97/stage1/stage1.S
+===================================================================
+--- grub-0.97/stage1/stage1.S	(revision 17)
++++ grub-0.97/stage1/stage1.S	(working copy)
+@@ -18,6 +18,24 @@
+  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+  */
+ 
++#ifdef ENABLE_IMA
++/*
++ *  Changes:
++ *   1) Remove CHS part to get thecode space for Transitive Trust Support
++ *   2) Measure the 1st sector of stage 1.5 before jump to them
++ *
++ *  2002/12/XX Y. Yamashita  Original Patch
++ *   TCG_HashAll & TCG_LogEvent are used insted of the single
++ *   TCG_HashLogEvent call.
++ *  2004/06/28 S. Munetoh    Modified
++ *  2006/08/15 S. Munetoh    IMA_USE_HLEE_F2
++ *   use TCG_HashLogEvent call with format 2.
++ *  2007/04/19 S. Munetoh 
++ *   remove IMA_BIOS_BIGREALMODE_FIX
++ */
++#endif /* ENABLE_IMA */
++
++
+ #include <stage1.h>
+ 	
+ /*
+@@ -153,6 +171,7 @@
+ 	/* print a notification message on the screen */
+ 	MSG(notification_string)
+ 
++#ifndef ENABLE_IMA
+ 	/* do not probe LBA if the drive is a floppy */
+ 	testb	$STAGE1_BIOS_HD_FLAG, %dl
+ 	jz	chs_mode
+@@ -180,6 +199,7 @@
+ 	jnz	lba_mode
+ 	andw	$1, %cx
+ 	jz	chs_mode
++#endif /* ENABLE_IMA */
+ 	
+ lba_mode:
+ 	/* save the total number of sectors */
+@@ -227,7 +247,11 @@
+ 	movw	$STAGE1_BUFFERSEG, %bx
+ 	jmp	copy_buffer
+ 		
+-chs_mode:	
++chs_mode:
++#ifdef ENABLE_IMA
++	MSG(chs_no_support_string)
++	jmp     general_error
++#else /* ! ENABLE_IMA */
+ 	/*
+ 	 *  Determine the hard disk geometry from the BIOS!
+ 	 *  We do this first, so that LS-120 IDE floppies work correctly.
+@@ -345,8 +369,129 @@
+ 	jc	read_error
+ 
+ 	movw	%es, %bx
++#endif /* ! ENABLE_IMA */
+ 	
+ copy_buffer:
++
++#ifdef ENABLE_IMA
++
++	pusha
++#ifdef IMA_USE_HLEE_F2  /* IBM/Lenovo V11 and all V12 BIOS must work */
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=00h" TCG_StatusCheck
++ *	Call with	%ah = 0xBB
++ *			%al = 0x00
++ *
++ *	Return:		%eax = TCG_STATUS
++ *			%ebx = 'TCPA'
++ *
++ * Ref:
++ *  TCG PC Client Specific Implementation Specification for Conventional BIOS v1.2,
++ *  Section 12.5 (page 85)
++ */
++tcg_statuscheck:
++	movw    $0xbb00, %ax		/* TCG_StatusCheck */
++	int     $0x1a
++	test	%eax, %eax
++	jnz	tcg_end			/* if eax != 0 */
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=01h" TCG_HashLogExtendEvent
++ *	Call with	%ah = 0xBB
++ *			%al = 0x01
++ *			%es:%di = segment:offset of input parametor block
++ *			%ds:%si = segment:offset of output parametor block
++ *			%ebx = 'TCPA'
++ *			%ecx = 0
++ *			%edx = 0
++ *	Return:
++ *			%eax = TCG_STATUS
++ *			%ds:%si = ?
++ *
++ * Ref:
++ *  TCG PC Client Specific Implementation Specification for Conventional BIOS v1.2,
++ *  Section 12.6 (page 86)
++ */
++	/* Set tcg_pcr_event.eventSize = 0 */
++tcg_hashlogextendevent:
++	movl	%eax, ABS(tcg_pcr_event + 28) /* LogDatalen = 0, eax must be zero */
++	movw    $0xbb01, %ax		/* TCG_LogEvent */
++	movw    $ABS(ipb), %di		/* ES:DI = IPB */
++	movw	$0x8E00, %si		/* OPB = 0x8E00 */
++	xorl    %ecx, %ecx		/* ECX = 0 */
++	xorl    %edx, %edx		/* EDX = 0 */
++	int     $0x1a
++#ifndef IMA_IGNORE_BIOS_RC3
++	test	%eax, %eax
++	jz	tcg_end
++	MSG(tcg_error_string)
++#endif /* IMA_IGNORE_BIOS_RC3 */
++
++#else /* ! IMA_USE_HLEE_F2 */
++/*
++ * all V11 & V12 BIOS must work but HALT with some BIOS
++ * since there are no space to put TCG_StatusCkeck()
++ */
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=05h" TCG_HashAll
++ *	Call with	%ah = 0xBB
++ *			%al = 0x05
++ *			%es:%di = segment:offset of input parametor block
++ *			%ds:%si = segment:offset of output parametor block
++ *			%ebx = 'TCPA'
++ *			%ecx = 0
++ *			%edx = 0
++ *	Return:
++ *			%eax = TCG_STATUS
++ *			%ds:%si = segment:offset of referenced buffer
++ *
++ * Ref:	 TCG PC Specification v1.0, Section 8.1.8 (page 49)
++ */
++tcg_hashall:
++	movw    $0xbb05, %ax				/* TCG_HashAll */
++	movw    $ABS(ipb), %di				/* ES:DI = IPB */
++	movw    $ABS(tcg_pcr_event + 8), %si /* DS:SI = OPB */
++	movl    $0x41504354, %ebx			/* EBX = "TCPA" */
++	xorl    %ecx, %ecx				/* ECX = 0 */
++	xorl    %edx, %edx				/* EDX = 0 */
++	int     $0x1a
++#ifndef IMA_IGNORE_BIOS_RC3
++	test	%eax, %eax
++	jnz	tcg_error
++#endif	/* IMA_IGNORE_BIOS_RC3 */
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=04h" TCG_LogEvent
++ *	Call with	%ah = 0xBB
++ *			%al = 0x04
++ *			%es:%di = segment:offset of input parametor block
++ *			%ds:%si = segment:offset of output parametor block
++ *			%ebx = 'TCPA'
++ *			%ecx = 0
++ *			%edx = 0
++ *	Return:
++ *			%eax = TCG_STATUS
++ *			%ds:%si = ?
++ *
++ * Ref:	 TCG PC Specification v1.0, Section 8.1.7 (page 47)
++ */
++tcg_logevent:
++	/* Set tcg_pcr_event.eventSize = 0 */
++	movl	%eax, ABS(tcg_pcr_event + 28)
++	movb	$(ipb_logevent_end - ipb), ABS(ipb_len)
++	movb	$IMA_EV_GRUB_STAGE15_PCR, ABS(ipb_pcrindex)
++	movw    $0xbb04, %ax		/* TCG_LogEvent */
++	movw	$0x8E00, %si		/* OPB = 0x8E00 */
++	int     $0x1a
++#ifndef IMA_IGNORE_BIOS_RC3
++	test	%eax, %eax
++	jz	tcg_end
++tcg_error:
++	MSG(tcg_error_string)
++#endif /* IMA_IGNORE_BIOS_RC3 */
++#endif /* ! IMA_USE_HLEE_F2 */
++tcg_end:
++	popa
++#endif /* ENABLE_IMA */
++
+ 	movw	ABS(stage2_segment), %es
+ 
+ 	/*
+@@ -405,6 +550,10 @@
+ hd_probe_error_string:	.string "Hard Disk"
+ read_error_string:	.string "Read"
+ general_error_string:	.string " Error"
++#ifdef ENABLE_IMA
++chs_no_support_string:	.string "CHSNA"
++tcg_error_string:	.string "TCGERR "
++#endif
+ 
+ /*
+  * message: write the string pointed to by %si
+@@ -427,6 +576,55 @@
+ 	jne	1b	/* if not end of string, jmp to display */
+ 	ret
+ 
++#ifdef ENABLE_IMA
++
++/* TCG(TCG) BIOS Input Parameter Block */
++#ifdef IMA_USE_HLEE_F2
++/* TCG_HashLogExtendEvent Input Parameter Block Format 2 */
++ipb: /* 28 bytes */
++	.word	(ipb_end - ipb)		/*  0 block size   */
++	.word   0                       /*  2 reserved     */
++	.long   STAGE1_BUFFERSEG * 0x10 /*  4 hash data pointer */
++#ifdef IMA_INFRA_MODE
++	.long   496                     /*  8 hash data length (496 bytes) */
++#else
++	.long   512			/*  8 hash data length (512 bytes) */
++#endif
++	.long   IMA_EV_GRUB_STAGE15_PCR /*  C PCR index */
++	.long   0                       /* 10 reserved */
++	.long   ABS(tcg_pcr_event)      /* 14 LogData Ptr */
++	.long   32                      /* 18 LogData Len */
++ipb_end:
++
++#else /* ! IMA_USE_HLEE_F2 */
++ipb:
++ipb_len:
++	.word	(ipb_hashall_end - ipb)	/*  0 block size   */
++	.word   0                       /*  2 reserved     */
++	.long   STAGE1_BUFFERSEG * 0x10	/*  4 data pointer */
++#ifdef IMA_INFRA_MODE
++	.long   496                     /*  8 hash data length (496 bytes) */
++#else
++	.long   512			/*  8 hash data length (512 bytes) */
++#endif
++ipb_pcrindex:
++ipb_algorithmid:
++	.long   4                       /* AlgorighmID = TCG_ALG_SHA for HashAll*/
++					/* PCRIndex for LogEvent */
++ipb_hashall_end:
++	.long	IMA_EV_GRUB_STAGE15_TYPE /* event type	*/
++	.long   ABS(tcg_pcr_event)       /* log pointer  */
++	.long   32                       /* log size     */
++ipb_logevent_end:
++#endif /* ! IMA_USE_HLEE_F2 */
++/* TCG_PCR_EVENT structure */
++tcg_pcr_event:                            /* 32 bytes     */
++	.long   IMA_EV_GRUB_STAGE15_PCR   /* PCR index    */
++	.long   IMA_EV_GRUB_STAGE15_TYPE  /* event type   */
++/*      .space  20                        |* PCR value    */
++/*      .long   0                         |* event size   */
++#endif /* ENABLE_IMA  */
++
+ 	/*
+ 	 *  Windows NT breaks compatibility by embedding a magic
+ 	 *  number here.
+@@ -446,6 +644,7 @@
+ part_start:	
+ 	. = _start + STAGE1_PARTSTART
+ 
++#ifndef ENABLE_IMA
+ probe_values:
+ 	.byte	36, 18, 15, 9, 0
+ 
+@@ -493,6 +692,8 @@
+ 
+ 	jmp	final_init
+ 
++#endif /* ! ENABLE_IMA */
++
+ 	. = _start + STAGE1_PARTEND
+ 
+ /* the last 2 bytes in the sector 0 contain the signature */
+Index: grub-0.97/stage2/asm.S
+===================================================================
+--- grub-0.97/stage2/asm.S	(revision 17)
++++ grub-0.97/stage2/asm.S	(working copy)
+@@ -2478,7 +2478,835 @@
+ 
+ #endif /* STAGE1_5 */
+ 
++#ifdef TRANSITIVE_TRUST
++
++#define TCG_DIGEST_SIZE     20
++#define TCG_PCR_VALUE_SIZE  20
++#define TCG_EV_GRUB         0x20
++
++/* #define TCG_DEBUG  */
++
++
++	.code16
++	.align  4
++tcg_signature:
++	.byte   'T', 'C', 'P', 'A'
++tcg_grub:
++	.byte   'G', 'R', 'U', 'B'
++
++
++	/* TCG_PassThroughToTPM Input Parameter Block */
++tcg_passthru_ipb:
++tcg_passthru_ipb_length:
++	.word   0	       /* IPBLength */
++	.word   0	       /* Reserved */
++tcg_passthru_ipb_opb_length:	/* OPBLength */
++	.word   tcg_passthru_opb_end - tcg_passthru_opb
++	.word   0	       /* Reserved */
++tpm_operand_in_buff:
++	.space  34	      /* TPMOperandIn */
++tpm_operand_in_buff_end:
++
++
++	/* TCG_PassThroughToTPM Output Parameter Block */
++tcg_passthru_opb:
++tcg_passthru_opb_length:    /* OPBLength */
++	.word   tcg_passthru_opb_end - tcg_passthru_opb
++	.word   0	       /* Reserved */
++tpm_operand_out_buff:
++	.space  2	       /* tag */
++	.space  4	       /* paramSize */
++tpm_operand_out_return_code:
++	.space  4	       /* returnCode */
++	.space  20	      /* Buffer for output values */
++tpm_operand_out_buff_end:
++tcg_passthru_opb_end:
++
++
++	/* TPM_Extend Input (Note: TPM Operands are Network-Byte-Order */
++tpm_extend_in:
++	.byte   0,0xC1	  /* tag = TPM_TAG_RQU_COMMAND */
++	.byte   0,0,0,tpm_extend_in_end - tpm_extend_in
++				/* paramSize */
++	.byte   0,0,0,20	/* ordinal = TPM_ORD_Extend  */
++	.byte   0,0,0	   /* pcrNum (Bit 31-8) */
++tpm_extend_pcr_num:
++	.byte   0	       /* pcrNum (Bit 7-0) */
++tpm_extend_digest:
++	.space  TCG_DIGEST_SIZE
++tpm_extend_in_end:
++
++	/* TPM_Extend Output parameter offsets */
++tpm_extend_pcr_value = 10
++
++
++	/* TPM_PcrRead Input (Note: TPM Operands are Network-Byte-Order */
++tpm_pcrread_in:
++	.byte   0,0xC1	  /* tag = TPM_TAG_RQU_COMMAND */
++	.byte   0,0,0,tpm_pcrread_in_end - tpm_pcrread_in
++				/* paramSize */
++	.byte   0,0,0,21	/* ordinal = TPM_ORD_PcrRead  */
++	.byte   0,0,0	   /* pcrNum (Bit 31-8) */
++tpm_pcrread_pcrindex:
++	.byte   0	       /* pcrNum (Bit 7-0) */
++tpm_pcrread_in_end:
++
++	/* TPM_PcrRead Output parameter offsets */
++tpm_pcrread_pcr_value = 10
++
++
++
++	/* TCG_HashLogExtendEvent Input Parameter Block (Format 1)*/
++tcg_hlee_ipb:
++	.word   tcg_hlee_ipb_end - tcg_hlee_ipb	 /* IPBLength, 18h */
++	.word   0				       /* Reserved */
++tcg_hlee_ipb_hashdata:
++	.long   0				       /* HashDataPtr */
++tcg_hlee_ipb_hashdatalen:
++	.long   0				       /* HashDataLen */
++tcg_hlee_ipb_pcr_index:
++	.long   0				       /* PCRIndex */
++tcg_hlee_ipb_logdata:
++	.long   0				       /* LogDataPtr */
++tcg_hlee_ipb_logdatalen:
++	.long   0				       /* LogDataLen */
++tcg_hlee_ipb_end:
++	/* TBD */
++
++	/* TCG_HashLogExtendEvent Input Parameter Block (Format 2) */
++	/* TCG_LogEvent	   Input Parameter Block */
++tcg_le_ipb:
++	.word   tcg_le_ipb_end - tcg_le_ipb	     /* IPBLength, 18h */
++	.word   0				       /* Reserved */
++tcg_le_ipb_hashdata:
++	.long   0				       /* HashDataPtr */
++tcg_le_ipb_hashdatalen:
++	.long   0				       /* HashDataLen */
++tcg_le_ipb_pcr_index:
++	.long   0				       /* PCRIndex */
++tcg_le_ipb_eventtype:
++	.long   0				       /* reserved/type */
++tcg_le_ipb_logdata:
++	.long   0				       /* LogDataPtr */
++tcg_le_ipb_logdatalen:
++	.long   0				       /* LogDataLen */
++tcg_le_ipb_end:
++
++
++	/* TCG_HashLogExtendEvent Output Parameter Block */
++	/* TCG_LogEvent	   Output Parameter Block */
++tcg_le_opb:
++	.word   tcg_le_opb_end - tcg_le_opb     /* OPBLength */
++	.word   0			       /* Reserved */
++	.long   0			       /* EventNumber */
++	.space  TCG_PCR_VALUE_SIZE	      /* Hash */
++tcg_le_opb_end:
++
++
++
++	/* TCG_HashAll Input Parameter Block */
++tcg_hashall_ipb:
++	.word   tcg_hashall_ipb_end - tcg_hashall_ipb /* IPBLength =16 */
++	.word   0				     /* Reserved */
++tcg_hashall_ipb_data_ptr:
++	.long   0				     /* HashDataPtr */
++tcg_hashall_ipb_data_len:
++	.long   0				     /* HashDataLen */
++	.long   4	      /* AlgorithmID TPM_ALG_SHA 0x00000004 */
++tcg_hashall_ipb_end:
++
++	/* TCG_HashAll Outnput Parameter Block */
++tcg_hashall_opb:
++	.space  TCG_DIGEST_SIZE	       /* Hash size = PCR size */
++tcg_hashall_opb_end:
++
++	    /* Buffer for "tpm test" command */
++tcg_chlee_buf:
++	.byte  0xBB, 0x07
++
++
++#ifdef TCG_DEBUG
++	/* DEBUG: Display debug message */
++debugmsg:
++	push    %ax
++	push    %bx
++	cld
++debugmsg_loop:
++	lodsb
++	cmpb    $0, %al
++	je      debugmsg_ret
++	movw    $0x0001, %bx
++	movb    $0xe, %ah
++	int     $0x10   /* Display a byte */
++	jmp     debugmsg_loop
++debugmsg_ret:
++	pop     %bx
++	pop     %ax
++	ret
++
++#define MSG(x)  push %si; movw $ABS(x), %si; call debugmsg; pop %si
++
++status_check_msg:       .string "DEBUG: TCG_StatusCheck "
++tcg_passthru_msg:       .string "DEBUG: TCG_PassThru "
++logevent_msg:           .string "DEBUG: TCG_LogEvent "
++hashlogevent_msg:       .string "DEBUG: TCG_HashLogExtendEvent "
++compacthashlogevent_msg: .string "DEBUG: TCG_CompactHashLogExtendEvent "
++hashall_msg:            .string "DEBUG: TCG_HashAll 0816 "
++ok_msg:                 .string "ok\r\n"
++ng_msg:                 .string "ng\r\n"
++        /* DEBUG: End of debug messages */
++#else  /* TCG_DEBUG */
++#define MSG(x)
++#endif /* TCG_DEBUG */
++
++	.code32
++
++
+ /*
++ * int TCG_StatusCheck (unsigned char *major,         *OUT*
++ *	                 unsigned char *minor,         *OUT*
++ *	                 unsigned char **event_log );  *OUT*
++ * Check TCG status.
++ * This returns 0 if the BIOS has TCG function.
++ * If system does not have TCG BIOS, TCG_PC_UNSUPPORTED(0x0003) is
++ * returned.
++ *
++ * TCG_StatusCheck
++ * BIOS Call "Int 1AH Function" verify the presence of TCG BIOS I/F
++ *      Call with       %ax = 0xBB00h (TCG_LogEvent)
++ *                      %ebx = "TCPA" (0x41504354)
++ *                      %ecx = 0
++ *                      %edx = 0
++ * 2006-06-20 SM revised
++ */
++ENTRY(TCG_StatusCheck)
++	push    %ebx
++	push    %ecx
++	push    %edx
++	push    %esi
++	push    %edi
++	push    %ebp
++
++	call    EXT_C(prot_to_real)
++	.code16
++
++	MSG(status_check_msg)
++
++	/*  TCG_StatusCheck */
++	movw    $0xBB00, %ax
++	int     $0x1A
++	and     %eax, %eax
++	jnz     tcg_sc_ng
++	cmpl    %ebx, ABS(tcg_signature)
++	je      tcg_sc_ok
++tcg_sc_ng:
++	MSG(ng_msg)
++	/* movw    $0x0003, %ax  # 2006-06-28 SM remove */
++	jmp     tcg_sc_goback
++tcg_sc_ok:
++	MSG(ok_msg)
++tcg_sc_goback:
++	movw    %ax, %bx
++	DATA32  call    EXT_C(real_to_prot)
++	.code32
++
++	movzwl  %bx, %eax
++	test    %eax, %eax
++	jnz     tcg_sc_skip_copy_event_log
++
++	/* *version major */
++	movl    0x1C(%esp), %edi
++	movb    %ch, (%edi)
++
++	/* *version minor */
++	movl    0x20(%esp), %edi
++	movb    %cl, (%edi)
++
++	/* *event_log */
++	movl    0x24(%esp), %edi
++	test    %edi, %edi
++	jz      tcg_sc_skip_copy_event_log
++
++	movl    %esi, (%edi)
++
++tcg_sc_skip_copy_event_log:
++	pop     %ebp
++	pop     %edi
++	pop     %esi
++	pop     %edx
++	pop     %ecx
++	pop     %ebx
++	ret
++
++/*
++ * int TCG_HashLogExtendEventF1( int pcr_index,            *IN
++ *                                 int hashdatasize          *IN
++ *                                 unsigned char *hashdeta   *IN
++ *                                 int logdatasize           *IN
++ *                                 unsigned char *logdata )  *IN
++ *
++ *  Format 1 (?)
++ *
++ * BIOS Call "Int 1AH Function" to log TCG_PCR_EVENT
++ *      Call with       %ax = 0xBB01h (TCG_HashLogExtendEvent)
++ *                      %es = Segment of the TPM input parameter block
++ *                      %di = Offset of the TPM input parameter block
++ *                      %ds = Segment of the TPM output parameter block
++ *                      %si = Offset of the TPM output parameter block
++ *                      %ebx = "TCPA" (0x41504354)
++ *                      %ecx = 0
++ *                      %edx = 0
++ */
++ENTRY(TCG_HashLogExtendEventF1)
++	push    %ebp
++	movl    %esp, %ebp
++	push    %ebx
++	push    %ecx
++	push    %edx
++	push    %esi
++	push    %edi
++	/* ipb - PCR index */
++	movl    0x08(%ebp), %eax
++	movl    %eax, ABS(tcg_hlee_ipb_pcr_index)
++
++	/* ipb - Hash Data Size */
++	movl    0x0C(%ebp), %eax
++	movl    %eax, ABS(tcg_hlee_ipb_hashdatalen)
++
++	/* ipb - Hash Data Ptr */
++	movl    0x10(%ebp), %esi
++	movl    %esi, ABS(tcg_hlee_ipb_hashdata)
++
++	/* ipb - Log Data Size */
++	movl    0x14(%ebp), %eax
++	movl    %eax, ABS(tcg_hlee_ipb_logdatalen)
++
++	/* ipb - Log Data Ptr */
++	movl    0x18(%ebp), %esi
++	movl    %esi, ABS(tcg_hlee_ipb_logdata)
++
++
++	call    EXT_C(prot_to_real)
++	.code16
++
++	/* TCG_HashLogExtendEvent */
++	MSG(hashlogevent_msg)
++
++	movw    $0xBB01, %ax
++	movw    $ABS(tcg_hlee_ipb), %di
++	movw    $ABS(tcg_le_opb), %si
++	movl    ABS(tcg_signature), %ebx
++	xorl    %ecx, %ecx
++	movl    %ecx, %edx
++	int     $0x1A
++	and     %eax, %eax
++	jz      tcg_hlee_ok
++	MSG(ng_msg)
++	jmp     tcg_hlee_go_back
++
++tcg_hlee_ok:
++	MSG(ok_msg)
++
++tcg_hlee_go_back:
++	movl    %eax, %ebx /* TODO return 3h???  */
++	DATA32  call    EXT_C(real_to_prot)
++	.code32
++
++	movl    %ebx, %eax
++	pop     %edi
++	pop     %esi
++	pop     %edx
++	pop     %ecx
++	pop     %ebx
++	pop     %ebp
++	ret
++
++/*
++ * int TCG_HashLogExtendEventF2( int pcr_index,              *IN
++ *                                 int hashdatasize          *IN
++ *                                 unsigned char *hashdeta   *IN
++ *                                 int logdatasize           *IN
++ *                                 unsigned char *logdata )  *IN
++ *
++ *  Format 2 (IBM/Lenove)
++ *
++ * BIOS Call "Int 1AH Function" to log TCG_PCR_EVENT
++ *      Call with       %ax = 0xBB01h (TCG_HashLogExtendEvent)
++ *                      %es = Segment of the TPM input parameter block
++ *                      %di = Offset of the TPM input parameter block
++ *                      %ds = Segment of the TPM output parameter block
++ *                      %si = Offset of the TPM output parameter block
++ *                      %ebx = "TCPA" (0x41504354)
++ *                      %ecx = 0
++ *                      %edx = 0
++ */
++ENTRY(TCG_HashLogExtendEventF2)
++	push    %ebp
++	movl    %esp, %ebp
++	push    %ebx
++	push    %ecx
++	push    %edx
++	push    %esi
++	push    %edi
++	/* ipb - PCR index */
++	movl    0x08(%ebp), %eax
++	movl    %eax, ABS(tcg_le_ipb_pcr_index)
++
++	/* ipb - Hash Data Size */
++	movl    0x0C(%ebp), %eax
++	movl    %eax, ABS(tcg_le_ipb_hashdatalen)
++
++	/* ipb - Hash Data Ptr */
++	movl    0x10(%ebp), %esi
++	movl    %esi, ABS(tcg_le_ipb_hashdata)
++
++	/* ipb - Log Data Size */
++	movl    0x14(%ebp), %eax
++	movl    %eax, ABS(tcg_le_ipb_logdatalen)
++
++	/* ipb - Log Data Ptr */
++	movl    0x18(%ebp), %esi
++	movl    %esi, ABS(tcg_le_ipb_logdata)
++	/* ipb - reserved - clear */
++	xorl    %esi, %esi
++	movl    %esi, ABS(tcg_le_ipb_eventtype)
++
++	call    EXT_C(prot_to_real)
++	.code16
++
++	/* TCG_HashLogExtendEvent */
++	MSG(hashlogevent_msg)
++
++	movw    $0xBB01, %ax
++	movw    $ABS(tcg_le_ipb), %di
++	movw    $ABS(tcg_le_opb), %si
++	movl    ABS(tcg_signature), %ebx
++	xorl    %ecx, %ecx
++	movl    %ecx, %edx
++	int     $0x1A
++	and     %eax, %eax
++	jz      tcg_hlee2_ok
++	MSG(ng_msg)
++	jmp     tcg_hlee2_go_back
++
++tcg_hlee2_ok:
++	MSG(ok_msg)
++
++tcg_hlee2_go_back:
++	movl    %eax, %ebx /* TODO return 3h???  */
++	DATA32  call    EXT_C(real_to_prot)
++	.code32
++
++	movl    %ebx, %eax
++	pop     %edi
++	pop     %esi
++	pop     %edx
++	pop     %ecx
++	pop     %ebx
++	pop     %ebp
++	ret
++
++
++/*
++ * TCG PassthroughToTPM
++ *      Call with   (%esi) = TPM OperandIn
++ *
++ *      Return with %eex = Return code
++ *                  (%esi) = TPM OperandOut (= $tpm_operand_out_buff )
++ *
++ *      Modified registers: ebx, ecx, edx, edi
++ *
++ * BIOS Call "Int 1AH Function" to send a TPM operation.
++ *      Call with       %ax = 0xBB02h (TCG_PassThroughToTPM)
++ *                      %es = Segment of the TPM input parameter block
++ *                      %di = Offset of the TPM input parameter block
++ *                      %ds = Segment of the TPM output parameter block
++ *                      %si = Offset of the TPM output parameter block
++ *                      %ebx = "TCG" (0x41504354)
++ *                      %ecx = 0
++ *                      %edx = 0
++ */
++tcg_passthru_to_tpm:
++        movl    $ABS(tpm_operand_in_buff), %edi
++	movl    2(%esi), %ecx	   /* Load operandIn paramSize */
++	bswap   %ecx		    /* ecx = operandIn size */
++	movl    $(tpm_operand_in_buff - tcg_passthru_ipb), %eax
++	addl    %ecx, %eax	      /* eax = IPB size */
++	movl    %eax, ABS(tcg_passthru_ipb_length)
++
++	cld
++	rep
++	movsb			   /* Copy operandIn to IPB */
++
++	call    EXT_C(prot_to_real)
++	.code16
++
++	MSG(tcg_passthru_msg)
++	movw    $0xBB02, %ax
++	movw    $ABS(tcg_passthru_ipb), %di
++	movw    $ABS(tcg_passthru_opb), %si
++	movl    ABS(tcg_signature), %ebx
++	xorl    %ecx, %ecx
++	movl    %ecx, %edx
++	int     $0x1A
++	and     %eax, %eax
++	jnz     tcg_passthru_ng
++	cmpl    %eax, ABS(tpm_operand_out_return_code)
++	je      tcg_passthru_ok
++	movl    $0x0004, %eax
++
++tcg_passthru_ng:
++	MSG(ng_msg)
++	jmp     tcg_passthru_return
++
++tcg_passthru_ok:
++	MSG(ok_msg)
++
++tcg_passthru_return:
++	movl    %eax, %ebx
++	DATA32  call    EXT_C(real_to_prot)
++	.code32
++
++	movl    $ABS(tpm_operand_out_buff), %esi
++	movl    %ebx, %eax
++	ret
++
++/*
++ * int ima_extend (  int pcr_index,                     *IN*
++ *                   unsigned char *digest,             *IN*
++ *                   unsigned char *pcr_value );        *OUT*
++ * Send TPM_Extend.
++ * This returns 0 if successful. As defined by TCG PC Specification 1.00
++ * (8.1.2 Return Codes, Page 40)
++ */
++
++ENTRY(ima_extend)
++	push    %ebp
++	movl    %esp, %ebp
++	push    %ebx
++	push    %ecx
++	push    %edx
++	push    %esi
++	push    %edi
++
++	movl    0x8(%ebp), %eax	 /* pcr_index */
++	movb    %al, ABS(tpm_extend_pcr_num)
++
++	movl    0xC(%ebp), %esi	 /* *digest */
++	movl    $ABS(tpm_extend_digest), %edi
++	movl    $TCG_DIGEST_SIZE, %ecx
++	cld
++	rep
++	movsb
++
++	movl    $ABS(tpm_extend_in), %esi
++	call    EXT_C(tcg_passthru_to_tpm)
++	test    %eax, %eax
++	jnz     ima_extend_go_back
++
++	/* Return PCR value */
++	addl    $(tpm_extend_pcr_value), %esi
++	movl    0x24(%esp), %edi	 /* *pcr_value */
++	movl    $(TCG_PCR_VALUE_SIZE), %ecx
++	cld
++	rep
++	movsb
++
++ima_extend_go_back:
++	pop     %edi
++	pop     %esi
++	pop     %edx
++	pop     %ecx
++	pop     %ebx
++	pop     %ebp
++	ret
++
++
++/*
++ * int ima_pcr_read (  int pcr_index,                   *IN*
++ *                     unsigned char *pcr_value );      *OUT*
++ * Send TPM_PcrRead.
++ * This returns 0 if successful. As defined by TCG PC Specification 1.00
++ * (8.1.2 Return Codes, Page 40)
++ */
++
++ENTRY(ima_pcr_read)
++	push    %ebp
++	movl    %esp, %ebp
++	push    %ebx
++	push    %ecx
++	push    %edx
++	push    %esi
++	push    %edi
++
++	movl    0x1C(%esp), %eax		/* pcr_index */
++	movb    %al, ABS(tpm_pcrread_pcrindex)
++
++	movl    $ABS(tpm_pcrread_in), %esi
++	call    EXT_C(tcg_passthru_to_tpm)
++	test    %eax, %eax
++	jnz     ima_pcr_read_go_back
++
++	/* Return PCR value */
++	addl    $(tpm_pcrread_pcr_value), %esi
++	movl    0x20(%esp), %edi	 /* *pcr_value */
++	movl    $(TCG_PCR_VALUE_SIZE), %ecx
++	cld
++	rep
++	movsb
++
++ima_pcr_read_go_back:
++	pop     %edi
++	pop     %esi
++	pop     %edx
++	pop     %ecx
++	pop     %ebx
++	pop     %ebp
++	ret
++
++
++/*
++ * int TCG_LogExtend ( int pcr_index,            *IN
++ *                     int eventtype             *IN
++ *                     int loddatasize           *IN
++ *                     unsigned char *logdata )  *IN
++ * Log PCR event and extend.
++ * This returns 0 if successful. As defined by TCG PC Specification 1.00
++ * (8.1.2 Return Codes, Page 40)
++ * BIOS Call "Int 1AH Function" to log TCG_PCR_EVENT
++ *      Call with       %ax = 0xBB04h (TCG_LogEvent)
++ *                      %es = Segment of the TPM input parameter block
++ *                      %di = Offset of the TPM input parameter block
++ *                      %ds = Segment of the TPM output parameter block
++ *                      %si = Offset of the TPM output parameter block
++ *                      %ebx = "TCPA" (0x41504354)
++ *                      %ecx = 0
++ *                      %edx = 0
++ */
++ENTRY(TCG_LogExtend)
++	push    %ebp
++	movl    %esp, %ebp
++	push    %ebx
++	push    %ecx
++	push    %edx
++	push    %esi
++	push    %edi
++	/* ipb - PCR index */
++	movl    0x08(%ebp), %eax
++	movl    %eax, ABS(tcg_le_ipb_pcr_index)
++
++	/* ipb - type */
++	movl    0x0C(%ebp), %eax
++	movl    %eax, ABS(tcg_le_ipb_eventtype)
++
++	/* ipb - Log Data Size */
++	movl    0x10(%ebp), %eax
++	movl    %eax, ABS(tcg_le_ipb_logdatalen)
++
++	/* ipb - Log Data Ptr */
++	movl    0x14(%ebp), %esi
++	movl    %esi, ABS(tcg_le_ipb_logdata)
++
++	/* ipb - clear Hash Data */
++	xorl    %esi, %esi
++	movl    %esi, ABS(tcg_le_ipb_hashdatalen)
++	movl    %esi, ABS(tcg_le_ipb_hashdata)
++
++
++	call    EXT_C(prot_to_real)
++	.code16
++
++	/* TCG_LogEvent */
++	MSG(logevent_msg)
++
++	movw    $0xBB04, %ax
++	movw    $ABS(tcg_le_ipb), %di
++	movw    $ABS(tcg_le_opb), %si
++	movl    ABS(tcg_signature), %ebx
++	xorl    %ecx, %ecx
++	movl    %ecx, %edx
++	int     $0x1A
++	and     %eax, %eax
++	jz      tle3_ok
++	MSG(ng_msg)
++	jmp     tle3_go_back
++
++tle3_ok:
++	MSG(ok_msg)
++
++tle3_go_back:
++	movl    %eax, %ebx
++	DATA32  call    EXT_C(real_to_prot)
++	.code32
++
++	movl    %ebx, %eax
++	pop     %edi
++	pop     %esi
++	pop     %edx
++	pop     %ecx
++	pop     %ebx
++	pop     %ebp
++	ret
++
++
++/*
++ * int TCG_HashAll ( int len,                 *IN
++ *	              unsigned char *data,     *IN
++ *                    unsigned char *digest ); *OUT
++ * Hash the data
++ * This returns 0 if successful. As defined by TCG PC Specification 1.1
++ * (8.1.9 Return Codes, Page 50)
++ * BIOS Call "Int 1AH Function" to Hash the Data
++ *      Call with       %ax = 0xBB05h (TCG_HashAll)
++ *                      %es = Segment of the TPM input parameter block
++ *                      %di = Offset of the TPM input parameter block
++ *                      %ds = Segment of the TPM output parameter block
++ *                      %si = Offset of the TPM output parameter block
++ *                      %ebx = "TCPA" (0x41504354)
++ *                      %ecx = 0
++ *                      %edx = 0
++ *
++ * 2004-10-15 S. Munetoh added
++ *
++ */
++ENTRY(TCG_HashAll)
++        push    %ebp
++	/* movl    %esp, %ebp */
++	push    %ebx
++	push    %ecx
++	push    %edx
++	push    %esi
++	push    %edi
++
++	/* len */
++	movl    0x1c(%esp), %eax
++	movl    %eax, ABS(tcg_hashall_ipb_data_len)
++
++	/* *data */
++	movl    0x20(%esp), %esi
++	movl    %esi, ABS(tcg_hashall_ipb_data_ptr)
++
++	call    EXT_C(prot_to_real)
++	.code16
++
++	/* TCG_HashAll */
++	MSG(hashall_msg)
++
++	movw    $0xBB05, %ax
++	movw    $ABS(tcg_hashall_ipb), %di
++	movw    $ABS(tcg_hashall_opb), %si
++	movl    ABS(tcg_signature), %ebx
++	xorl    %ecx, %ecx
++	movl    %ecx, %edx
++	int     $0x1A
++	and     %eax, %eax
++	jz      tcg_hashall_ok
++	MSG(ng_msg)
++	jmp     tcg_hashall_go_back
++tcg_hashall_ok:
++	MSG(ok_msg)
++tcg_hashall_go_back:
++	movl    %eax, %ebx
++	DATA32  call    EXT_C(real_to_prot)
++	.code32
++
++	/* Return Digest value, whether call is ok or not*/
++	/* this will copy the digest */
++	movl    $ABS(tcg_hashall_opb), %esi
++	movl    0x24(%esp), %edi
++	movl    $TCG_DIGEST_SIZE, %ecx
++	cld
++	rep
++	movsb
++
++	movl    %ebx, %eax
++	pop     %edi
++	pop     %esi
++	pop     %edx
++	pop     %ecx
++	pop     %ebx
++	pop     %ebp
++	ret
++
++/*
++ * int TCG_CompactHashLogExtendEvent( int pcr_index,          *IN
++ *                                 int hashdatasize           *IN
++ *                                 unsigned char *hashdeta)   *IN
++ *
++ *  Event Type  :	EV_COMPACT_HASH (0Ch) - fixed
++ *  Event Field :	4 bytes "GRUB"
++ *
++ * BIOS Call "Int 1AH Function" to log TCG_PCR_EVENT
++ *      Call with       %ax = 0xBB07h (TCG_CompactHashLogExtendEvent)
++ *                      %es = Segment of data to be hashed
++ *                      %di = Offset of data to be hashed
++ *                      %esi = event field
++ *                      %ebx = "TCPA" (0x41504354)
++ *                      %ecx = data length
++ *                      %edx = pcr index
++ *
++ *      Return          %eax = Return code
++ *                      %edx = event num
++ */
++ENTRY(TCG_CompactHashLogExtendEvent)
++	push    %ebp
++	movl    %esp, %ebp
++	push    %ebx
++	push    %ecx
++	push    %edx
++	push    %esi
++	push    %edi
++	/* PCR index */
++	movl    0x08(%ebp), %edx
++
++	/* Hash Data Size */
++		movl    0x0C(%ebp), %ecx
++
++	/* Hash Data Ptr  */
++#if 0
++	/* Sorry, this does not work yet */
++	movw    0x10(%ebp), %ax
++	shlw    $12,  %ax
++	movw	%ax, %es
++	movw    0x12(%ebp), %di
++#endif
++
++	call    EXT_C(prot_to_real)
++	.code16
++
++	/* TCG_CompactHashLogExtendEvent */
++	MSG(compacthashlogevent_msg)
++
++	movw    $0xBB07, %ax
++	movw	$ABS(tcg_chlee_buf), %di
++	movl    ABS(tcg_signature), %ebx
++	movl    ABS(tcg_grub), %esi
++	int     $0x1A
++	and     %eax, %eax
++	jz      tcg_chlee_ok
++	MSG(ng_msg)
++	jmp     tcg_chlee_go_back
++
++tcg_chlee_ok:
++	MSG(ok_msg)
++
++tcg_chlee_go_back:
++	movl    %eax, %ebx /* TODO return 3h???  */
++	DATA32  call    EXT_C(real_to_prot)
++	.code32
++
++	movl    %ebx, %eax
++	pop     %edi
++	pop     %esi
++	pop     %edx
++	pop     %ecx
++	pop     %ebx
++	pop     %ebp
++	ret
++
++#endif /* TRANSITIVE_TRUST */
++
++/*
+  *  This is the area for all of the special variables.
+  */
+ 
+Index: grub-0.97/stage2/boot.c
+===================================================================
+--- grub-0.97/stage2/boot.c	(revision 17)
++++ grub-0.97/stage2/boot.c	(working copy)
+@@ -30,6 +30,7 @@
+ static struct mod_list mll[99];
+ static int linux_mem_size;
+ 
++
+ /*
+  *  The next two functions, 'load_image' and 'load_module', are the building
+  *  blocks of the multiboot loader component.  They handle essentially all
+@@ -61,6 +62,26 @@
+      buffer by default */
+   pu.aout = (struct exec *) buffer;
+ 
++
++#ifdef TRANSITIVE_TRUST
++  /* we measure the whole kernel image at this point */
++  /* thus grub read the kernel twice, sorry  */
++  if  (ima_grub_pcr_index >= 0) {
++     if (ima_debug) grub_printf("load_image\n");
++     ima_workbuf = (unsigned char *) 0x100000;
++     measure_eventdata(IMA_EV_GRUB_KERNEL_CMD_PCR,
++		      IMA_EV_GRUB_KERNEL_CMD_TYPE,
++		      grub_strlen(arg),
++		      arg); // or skip_to(0,arg));
++     /* measure kenrel image */
++     measure_file(kernel,
++		 ima_grub_pcr_index, /* set by kernel_func() in builtin.c*/
++		 ima_grub_eventtype);
++     ima_grub_pcr_index = -1;
++  }
++#endif
++
++
+   if (!grub_open (kernel))
+     return KERNEL_TYPE_NONE;
+ 
+@@ -74,6 +95,9 @@
+       return KERNEL_TYPE_NONE;
+     }
+ 
++
++
++
+   for (i = 0; i < len; i++)
+     {
+       if (MULTIBOOT_FOUND ((int) (buffer + i), len - i))
+@@ -766,6 +790,27 @@
+   /* if we are supposed to load on 4K boundaries */
+   cur_addr = (cur_addr + 0xFFF) & 0xFFFFF000;
+ 
++#ifdef TRANSITIVE_TRUST
++  if (ima_measure_gziped_file == 1) {
++      /* we measure the whole (gziped) module image at this point */
++      /* thus grub read the module twice, sorry  */
++      if  (ima_grub_pcr_index >= 0) {
++	  if (ima_debug) grub_printf("load_image\n");
++	  ima_workbuf = (unsigned char *) cur_addr;
++	  measure_eventdata(IMA_EV_GRUB_MODULE_CMD_PCR,
++		      IMA_EV_GRUB_MODULE_CMD_TYPE,
++		      grub_strlen(arg),
++		      arg); // or skip_to(0,arg));
++	  /* measure kenrel image */
++	  measure_file(module,
++		 ima_grub_pcr_index, /* set by kernel_func() in builtin.c*/
++		 ima_grub_eventtype);
++	  ima_grub_pcr_index = -1;
++      }
++  }
++#endif
++
++
+   if (!grub_open (module))
+     return 0;
+ 
+@@ -776,9 +821,26 @@
+       return 0;
+     }
+ 
+-  printf ("   [Multiboot-module @ 0x%x, 0x%x bytes]\n", cur_addr, len);
++#ifdef  TRANSITIVE_TRUST
++  if (ima_measure_gziped_file !=1) {
++      if  (ima_grub_pcr_index >= 0) {
++	  if (ima_debug) grub_printf("load_module\n");
++	  /* measure */
++	  measure_eventdata(IMA_EV_GRUB_MODULE_CMD_PCR,
++			IMA_EV_GRUB_MODULE_CMD_TYPE,
++			grub_strlen(arg),
++			arg); // or skip_to(0,arg));
++	  measure_mem(len,
++		  (unsigned char*)cur_addr,
++		  ima_grub_pcr_index,
++		  ima_grub_eventtype,
++		  module);
++	  ima_grub_pcr_index = -1;
++      }
++  }
++#endif /* TRANSITIVE_TRUST */
+ 
+-  /* these two simply need to be set if any modules are loaded at all */
++  printf ("   [Multiboot-module @ 0x%x, 0x%x bytes]\n", cur_addr, len);  /* these two simply need to be set if any modules are loaded at all */
+   mbi.flags |= MB_INFO_MODS;
+   mbi.mods_addr = (int) mll;
+ 
+@@ -848,6 +910,19 @@
+ 
+   grub_close ();
+ 
++#ifdef  TRANSITIVE_TRUST
++  if  (ima_grub_pcr_index >= 0) {
++     if (ima_debug) grub_printf("load_initrd\n");
++    /* measure */
++      measure_mem(lh->ramdisk_size,
++		       (unsigned char*)lh->ramdisk_image,
++		       ima_grub_pcr_index,
++		       ima_grub_eventtype,
++		       initrd);
++    ima_grub_pcr_index = -1;
++  }
++#endif /* TRANSITIVE_TRUST */
++
+  fail:
+   
+ #ifndef NO_DECOMPRESSION
+Index: grub-0.97/stage2/builtins.c
+===================================================================
+--- grub-0.97/stage2/builtins.c	(revision 17)
++++ grub-0.97/stage2/builtins.c	(working copy)
+@@ -108,9 +108,44 @@
+ int
+ check_password (char *entered, char* expected, password_t type)
+ {
++#ifdef ENABLE_IMA
++  int rc=0;
++
+   switch (type)
+     {
+     case PASSWORD_PLAIN:
++      rc = strcmp (entered, expected);
++      break;
++#ifdef USE_MD5_PASSWORDS
++    case PASSWORD_MD5:
++      rc = check_md5_password (entered, expected);
++      break;
++#endif
++    default:
++      /* unsupported password type: be secure */
++      rc = 1;
++    }
++
++  if (rc != 0)
++    {
++      measure_eventdata(IMA_EV_GRUB_ACTION_PCR,
++                        IMA_EV_GRUB_ACTION_TYPE,
++                        grub_strlen(ima_password_failure),
++                        ima_password_failure);
++    }
++  else
++    {
++      measure_eventdata(IMA_EV_GRUB_ACTION_PCR,
++                       IMA_EV_GRUB_ACTION_TYPE,
++                       grub_strlen(ima_password_enter),
++                       ima_password_enter);
++    }
++  return rc;
++
++#else  /* ! ENABLE_IMA */
++  switch (type)
++    {
++    case PASSWORD_PLAIN:
+       return strcmp (entered, expected);
+ 
+ #ifdef USE_MD5_PASSWORDS
+@@ -121,6 +156,7 @@
+       /* unsupported password type: be secure */
+       return 1;
+     }
++#endif /* ENABLE_IMA */
+ }
+ 
+ /* Print which sector is read when loading a file.  */
+@@ -298,16 +334,25 @@
+     case KERNEL_TYPE_FREEBSD:
+     case KERNEL_TYPE_NETBSD:
+       /* *BSD */
++#ifdef TRANSITIVE_TRUST
++      ima_final ("Booting BSD");
++#endif /* TRANSITIVE_TRUST */
+       bsd_boot (kernel_type, bootdev, (char *) mbi.cmdline);
+       break;
+ 
+     case KERNEL_TYPE_LINUX:
+       /* Linux */
++#ifdef TRANSITIVE_TRUST
++      ima_final ("Booting Linux Kenrel");
++#endif /* TRANSITIVE_TRUST */
+       linux_boot ();
+       break;
+ 
+     case KERNEL_TYPE_BIG_LINUX:
+       /* Big Linux */
++#ifdef TRANSITIVE_TRUST
++      ima_final ("Booting Big Linux Kenrel");
++#endif /* TRANSITIVE_TRUST */
+       big_linux_boot ();
+       break;
+ 
+@@ -336,6 +381,9 @@
+ 	  set_int13_handler (bios_drive_map);
+ 	}
+       
++#ifdef TRANSITIVE_TRUST
++      ima_final ("Chainloader");
++#endif /* TRANSITIVE_TRUST */
+       gateA20 (0);
+       boot_drive = saved_drive;
+       chain_stage1 (0, BOOTSEC_LOCATION, boot_part_addr);
+@@ -343,10 +391,16 @@
+ 
+     case KERNEL_TYPE_MULTIBOOT:
+       /* Multiboot */
++#ifdef TRANSITIVE_TRUST
++      ima_final ("MultiBoot");
++#endif /* TRANSITIVE_TRUST */
+       multi_boot ((int) entry_addr, (int) &mbi);
+       break;
+ 
+     default:
++#ifdef TRANSITIVE_TRUST
++      ima_final ("Boot Error");
++#endif /* TRANSITIVE_TRUST */
+       errnum = ERR_BOOT_COMMAND;
+       return 1;
+     }
+@@ -456,6 +510,11 @@
+ {
+   int force = 0;
+   char *file = arg;
++  //#ifdef ENABLE_IMA
++#ifdef TRANSITIVE_TRUST
++  int pcr_index = IMA_EV_GRUB_FILE_PCR;//TCG_FILE_PCR_INDEX;
++  int eventtype = IMA_EV_GRUB_FILE_TYPE;
++#endif
+ 
+   /* If the option `--force' is specified?  */
+   if (substring ("--force", arg) <= 0)
+@@ -464,6 +523,27 @@
+       file = skip_to (0, arg);
+     }
+ 
++  //#ifdef ENABLE_IMA
++#ifdef TRANSITIVE_TRUST
++  if (substring ("--pcr=", file) <= 0)
++    {
++      arg = file + 6;
++      if (! safe_parse_maxint(&arg, &pcr_index))
++        return 1;
++      file = skip_to(0, arg);
++    }
++  if (substring ("--eventtype=", file) <= 0)
++    {
++      arg = file + 12;
++      if (! safe_parse_maxint(&arg, &eventtype))
++        return 1;
++      file = skip_to(0, arg);
++    }
++
++  //measure_file(file, pcr_index, 1);
++  measure_file(file, pcr_index, eventtype);
++#endif
++
+   /* Open the file.  */
+   if (! grub_open (file))
+     {
+@@ -517,9 +597,16 @@
+   "chainloader",
+   chainloader_func,
+   BUILTIN_CMDLINE | BUILTIN_HELP_LIST,
++#ifdef ENABLE_IMA
++  "chainloader [--force] [--pcr=PCRINDEX] --eventtype=[EVENTTYPE] FILE",
++  "Load the chain-loader FILE. If --force is specified, then load it"
++  " forcibly, whether the boot loader signature is present or not."
++  " The option --pcr specifies PCR index for measuring the FILE."
++#else
+   "chainloader [--force] FILE",
+   "Load the chain-loader FILE. If --force is specified, then load it"
+   " forcibly, whether the boot loader signature is present or not."
++#endif
+ };
+ 
+ 
+@@ -1908,6 +1995,30 @@
+ static int
+ initrd_func (char *arg, int flags)
+ {
++#ifdef ENABLE_IMA
++  int pcr_index = IMA_EV_GRUB_INITRD_PCR;
++  int eventtype = IMA_EV_GRUB_INITRD_TYPE;
++
++  if (substring ("--pcr=", arg) <= 0)
++    {
++      arg += 6;
++      if (! safe_parse_maxint(&arg, &pcr_index))
++        return 1;
++      arg = skip_to(0, arg);
++    }
++  if (substring ("--eventtype=", arg) <= 0)
++    {
++      arg += 12;
++      if (! safe_parse_maxint(&arg, &eventtype))
++        return 1;
++      arg = skip_to(0, arg);
++    }
++
++  ima_grub_pcr_index = pcr_index;
++  ima_grub_eventtype = eventtype;
++
++#endif
++
+   switch (kernel_type)
+     {
+     case KERNEL_TYPE_LINUX:
+@@ -1929,9 +2040,17 @@
+   "initrd",
+   initrd_func,
+   BUILTIN_CMDLINE | BUILTIN_HELP_LIST,
++#ifdef ENABLE_IMA
++  "initrd [--pcr=PCRINDEX] [--eventtype=EVENTTYPE] FILE [ARG ...]",
++  "Load an initial ramdisk FILE for a Linux format boot image and set the"
++  " appropriate parameters in the Linux setup area in memory."
++  " The option --pcr specifies PCR index for measuring the FILE."
++  " The option --eventtype specifies Event Type for measuring the FILE."
++#else
+   "initrd FILE [ARG ...]",
+   "Load an initial ramdisk FILE for a Linux format boot image and set the"
+   " appropriate parameters in the Linux setup area in memory."
++#endif
+ };
+ 
+ 
+@@ -2555,6 +2674,11 @@
+   int len;
+   kernel_t suggested_type = KERNEL_TYPE_NONE;
+   unsigned long load_flags = 0;
++  //#ifdef ENABLE_IMA
++#ifdef TRANSITIVE_TRUST
++  int pcr_index = IMA_EV_GRUB_KERNEL_PCR; //TCG_FILE_PCR_INDEX;
++  int eventtype = IMA_EV_GRUB_KERNEL_TYPE;
++#endif
+ 
+ #ifndef AUTO_LINUX_MEM_OPT
+   load_flags |= KERNEL_LOAD_NO_MEM_OPTION;
+@@ -2594,6 +2718,21 @@
+ 	 has no effect.  */
+       else if (grub_memcmp (arg, "--no-mem-option", 15) == 0)
+ 	load_flags |= KERNEL_LOAD_NO_MEM_OPTION;
++
++#ifdef TRANSITIVE_TRUST
++      else if (grub_memcmp (arg, "--pcr=", 6) == 0)
++        {
++          arg += 6;
++          if (! safe_parse_maxint(&arg, &pcr_index))
++            return 1;
++        }
++      else if (grub_memcmp (arg, "--eventype=", 12) == 0)
++        {
++          arg += 12;
++          if (! safe_parse_maxint(&arg, &eventtype))
++            return 1;
++        }
++#endif
+       else
+ 	break;
+ 
+@@ -2613,6 +2752,14 @@
+ 
+   /* Copy the command-line to MB_CMDLINE.  */
+   grub_memmove (mb_cmdline, arg, len + 1);
++
++#ifdef TRANSITIVE_TRUST
++  /* save PCR index and EventType as global for load_image() */
++  /* For command line measurement, use default assignment -- TODO  */
++  ima_grub_pcr_index =  pcr_index;
++  ima_grub_eventtype =  eventtype;
++#endif
++
+   kernel_type = load_image (arg, mb_cmdline, suggested_type, load_flags);
+   if (kernel_type == KERNEL_TYPE_NONE)
+     return 1;
+@@ -2626,6 +2773,17 @@
+   "kernel",
+   kernel_func,
+   BUILTIN_CMDLINE | BUILTIN_HELP_LIST,
++#ifdef TRANSITIVE_TRUST
++  "kernel [--no-mem-option] [--type=TYPE] [--pcr=PCRINDEX] --eventtype=[EVENTTYPE] FILE [ARG ...]",
++  "Attempt to load the primary boot image from FILE. The rest of the"
++  " line is passed verbatim as the \"kernel command line\".  Any modules"
++  " must be reloaded after using this command. The option --type is used"
++  " to suggest what type of kernel to be loaded. TYPE must be either of"
++  " \"netbsd\", \"freebsd\", \"openbsd\", \"linux\", \"biglinux\" and"
++  " \"multiboot\". The option --no-mem-option tells GRUB not to pass a"
++  " Linux's mem option automatically."
++  " The option --pcr specifies PCR index for measuring the FILE."
++#else
+   "kernel [--no-mem-option] [--type=TYPE] FILE [ARG ...]",
+   "Attempt to load the primary boot image from FILE. The rest of the"
+   " line is passed verbatim as the \"kernel command line\".  Any modules"
+@@ -2634,6 +2792,7 @@
+   " \"netbsd\", \"freebsd\", \"openbsd\", \"linux\", \"biglinux\" and"
+   " \"multiboot\". The option --no-mem-option tells GRUB not to pass a"
+   " Linux's mem option automatically."
++#endif
+ };
+ 
+ 
+@@ -2809,7 +2968,29 @@
+ module_func (char *arg, int flags)
+ {
+   int len = grub_strlen (arg);
++#ifdef ENABLE_IMA
++  int pcr_index = IMA_EV_GRUB_MODULE_PCR;//TCG_FILE_PCR_INDEX;
++  int eventtype = IMA_EV_GRUB_MODULE_TYPE;
+ 
++  if (substring ("--pcr=", arg) <= 0)
++    {
++      arg += 6;
++      if (! safe_parse_maxint(&arg, &pcr_index))
++        return 1;
++      arg = skip_to(0, arg);
++    }
++  if (substring ("--eventtype=", arg) <= 0)
++    {
++      arg += 12;
++      if (! safe_parse_maxint(&arg, &eventtype))
++        return 1;
++      arg = skip_to(0, arg);
++    }
++
++  ima_grub_pcr_index =  pcr_index;
++  ima_grub_eventtype =  eventtype;
++#endif
++
+   switch (kernel_type)
+     {
+     case KERNEL_TYPE_MULTIBOOT:
+@@ -2843,12 +3024,23 @@
+   "module",
+   module_func,
+   BUILTIN_CMDLINE | BUILTIN_HELP_LIST,
++#ifdef ENABLE_IMA
++  "module [--pcr=PCRINDEX] [--eventtype=EVENTTYPE] FILE [ARG ...]",
++  "Load a boot module FILE for a Multiboot format boot image (no"
++  " interpretation of the file contents is made, so users of this"
++  " command must know what the kernel in question expects). The"
++  " rest of the line is passed as the \"module command line\", like"
++  " the `kernel' command."
++  " The option --pcr specifies PCR index for measuring the FILE."
++  " The option --eventtype specifies Event Type for measuring the FILE."
++#else
+   "module FILE [ARG ...]",
+   "Load a boot module FILE for a Multiboot format boot image (no"
+   " interpretation of the file contents is made, so users of this"
+   " command must know what the kernel in question expects). The"
+   " rest of the line is passed as the \"module command line\", like"
+   " the `kernel' command."
++#endif
+ };
+ 
+ 
+@@ -2876,9 +3068,16 @@
+   "modulenounzip",
+   modulenounzip_func,
+   BUILTIN_CMDLINE | BUILTIN_HELP_LIST,
++#ifdef ENABLE_IMA
++  "modulenounzip [--pcr=PCRINDEX] FILE [ARG ...]",
++  "The same as `module', except that automatic decompression is"
++  " disabled."
++  " The option --pcr specifies PCR index for measuring the FILE."
++#else
+   "modulenounzip FILE [ARG ...]",
+   "The same as `module', except that automatic decompression is"
+   " disabled."
++#endif
+ };
+ 
+ 
+@@ -3162,6 +3361,22 @@
+       grub_memmove (password, arg, len);
+       grub_memset (password + len, 0, PASSWORD_BUFLEN - len);
+       password_type = type;
++#ifdef ENABLE_IMA
++      if (type == PASSWORD_MD5)
++	{
++          measure_eventdata(IMA_EV_GRUB_ACTION_PCR,
++                            IMA_EV_GRUB_ACTION_TYPE,
++                            grub_strlen(ima_password_protection_md5),
++                            ima_password_protection_md5);
++        }
++      else
++        {
++          measure_eventdata(IMA_EV_GRUB_ACTION_PCR,
++                            IMA_EV_GRUB_ACTION_TYPE,
++                            grub_strlen(ima_password_protection),
++                            ima_password_protection);
++        }
++#endif /* ENABLE_IMA */
+     }
+   return 0;
+ }
+@@ -5056,7 +5271,174 @@
+   "Probe VBE information. If the mode number MODE is specified, show only"
+   " the information about only the mode."
+ };
++
++
++#ifdef TRANSITIVE_TRUST
++/*
++   measure
++
++   2006-06-20 SM renew
++ */
++
++static int
++measure_func (char *arg, int flags)
++{
++	char *file = arg;
++	int pcr_index = IMA_EV_GRUB_FILE_PCR;
++	int eventtype = IMA_EV_GRUB_FILE_TYPE;
++	int rc=0;
++	int mode=0; /* 0:normal 1:data=>event */
++	int wPcr=0;
++	int wType=0;
++
++	while(1) {
++		if (substring ("--pcr=", file) <= 0) {
++			wPcr=1;
++			arg = file + 6;
++			if (! safe_parse_maxint(&arg, &pcr_index))
++				return 1;
++			file = skip_to(0, arg);
++		} else if (substring ("--eventtype=", file) <= 0) {
++			wType=1;
++			arg = file + 12;
++			if (! safe_parse_maxint(&arg, &eventtype))
++				return 1;
++			file = skip_to(0, arg);
++		} else if (substring ("--eventdata", file) <= 0) {
++			mode=1;
++			if (wPcr==0)  pcr_index = IMA_EV_GRUB_FILEDATA_PCR;
++			if (wType==0) eventtype = IMA_EV_GRUB_FILEDATA_TYPE;
++			file = skip_to(0, file);
++		} else
++			break;
++	}  // while
++
++	if (mode) { /* mode 1 eventdata = file image */
++		rc = measure_file_as_event( file, pcr_index, eventtype );
++	} else {    /* mode 0 eventdata = filename */
++		rc = measure_file( file, pcr_index, eventtype );
++	}
++	return rc;
++}
++
++static struct builtin builtin_measure =
++{
++  "measure",
++  measure_func,
++  //BUILTIN_CMDLINE | BUILTIN_MENU,
++  BUILTIN_CMDLINE | BUILTIN_MENU | BUILTIN_HELP_LIST,
++  "measure [[--pcr=PCRINDEX] [--eventtype=EVENTTYPE] [--eventdata] | [--mbr]] FILE",
++  "Perform measurement (Transitive Trust) operation with the FILE."
++  "--eventdata : hash data = event data(filename+filedata)"
++};
++
++
++/*
++   tpm command
++
++   How about just one command for all TPM/TCG diagnostic work
++
++   2006-06-23
++ */
++static int
++tpm_func (char *arg, int flags)
++{
++
++  if (substring ("pcrs", arg) <= 0) {
++    print_pcrs();
++    return 0;
++  }
++  if (substring ("eventlog", arg) <= 0) {
++    print_eventlog();
++    return 0;
++  }
++  if (substring ("test", arg) <= 0) {
++    arg = arg + 4;
++    arg = skip_to(0, arg);
++    if (substring ("--format=1", arg) <= 0)
++      ima_diagnosis(1);
++    else
++      ima_diagnosis(2);
++    return 0;
++  }
++  if (substring ("disable", arg) <= 0) {
++    ima_disable=1;
++    return 0;
++  }
++  if (substring ("debug", arg) <= 0) {
++    ima_debug=1;
++    return 0;
++  }
++  if (substring ("benchmark", arg) <= 0) {
++    ima_benchmark=1;
++    return 0;
++  }
++  if (substring ("normal", arg) <= 0) {
++    ima_disable=0;
++    ima_benchmark=0;
++    ima_debug=0;
++    ima_measure_gziped_file=1;
++    ima_limit_pcrusage=0;
++    return 0;
++  }
++  if (substring ("fastboot", arg) <= 0) {
++    ima_measure_gziped_file=0;
++    return 0;
++  }
++  if (substring ("limit", arg) <= 0) {
++    ima_limit_pcrusage=1;
++    return 0;
++  }
++
++ usage:
++  grub_printf("GRUB %s with Transitive Trust Support (patch version : %s)\n",version_string, IMA_VERSION); // TODO
++  grub_printf("Usage:\n");
++  grub_printf("  tpm pcrs     : show PCR value\n");
++  grub_printf("  tpm eventlog : show eventlog\n");
++  grub_printf("  tpm test --format=n  : \n");
++  grub_printf("     conformance test of BIOS 1Ah calls\n");
++  grub_printf("      n: TCG_HashLogExtendEvent format, select 1 or 2(default)\n");
++  grub_printf("  tpm limit : \n");
++  grub_printf("     if this BIOS does not allow to use PCR 8 and over,\n");
++  grub_printf("     substitute PCR7 for them\n");
++  grub_printf("  tpm [debug|benchmark|disable|fastboot|normal] : \n");
++  grub_printf("     additional diagnostic mode for expert\n");
++  grub_printf("Current opration mode:\n");
++  grub_printf("    measure mode: %d (format used by TCG_HashLogExtendEvent)\n",ima_measure_mode);
++  grub_printf("    limit       : %d (limit PCR usage)\n",ima_limit_pcrusage);
++  grub_printf("    debug       : %d (show verbose messages)\n",ima_debug);
++  grub_printf("    disable     : %d (disable measurement)\n",ima_disable);
++  grub_printf("    benchmark   : %d (show elapsed time)\n",ima_benchmark);
++  grub_printf("    fastboot    : %d (fast measure of gziped file)\n",ima_measure_gziped_file);
++  grub_printf("Default assignment of pcr index and eventtype:\n");
++#ifdef ENABLE_IMA
++  grub_printf("  stage 1     :  %d   %d\n",IMA_EV_GRUB_STAGE1_PCR,IMA_EV_GRUB_STAGE1_TYPE);
++  grub_printf("  stage 1.5   :  %d   %d\n",IMA_EV_GRUB_STAGE15_PCR,IMA_EV_GRUB_STAGE15_TYPE);
++  grub_printf("  stage 2     :  %d   %d\n",IMA_EV_GRUB_STAGE2_PCR,IMA_EV_GRUB_STAGE2_TYPE);
++  grub_printf("  grub.conf   :  %d   %d\n",IMA_EV_GRUB_CONFIG_PCR,IMA_EV_GRUB_CONFIG_TYPE);
++#endif /* ENABLE_IMA */
++  grub_printf("  file*       :  %d   %d\n",IMA_EV_GRUB_FILE_PCR,IMA_EV_GRUB_FILE_TYPE);
++  grub_printf("  file(decomp):  %d   %d\n",IMA_EV_GRUB_FILE_PCR,IMA_EV_GRUB_FILE_DECOMP_TYPE);
++  grub_printf("  kernel cmd  :  %d   %d\n",IMA_EV_GRUB_CMD_PCR,IMA_EV_GRUB_CMD_TYPE);
++  grub_printf("  action      :  %d   %d\n",IMA_EV_GRUB_ACTION_PCR,IMA_EV_GRUB_ACTION_TYPE);
++  grub_printf("   *configuable\n");
++
++  return (0);
++}
++
++static struct builtin builtin_tpm =
++{
++  "tpm",
++  tpm_func,
++  BUILTIN_CMDLINE | BUILTIN_MENU | BUILTIN_HELP_LIST,
++  "tpm [pcrs|eventlog|test [--format=n]]",
++  "Diagnostic tool for TPM and Transtive Trust Support"
++};
++
++#endif /* TRANSITIVE_TRUST */
+   
++
++
+ 
+ /* The table of builtin commands. Sorted in dictionary order.  */
+ struct builtin *builtin_table[] =
+@@ -5114,6 +5496,9 @@
+ #ifdef USE_MD5_PASSWORDS
+   &builtin_md5crypt,
+ #endif /* USE_MD5_PASSWORDS */
++#ifdef TRANSITIVE_TRUST
++  &builtin_measure, /* new */
++#endif /* TRANSITIVE_TRUST */
+   &builtin_module,
+   &builtin_modulenounzip,
+   &builtin_pager,
+@@ -5153,6 +5538,9 @@
+ #endif /* SUPPORT_NETBOOT */
+   &builtin_timeout,
+   &builtin_title,
++#ifdef TRANSITIVE_TRUST
++  &builtin_tpm,
++#endif /* TRANSITIVE_TRUST */
+   &builtin_unhide,
+   &builtin_uppermem,
+   &builtin_vbeprobe,
+Index: grub-0.97/stage2/shared.h
+===================================================================
+--- grub-0.97/stage2/shared.h	(revision 17)
++++ grub-0.97/stage2/shared.h	(working copy)
+@@ -375,6 +375,13 @@
+ #define strcpy grub_strcpy
+ #endif /* WITHOUT_LIBC_STUBS */
+ 
++#if defined(ENABLE_IMA) || (!defined(STAGE1_5)&&defined(IMA_TEST))
++#define TRANSITIVE_TRUST 1 /* for ASM code region */
++#include "ima.h"
++#endif // TRANSITIVE_TRUST
++#if defined(IMA_TEST)
++#define ENABLE_IMA_STEPBYSTEP
++#endif // IMA_TEST
+ 
+ #ifndef ASM_FILE
+ /*
+@@ -1000,6 +1007,150 @@
+ 
+ void init_bios_info (void);
+ 
++#if defined(ENABLE_IMA) || (!defined(STAGE1_5)&&defined(IMA_TEST))
++#define TRANSITIVE_TRUST 1 /* for C code region */
++
++/* TCG BIOS Return Code (spec v1.2, 12.3, p84) */
++#define TCG_PC_OK          0x0000
++#define TCG_PC_TPMERROR    0x0001
++#define TCG_PC_LOGOVERFLOW 0x0002
++#define TCG_PC_UNSUPPORTED 0x0003
++
++/* TCG BIOS Return Code (spec v1.2, 13, p96) */
++#define TCG_OK          0x00
++#define TPM_RET_BASE    0x01
++#define TCG_GENERAL_ERROR    TPM_RET_BASE + 0x00
++#define TCG_TPM_IS_LOCKED    TPM_RET_BASE + 0x01
++
++
++#if !defined(IMA_VERSION)
++#define IMA_VERSION "1.1.0.0"
++#endif
++
++#define IMA_EV_GRUB_ACTION_PASSWORD_PROTECTION     "Password Protection"
++#define IMA_EV_GRUB_ACTION_PASSWORD_PROTECTION_MD5 "Password Protection using MD5"
++#define IMA_EV_GRUB_ACTION_PASSWORD_ENTER      "Password Entered"
++#define IMA_EV_GRUB_ACTION_PASSWORD_FAILURE    "Password Failure"
++#define IMA_EV_GRUB_ACTION_USER_INTERVENTION   "Boot Sequance User Intervention"
++#define IMA_EV_GRUB_ACTION_EVENT_SEPARATOR     "Grub Event Separator"
++#define IMA_EV_GRUB_ACTION_OS_EVENT_SEPARATOR  "OS Event Separator"
++
++
++/* ima.c */
++extern int ima_disable;
++extern int ima_debug;
++extern unsigned char *ima_workbuf;
++extern int ima_benchmark;
++extern int ima_measurefile;
++extern int ima_measure_mode;
++extern int ima_grub_pcr_index;
++extern int ima_grub_eventtype;
++extern char *ima_grub_log; /* TBD */
++extern int ima_limit_pcrusage;
++
++extern int ima_measure_gziped_file;
++
++/* ima.h */
++extern char *ima_password_protection;
++extern char *ima_password_protection_md5;
++extern char *ima_password_enter;
++extern char *ima_password_failure;
++extern char *ima_user_intervention;
++extern char *ima_grub_separator;
++extern char *ima_os_separator;
++
++extern int ima_user_intervention_state;
++
++/* asm.S */
++int TCG_StatusCheck(unsigned char *major,
++		     unsigned char *minor,
++		     unsigned char **event_log);
++int TCG_HashLogExtendEventF1(int pcr_index,
++			     int hashdatasize,
++			     unsigned char *hashdeta,
++			     int logdatasize,
++			     unsigned char *logdeta);
++int TCG_HashLogExtendEventF2(int pcr_index,
++			     int hashdatasize,
++			     unsigned char *hashdeta,
++			     int logdatasize,
++			     unsigned char *logdeta);
++/* TCG_PassThroughToTPM  */
++int ima_extend(int pcr_index, unsigned char *digest,
++                   unsigned char *pcr_value);
++int ima_pcr_read(int pcr_index, unsigned char *pcr_value);
++int TCG_LogExtend(int pcr_index,
++		  int type,
++		  int logdatasize,
++		  unsigned char *logdata);
++int TCG_HashAll(int data_len, unsigned char *data, unsigned char *digest);
++int TCG_CompactHashLogExtendEvent(int pcr_index,
++				  int hashdatasize,
++				  unsigned char *hashdeta);
++
++/* ima.c */
++int ima_status(unsigned char **addr);
++int measure_eventdata(int pcr_index,
++		      int eventtype,
++		      int eventsize,
++		      unsigned char * eventdata);
++int measure_file(char *filename,
++		 int pcr_index,
++		 int eventtype);
++int measure_file_as_event(char *filename,
++		  int pcr_index,
++		  int eventtype);
++int measure_mem(int len,
++		unsigned char *addr,
++		int pcr_index,
++		int eventtype,
++		char* eventdata);
++
++int ima_start_os_measurement(void);
++int ima_final(char *msg);
++
++int print_digest (unsigned char *digest, int len);
++int print_u32 (unsigned int in);
++int print_rc (char* msg, unsigned int in);
++int print_pcrs(void);
++int print_eventlog(void);
++
++int ima_diagnosis (int format);
++
++#define SHA1_DIGEST_SIZE 20
++// #define TCG_EVENT_SIZE 512 /* for MBR */
++
++typedef struct tdTCG_PCR_EVENT
++{
++  unsigned int pcrIndex;
++  unsigned int eventType;
++  unsigned char digest[SHA1_DIGEST_SIZE];
++  unsigned int eventDataSize;
++  unsigned char event[0];
++} TCG_PCR_EVENT;
++/* 4 + 4 + 20 + 4 + n = 32+n */
++
++#define TCG_PCR_EVENT_BASE_SIZE 32
++
++
++typedef struct {
++    unsigned int    eventID;
++    unsigned int    eventDataSize;
++    /* (eventDataSize) bytes of event data follows */
++} PC_SPECIFIC_EVENT;
++
++
++typedef struct {
++    unsigned int    filenameSize;
++    unsigned int    filedataSize;
++    unsigned char   data[0];
++    /* (filenameSize + filedataSize) bytes of filedata follows */
++} GRUB_SPECIFIC_EVENT;
++
++
++
++#endif /* ENABLE_IMA */
++
+ #endif /* ASM_FILE */
+ 
+ #endif /* ! GRUB_SHARED_HEADER */
+Index: grub-0.97/stage2/start.S
+===================================================================
+--- grub-0.97/stage2/start.S	(revision 17)
++++ grub-0.97/stage2/start.S	(working copy)
+@@ -86,11 +86,13 @@
+ 	je	bootit
+ 
+ setup_sectors:	
++#ifndef ENABLE_IMA
+ 	/* check if we use LBA or CHS */
+ 	cmpb	$0, -1(%si)
+ 
+ 	/* jump to chs_mode if zero */
+ 	je	chs_mode
++#endif /* !ENABLE_IMA */
+ 
+ lba_mode:	
+ 	/* load logical sector start */
+@@ -158,6 +160,7 @@
+ 	jc	read_error
+ 
+ 	movw	$BUFFERSEG, %bx
++#ifndef ENABLE_IMA
+ 	jmp	copy_buffer
+ 			
+ chs_mode:	
+@@ -257,7 +260,8 @@
+ 
+ 	/* save source segment */
+ 	movw	%es, %bx
+-	
++#endif /* !ENABLE_IMA */
++
+ copy_buffer:	
+ 
+ 	/* load addresses for copy from disk buffer to destination */
+@@ -284,6 +288,14 @@
+ 	xorw	%si, %si	/* zero offset of source addresses */
+ 	movw	%bx, %ds	/* restore the source segment */
+ 
++#ifdef  ENABLE_IMA
++	/*
++	 * ds:si = buffer address
++	 * cx : size
++	 */
++	call    tcg_measure
++#endif
++
+ 	cld		/* sets the copy direction to forward */
+ 
+ 	/* perform copy */
+@@ -313,7 +325,11 @@
+ 	MSG(notification_done)
+ 	popw	%dx	/* this makes sure %dl is our "boot" drive */
+ #ifdef STAGE1_5
++#ifdef IMA_INFRA_MODE
++	ljmp	$0, $0x2270
++#else /* ! IMA_INFRA_MODE */
+ 	ljmp	$0, $0x2200
++#endif /* IMA_INFRA_MODE */
+ #else /* ! STAGE1_5 */
+ 	ljmp	$0, $0x8200
+ #endif /* ! STAGE1_5 */
+@@ -339,19 +355,257 @@
+ stop:	jmp	stop
+ 
+ #ifdef STAGE1_5
++#ifdef ENABLE_IMA
++/* set version here to see the IMA version and also generate unique digest */
++notification_string:	.string "Loading stage1.5(ima1100)"
++#else
+ notification_string:	.string "Loading stage1.5"
++#endif /* ENABLE_IMA */
+ #else
+ notification_string:	.string "Loading stage2"
+ #endif
+ 
+-notification_step:	.string "."
++notification_step:	.string "<+>"
+ notification_done:	.string "\r\n"
+ 	
+ geometry_error_string:	.string "Geom"
+ read_error_string:	.string "Read"
+ general_error_string:	.string " Error"
+ 
++#ifdef ENABLE_IMA
++ima_debug_string:	.string "<T>"
+ /*
++ * ds:si = buffer address
++ * cx    = size
++ */
++tcg_measure:
++	pushal
++	push    %ds
++	push    %es
++
++#ifdef IMA_USE_HLEE_F2
++/*
++ * set datasize
++ */
++	movw    %ds, %di
++	xorw    %ax, %ax		/* ax =0 */
++	movw    %ax, %ds		/* ds =0 */
++	movw    %ax, %es		/* es =0 */
++	movzx   %si, %esi
++	movzx   %di, %edi
++	shll    $4,  %edi
++	addl    %edi,%esi		/* esi= (32-bit phisical address) */
++
++	// NG movw	%cx, ABS(hlee_ipb_datasize)
++	movw    $ABS(hlee_ipb), %di	/* ES:DI = IPB */
++	movl    %esi, 4(%di)		/* HashDataPtr */
++	movw    %cx,  8(%di)		/* HashDataLen */
++
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=00h" TCG_StatusCheck
++ *	Call with
++ *	  %ah = 0xBB
++ *			%al = 0x00
++ *	Return:
++ *			%eax = TCG_STATUS
++ *			%ebx = 'TCPA'
++ *
++ * Ref:
++ *  TCG PC Client Specific Implementation Specification for Conventional BIOS v1.2,
++ *  Section 12.5 (page 85)
++ */
++tcg_statuscheck:
++	movw    $0xbb00, %ax		/* TCG_LogEvent */
++	int     $0x1a
++	test	%eax, %eax
++	jnz	tcg_goback
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=01h" TCG_HashLogExtendEvent
++ *	Call with
++ *          %ah = 0xBB
++ *			%al = 0x01
++ *			%es:%di = segment:offset of input parametor block
++ *			%ds:%si = segment:offset of output parametor block
++ *			%ebx = 'TCPA'
++ *			%ecx = 0
++ *			%edx = 0
++ *	Return:
++ *			%eax = TCG_STATUS
++ *			%ds:%si = ?
++ *
++ * Ref:
++ *  TCG PC Client Specific Implementation Specification for Conventional BIOS v1.2,
++ *  Section 12.6 (page 86)
++ *
++ */
++tcg_hashlogextendevent:
++	/* Setup IPB */
++
++	movw    $ABS(hlee_ipb), %di	/* ES:DI = IPB */
++#ifdef IMA_INFRA_MODE
++	/* Fix the size */
++	addl	$0x70, 4(%di)		/* HashDataPtr + 0x70 */
++	subl    $0x70, 8(%di)		/* HashDataLen - 0x70 */
++	//subl    $0x70, ABS(hlee_ipb_datasize)
++#endif
++	/* Call */
++	movw    $0xbb01, %ax		/* TCG_LogEvent */
++	movw	$0x2E00, %si		/* OPB OK */
++	xorl    %ecx, %ecx		/* ECX = 0 */
++	xorl    %edx, %edx		/* EDX = 0 */
++	int     $0x1a
++
++
++#ifndef IMA_IGNORE_BIOS_RC3
++	test	%eax, %eax
++	jz	tcg_end
++tcg_error:
++	MSG(tcg_error_string)
++#endif /*  IMA_IGNORE_BIOS_RC3 */
++
++#else /* IMA_USE_HLEE_F2 */
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=05h" TCG_HashAll
++ *	Call with	%ah = 0xBB
++ *			%al = 0x05
++ *			%es:%di = segment:offset of input parametor block
++ *			%ds:%si = segment:offset of output parametor block
++ *			%ebx = 'TCPA'
++ *			%ecx = 0
++ *			%edx = 0
++ *	Return:
++ *			%eax = TCG_STATUS
++ *			%ds:%si = segment:offset of referenced buffer
++ *
++ * Ref:	 TCG PC Specification v1.0, Section 8.1.8 (page 49)
++ */
++	movw    %ds, %di
++	xorw    %ax, %ax		/* ax =0 */
++	movw    %ax, %ds		/* ds =0 */
++	movw    %ax, %es		/* es =0 */
++	movw    $0xbb05, %ax	/* ah=BBh,al=05h, TCG_HashAll */
++	movzx   %si, %esi
++	movzx   %di, %edi
++	shll    $4,  %edi
++	addl    %edi,%esi		/* esi= (32-bit phisical address) */
++
++	/* Setup IPB */
++	movw    $ABS(ha_ipb), %di	/* di=IPB */
++	movl    %esi, 4(%di)		/* HashDataPtr */
++	movw    %cx,  8(%di)		/* HashDataLen */
++#ifdef IMA_INFRA_MODE
++	/* Fix the size */
++	addl	$0x70, 4(%di)		/* HashDataPtr + 0x70 */
++	subl    $0x70, 8(%di)		/* HashDataLen - 0x70 */
++#endif
++
++	movw    $ABS(tpe_pcrvalue),%si  /* si=OPB */
++	movl    ABS(tcg_sig), %ebx	/* (EBX)='TCPA' */
++	xorl    %ecx, %ecx		/* (ECX)=xero */
++	movl    %ecx, %edx		/* (EDX)=xero */
++
++	int     $0x1a			/* INT 1Ah */
++
++	/*
++	(EAX)=TCG_STATUS
++	(DS:SI)=Referenced buffer updated to provide return result
++	*/
++
++#ifndef IMA_IGNORE_BIOS_RC3 /* for DEBUG. Skip LogEvent */
++	test	%eax, %eax
++	jnz	tcg_goback
++#endif /* IMA_IGNORE_BIOS_RC3 */
++
++
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=04h" TCG_LogEvent
++ *	Call with	%ah = 0xBB
++ *			%al = 0x04
++ *			%es:%di = segment:offset of input parametor block
++ *			%ds:%si = segment:offset of output parametor block
++ *			%ebx = 'TCPA'
++ *			%ecx = 0
++ *			%edx = 0
++ *	Return:
++ *			%eax = TCG_STATUS
++ *			%ds:%si = na
++ *
++ * Ref:	 TCG PC Specification v1.0, Section 8.1.7 (page 47)
++ */
++	movw    $0xbb04, %ax		/* TCG_LogEvent */
++	movw    $ABS(le_ipb), %di	/* di=IPB */
++	movw	$0x7FF0, %si		/* si=OPB = 0x7FF0 */
++	movw	$ABS(ha_ipb), %si	/* use ha_ipb (TBD) */
++	int     $0x1a
++	test	%eax, %eax
++#endif /* IMA_USE_HLEE_F2 */
++tcg_goback:
++	pop     %es
++	pop     %ds
++	popal
++	ret
++
++#ifdef IMA_USE_HLEE_F2
++/* TCG_HashLogExtendEvent Input Parameter Block Format 2. p88 Table 15 */
++hlee_ipb:
++	.word   (hlee_ipb_end - hlee_ipb)	/*  0 block size   */
++	.word   0				/*  2 reserved     */
++//	.long   0x00070070			/*  4 data pointer */
++#ifdef IMA_INFRA_MODE
++	.long   BUFFERSEG * 0x10 + 0x70		/*  4 data pointer */
++#else /* ! IMA_INFRA_MODE */
++	.long   BUFFERSEG * 0x10		/*  4 data pointer */
++#endif /* ! IMA_INFRA_MODE */
++hlee_ipb_datasize:
++	.long   0x00002190			/*  8 data size   TODO  */
++	.long   IMA_EV_GRUB_STAGE15FS_PCR	/*  C PCR index    */
++	.long	0				/* 10 event type	*/
++	.long   ABS(tcg_pcr_event)		/* 14 log pointer  */
++	.long   32				/* 18 log size     */
++hlee_ipb_end:
++#else /* IMA_USE_HLEE_F2 */
++/* HashAll Input Parameter Block (16-bytes) p49 */
++ha_ipb:
++	.word   (ha_ipb_end - ha_ipb)	/* 0 block size   */
++	.word   0                       /* 2 reserved     */
++	.long   0                       /* 4 data pointer */
++	.long   0x200                   /* 8 data size =512 (def)   */
++	.long   4                       /* C Algorithm id = TCG_ALG_SHA = 4 */
++ha_ipb_end:
++
++/* LogEvent Input Parameter Block (28-bytes) p47 */
++le_ipb:
++	.word   (le_ipb_end - le_ipb)	 /*  0 block size   */
++	.word   0                        /*  2 reserved     */
++	.long   0                        /*  4 data pointer */
++	.long   0                        /*  8 data size    */
++	.long   IMA_EV_GRUB_STAGE15FS_PCR  /*  C PCR index    */
++	.long	IMA_EV_GRUB_STAGE15FS_TYPE /* 10 event type	*/
++	.long   ABS(tcg_pcr_event)       /* 14 log pointer  */
++	.long   32                       /* 18 log size     */
++le_ipb_end:
++#endif /* IMA_USE_HLEE_F2 */
++
++/* TCG_PCR_EVENT data structure 32-bytes */
++tcg_pcr_event: /* 32 bytes */
++	.long   IMA_EV_GRUB_STAGE15FS_PCR          /* PCR index    */
++tcg_pcr_event_type:
++	.long   IMA_EV_GRUB_STAGE15FS_TYPE         /* event type   */
++/* HashAll Output Parameter Block (20-bytes) p49 */
++tpe_pcrvalue:
++	.space  20                      /* PCR value    */
++	.long   0                       /* event size   */
++tcg_sig:
++        .string "TCPA" /* */
++#if 0
++tcg_memo:
++        .long 0
++tcg_memo_len:
++        .long 0
++#endif // 0
++#endif /* ENABLE_IMA */
++
++/*
+  * message: write the string pointed to by %si
+  *
+  *   WARNING: trashes %si, %ax, and %bx
+Index: grub-0.97/stage2/stage1_5.c
+===================================================================
+--- grub-0.97/stage2/stage1_5.c	(revision 17)
++++ grub-0.97/stage2/stage1_5.c	(working copy)
+@@ -30,7 +30,11 @@
+ void
+ cmain (void)
+ {
++#ifdef ENABLE_IMA
++  grub_printf ("\n\nGRUB loading (Stage2 w/ Transitive Trust), please wait...\n");
++#else
+   grub_printf ("\n\nGRUB loading, please wait...\n");
++#endif /* TCG*/
+ 
+   /*
+    *  Here load the true second-stage boot-loader.
+@@ -47,7 +51,7 @@
+       /* Sanity check: catch an internal error.  */
+       if (saved_sector == -1)
+ 	{
+-	  grub_printf ("internal error: the second sector of Stage 2 is unknown.");
++	  grub_printf ("internal error: the second sector of Stage 2 is unknown. 0816");
+ 	  stop ();
+ 	}
+       
+@@ -55,8 +59,78 @@
+       
+       grub_close ();
+ 
++#ifdef IMA_TEST
++      grub_printf("stage1_5.c measure (file = %s)\n",config_file);
++#endif
++#ifdef ENABLE_IMA
++      if (ret) {
++#if 1
++	unsigned char major,minor;
++	//int major,minor;
++	int rc;
++	// if (TCG_StatusCheck(&major,&minor,NULL)>0) {
++	if (TCG_StatusCheck(&major,&minor,NULL)==0) { /* OK if rc==0 */
++	  TCG_PCR_EVENT logdata;
++	  int i;
++#ifdef IMA_USE_HLEE_F2
++	  logdata.pcrIndex  = IMA_EV_GRUB_STAGE2_PCR;
++	  logdata.eventType = IMA_EV_GRUB_STAGE2_TYPE;
++	  logdata.eventDataSize = 0; /* no eventdata - TODO */
++	  rc = TCG_HashLogExtendEventF2(
++				 IMA_EV_GRUB_STAGE2_PCR,
++				 SECTOR_SIZE * 2 + ret,
++			     (char*)0x8000,
++			     TCG_PCR_EVENT_BASE_SIZE,
++			     (unsigned char *)&logdata);
++#else /* IMA_USE_HLEE_F2 */
++	  rc = TCG_HashAll( SECTOR_SIZE * 2 + ret,
++			     (char*)0x8000,
++			     logdata.digest);
++	  grub_printf("Measureing stage2. - (TCG_HashAll) ");
++	  //grub_printf(" start=%u len=%u Hash=\n ",0x8000,SECTOR_SIZE * 2 + ret);
++	  //for (i=0;i<20;i++) printf("%u,",logdata.digest[i]);
++	  //grub_printf("\n");
++
++	  logdata.pcrIndex  = IMA_EV_GRUB_STAGE2_PCR;
++	  logdata.eventType = IMA_EV_GRUB_STAGE2_TYPE;
++	  logdata.eventDataSize = 0; /* no eventdata - TODO */
++	  rc = TCG_LogExtend(IMA_EV_GRUB_STAGE2_PCR,
++			     IMA_EV_GRUB_STAGE2_TYPE,
++			     TCG_PCR_EVENT_BASE_SIZE,
++			     (unsigned char *)&logdata);
++#endif /* IMA_USE_HLEE_F2 */
++
++	}
++
++#else
++          /* If stage2 was loaded and TCG BIOS presents */
++          if (!ima_status_check( NULL ))
++            {
++              unsigned char sha1_hash[SHA1_DIGEST_SIZE];
++              int retcode,i;
++
++              /* Get SHA-1 hash of stage2 */
++              retcode = ima_hash_all( SECTOR_SIZE * 2 + ret,
++				      (char*)0x8000,
++				      sha1_hash);
++              grub_printf("Measureing stage2. - (HashAll) ");
++              grub_printf(" start=%u len=%u Hash=\n ",0x8000,SECTOR_SIZE * 2 + ret);
++              for (i=0;i<20;i++) printf("%u,",sha1_hash[i]);
++              grub_printf("\n");
++
++              /* Perform TSS_LogEvent and TPM_Extend */
++              retcode = ima_log_extend(TCG_GRUB_PCR_INDEX, sha1_hash);
++              grub_printf("PCR%u was Extended\n",TCG_GRUB_PCR_INDEX);
++
++            }
++#endif /* 1 */
++	chain_stage2 (0, 0x8200, saved_sector);
++      }
++#else
+       if (ret)
+ 	chain_stage2 (0, 0x8200, saved_sector);
++#endif
++
+     }
+ 
+   /*
+Index: grub-0.97/stage2/stage2.c
+===================================================================
+--- grub-0.97/stage2/stage2.c	(revision 17)
++++ grub-0.97/stage2/stage2.c	(working copy)
+@@ -566,6 +566,18 @@
+ 		break;
+ 	    }
+ 
++#ifdef ENABLE_IMA
++          if (ima_user_intervention_state==0)
++            {
++              /* extend 1st intervention only */
++              measure_eventdata(IMA_EV_GRUB_ACTION_PCR,
++                                IMA_EV_GRUB_ACTION_TYPE,
++                                grub_strlen(ima_user_intervention),
++                                ima_user_intervention);
++              ima_user_intervention_state=1;
++            }
++#endif /* ENABLE_IMA */
++
+ 	  if (! auth && password)
+ 	    {
+ 	      if (c == 'p')
+@@ -997,6 +1009,15 @@
+ 	      is_opened = is_preset = open_preset_menu ();
+ 	      if (! is_opened)
+ 		{
++#ifdef IMA_TEST
++		  printf("stage2.c measure grub.conf\n");
++#endif
++#ifdef ENABLE_IMA
++			ima_start_os_measurement();
++			measure_file(config_file,
++				IMA_EV_GRUB_CONFIG_PCR,
++				IMA_EV_GRUB_CONFIG_TYPE);
++#endif /* ENABLE_IMA */
+ 		  is_opened = grub_open (config_file);
+ 		  errnum = ERR_NONE;
+ 		}
+Index: grub-0.97/stage2/ima.h
+===================================================================
+--- grub-0.97/stage2/ima.h	(revision 0)
++++ grub-0.97/stage2/ima.h	(revision 0)
+@@ -0,0 +1,79 @@
++
++#ifndef __IMA_H
++#define __IMA_H
++
++/*
++ * PCR index & event type assignment
++ *
++ * EventType to identify the components in Grub (TBD)
++ *
++ *    bit
++ *   --------------------------------
++ *    8-15  Used by GRUB
++ *    0- 7  defined by TCG PC Spec
++ *   --------------------------------
++ *
++ * Ref: PC Spec v1.2 rev.1, Table 11 in page 76
++ *
++ */
++/* Stage1 is measured by BIOS, this assigment does not work for.. but  */
++#define IMA_EV_GRUB_STAGE1_PCR       0x04
++#define IMA_EV_GRUB_STAGE1_TYPE           0x0D /* 0x0Dh: v1.2 */
++
++#define IMA_EV_GRUB_STAGE15_PCR      0x04
++#define IMA_EV_GRUB_STAGE15_TYPE          0x0D
++
++#define IMA_EV_GRUB_STAGE15FS_PCR    0x04
++#define IMA_EV_GRUB_STAGE15FS_TYPE        0x0D
++
++#define IMA_EV_GRUB_STAGE2_PCR       0x04
++#define IMA_EV_GRUB_STAGE2_TYPE           0x0D
++
++#define IMA_EV_GRUB_MBR_PCR          0x04
++#define IMA_EV_GRUB_MBR_TYPE              0x06    // as part of PC Specific event
++#define IMA_EV_GRUB_MBR_PCTYPE            0x21    // TODO
++
++#define IMA_EV_GRUB_CONFIG_PCR       0x05
++#define IMA_EV_GRUB_CONFIG_TYPE           0x0E
++
++#define IMA_EV_GRUB_CMD_PCR          0x05
++#define IMA_EV_GRUB_CMD_TYPE              0x05
++
++#define IMA_EV_GRUB_ACTION_PCR       0x05
++#define IMA_EV_GRUB_ACTION_TYPE           0x05
++
++#define IMA_EV_GRUB_SEPARATOR_TYPE        0x04
++
++/* TODO changed by user*/
++
++#define IMA_EV_GRUB_BOOT_MSG_PCR     0x08
++#define IMA_EV_GRUB_BOOT_MSG_TYPE         0x1005
++
++#define IMA_EV_GRUB_FILE_PCR         0x08
++#define IMA_EV_GRUB_FILE_TYPE             0x1505
++#define IMA_EV_GRUB_FILE_DECOMP_TYPE      0x1605
++
++#define IMA_EV_GRUB_FILEDATA_PCR     0x08
++#define IMA_EV_GRUB_FILEDATA_TYPE         0x1700
++
++#define IMA_EV_GRUB_KERNEL_CMD_PCR   0x05
++#define IMA_EV_GRUB_KERNEL_CMD_TYPE       0x1105
++
++#define IMA_EV_GRUB_KERNEL_PCR       0x08
++#define IMA_EV_GRUB_KERNEL_TYPE           0x1205
++
++#define IMA_EV_GRUB_INITRD_PCR       0x08
++#define IMA_EV_GRUB_INITRD_TYPE           0x1305
++
++#define IMA_EV_GRUB_MODULE_PCR       0x08
++#define IMA_EV_GRUB_MODULE_TYPE           0x1405
++
++#define IMA_EV_GRUB_MODULE_CMD_PCR   0x05
++#define IMA_EV_GRUB_MODULE_CMD_TYPE       0x1505
++
++
++//#define TCG_EVENTDATA_SIZE  128
++#define TCG_EVENTDATA_SIZE  1024
++
++
++#endif /* __IMA_H */
+Index: grub-0.97/stage2/ima.c
+===================================================================
+--- grub-0.97/stage2/ima.c	(revision 0)
++++ grub-0.97/stage2/ima.c	(revision 0)
+@@ -0,0 +1,1453 @@
++/*
++
++ Transitive Trust Functions
++
++ 2007-01-29 S.Munetoh update for Xen
++ 2006-08-15 S.Munetoh functions moved from boot.c
++
++ */
++
++#include "shared.h"
++
++#ifdef TRANSITIVE_TRUST
++
++inline unsigned long long int rdtsc(void);
++int ima_hlee_select(
++        int eventsize,
++        unsigned char * eventdata,
++        int logdatasize,
++        TCG_PCR_EVENT *logdata);
++int print_pcrs(void);
++int print_eventlog(void);
++int get_last_event(unsigned char *digest);
++int verify_extend(
++        int pcr_index,
++        unsigned char *pcr_value,
++        unsigned char *digest,
++        int option);
++int ima_print_digest2(
++        char *msg1, unsigned char *digest1,
++        char *msg2, unsigned char *digest2);
++
++static unsigned long long int ima_benchmark_rdtsc; /* start ticks */
++
++#define TCG_PCR_EVENT_DATA_SIZE 128
++static unsigned char tcg_event_buf[TCG_PCR_EVENT_BASE_SIZE+TCG_PCR_EVENT_DATA_SIZE];
++
++
++/* TDOD really need them? */
++int ima_grub_pcr_index = -1;
++int ima_grub_eventtype = IMA_EV_GRUB_FILE_TYPE;
++char *ima_grub_log; /**/
++
++int ima_disable = 0; /* for DEBUG */
++#ifdef IMA_TEST
++int ima_debug = 1; /* for DEBUG */
++#else
++int ima_debug = 0; /* normal op */
++#endif
++
++//unsigned int tcg_buffer = 0x100000; /* TODO */
++unsigned char * ima_workbuf = (unsigned char *) 0x100000; /* default, this will be overwrited by kernel image */
++int ima_benchmark=0; /* benchmark */
++int ima_measurefile=1; /* 1:measure file 0:measure memory*/
++int ima_limit_pcrusage=0; /* 1: limit pcrusage, substitute PCR7 for PCR 8 and above*/
++
++int ima_measure_gziped_file=1; /* 1:measure file 0:measure memory*/
++
++#ifdef IMA_USE_HLEE_F2
++int ima_measure_mode=2;
++#else/* IMA_USE_HLEE_F2 */
++int ima_measure_mode=1;
++#endif /* IMA_USE_HLEE_F2 */
++
++int ima_grub_pcr_usage[24]; // TODO fixed value, 24
++
++static char *err_no_tcg = " BIOS does not suppot TCG APIs.\n";
++
++char *ima_password_protection     = IMA_EV_GRUB_ACTION_PASSWORD_PROTECTION;
++char *ima_password_protection_md5 = IMA_EV_GRUB_ACTION_PASSWORD_PROTECTION_MD5;
++
++char *ima_password_enter      = IMA_EV_GRUB_ACTION_PASSWORD_ENTER;
++char *ima_password_failure    = IMA_EV_GRUB_ACTION_PASSWORD_FAILURE;
++char *ima_user_intervention   = IMA_EV_GRUB_ACTION_USER_INTERVENTION;
++
++char *ima_grub_separator      = IMA_EV_GRUB_ACTION_EVENT_SEPARATOR;
++char *ima_os_separator        = IMA_EV_GRUB_ACTION_OS_EVENT_SEPARATOR;
++
++int ima_user_intervention_state = 0; /* 0:no -(extend)-> 1:yes */
++
++/* TODO to be simple*/
++static int
++print_hex (unsigned char hex)
++{
++    unsigned char l = 0x0F & hex;
++    unsigned char u = hex>>4;
++    if (u>=10) grub_printf("%c",u+55);
++    else grub_printf("%d",u);
++    if (l>=10) grub_printf("%c",l+55);
++    else grub_printf("%d",l);
++    return 0;
++}
++
++int
++print_digest (unsigned char *digest, int len)
++{
++    int i;
++    for (i=0;i<len;i++) {
++	print_hex(digest[i]);
++    }
++    return 0;
++}
++
++int
++print_u32 (unsigned int in)
++{
++    print_hex(0xff & in>>24);
++    print_hex(0xff & in>>16);
++    print_hex(0xff & in>>8);
++    print_hex(0xff & in);
++    return 0;
++}
++
++int
++print_rc (char *msg, unsigned int in)
++{
++    grub_printf("%s rc = 0x",msg);
++    print_u32(in);
++    grub_printf("\n"); /* TODO add error msg */
++    return 0;
++}
++
++inline unsigned long long int rdtsc(void) {
++	unsigned long long int t;
++	__asm__(".byte 0x0f,0x31" : "=A" (t));
++	return t;
++}
++
++/*
++ check tcg status
++ return:
++ 0x0000 : N/A
++ 0x0101 : OK v 1.1
++ 0x0102 : OK v 1.2
++
++ TODO
++ - Answer ipb format of HashLogExtendEvent, Format 1 or Format2
++
++ */
++
++#define TCG_V11 0x0101
++#define TCG_V12 0x0102
++
++int ima_status(unsigned char **addr)
++{
++	int rc=0;
++	unsigned char major;
++	unsigned char minor;
++	unsigned char *log_addr;
++
++	rc = TCG_StatusCheck(
++			&major,
++			&minor,
++			&log_addr );
++
++	if (rc!=0){ /* TODO is this work for non-TCG BIOS? */
++		grub_printf (err_no_tcg);
++		/* disable TCG*/
++		if (ima_debug==0) ima_disable=1;
++		return 0;
++	}
++
++	if (addr != NULL)
++		*addr = log_addr;
++
++	/* Check the BIOS TCG Version */
++	if ((major==1) && (minor==0))
++		return TCG_V11;
++
++	if ((major==1) && (minor==2))
++		return TCG_V12;
++
++	return 0;
++}
++
++/*
++ * BIOS Call for measurement
++ * Due to the ambiguous specification, we may have four options:-(
++ * ima_measure_mode
++ * 0 : HashAll + LogExtend default
++ * 1 : HashLogExtendEvent Format1(N/G for old IBM BIOS)
++ * 2 : HashLogExtendEvent Format2IMA_USE_HLEE_F2
++ * 3 : CompactHashLogExtendEvent (TBD)
++ */
++
++int ima_hlee_select(
++	int eventsize,
++	unsigned char * eventdata,
++	int logdatasize,
++	TCG_PCR_EVENT *logdata) {
++	int rc=0;
++
++	if (ima_limit_pcrusage==1) {
++		if (logdata->pcrIndex>7) {
++			logdata->pcrIndex = 7;
++		}
++	}
++
++	if (ima_measure_mode == 2) { // HLEE
++		rc = TCG_HashLogExtendEventF2(
++				logdata->pcrIndex,
++				eventsize,
++				eventdata,
++				logdatasize,
++				(unsigned char*)logdata);
++	} else {
++		/* Hash the file image */
++		rc = TCG_HashAll(
++				eventsize,
++				eventdata,
++				logdata->digest);
++		/* TODO check rc */
++		rc = TCG_LogExtend(
++				logdata->pcrIndex,
++				logdata->eventType,
++				logdatasize,
++				(unsigned char *)logdata);
++	}
++	return rc;
++}
++
++
++/*
++ *  measure & extend the eventdata
++ *
++ *    PCRn       = SHA1(PCRn-1 + eventdata)
++ *    event data = eventdata
++ *
++ *   2006-06-09 SM new
++ */
++int
++measure_eventdata (
++	int pcr_index,
++	int eventtype,
++	int eventsize,
++	unsigned char * eventdata)
++{
++	int rc=0;
++	TCG_PCR_EVENT *logdata;
++	int logdatasize;
++
++	if (ima_disable) return -1;
++
++	if (eventsize == 0) {
++		grub_printf("measure_eventdata: eventsize == 0 ??\n");
++		return -1;
++	}
++
++
++	if (eventsize > TCG_PCR_EVENT_DATA_SIZE) {
++	    logdata = (TCG_PCR_EVENT *) ima_workbuf; // TODO halt if assigned buffer is wrong
++	} else {
++	    logdata = (TCG_PCR_EVENT *) tcg_event_buf;
++	}
++
++	if (ima_status(NULL)) {
++		if (ima_benchmark) {
++			ima_benchmark_rdtsc = rdtsc();
++		}
++
++		logdata->pcrIndex=pcr_index;
++		logdata->eventType=eventtype; /* TODO*/
++		logdata->eventDataSize=eventsize;
++		memcpy(logdata->event,eventdata,logdata->eventDataSize);
++		logdatasize = TCG_PCR_EVENT_BASE_SIZE + eventsize;
++
++		ima_grub_pcr_usage[pcr_index] ++; /* Check the PCR usage*/
++
++		/* Call */
++		rc = ima_hlee_select(
++			logdata->eventDataSize,
++			logdata->event,
++			logdatasize,
++			logdata);
++
++		if (ima_benchmark)
++			grub_printf("measure_eventdata: %d bytes - %d msec(@2GHzCPU)\n",
++				logdata->eventDataSize,
++				(rdtsc() - ima_benchmark_rdtsc)>>21);
++
++		if (ima_debug) {
++			grub_printf("measure_eventdata (using TCG_HashLogExtendEventF2 call)\n");
++			grub_printf("pcr=%d,type=%d,eventdatasize=%d(to be hashed)\n",
++				logdata->pcrIndex,
++				logdata->eventType,
++				logdata->eventDataSize);
++			grub_printf("\nPress any key to go next step....\n");
++			getkey ();
++		}
++		if (rc!=0) {
++			if (rc == 3) {
++				/* TODO IBM BIOS return 3 */
++			} else {
++				print_rc("Error ",rc);
++				grub_printf("measure_event (TCG_HashLogExtendEvent) was failed?\n");
++			}
++		}
++		return rc;
++	} else {
++		//grub_printf (err_no_tcg);
++		return -1;
++	}
++}
++
++
++/*
++ *  measure a file
++ *
++ *    PCRn       = SHA1(PCRn-1 + file image)
++ *    event data = file name
++ *
++ *    2006-06-18 SM new
++ */
++int
++measure_file (
++	char *filename,
++	int pcr_index,
++	int eventtype)
++{
++	int rc=0;
++	TCG_PCR_EVENT *logdata;
++	int logdatasize;
++	int eventdatasize;
++	unsigned char *buf;
++
++	if (ima_disable) return -1;
++
++	/* status check */
++	if (ima_status(NULL)) {
++
++		if (ima_benchmark) {
++			ima_benchmark_rdtsc = rdtsc();
++		}
++
++		logdata = (TCG_PCR_EVENT *)  ima_workbuf;
++		logdata->pcrIndex=pcr_index;
++		logdata->eventType=eventtype; /* TODO*/
++
++		/* eventdata: image-> name*/
++		/* nul terminate the filename (let use logdata->event as tmp buf)*/
++		memcpy(logdata->event,filename,grub_strlen(filename)+1);
++		nul_terminate (logdata->event);
++		logdata->eventDataSize = grub_strlen(logdata->event);
++		logdatasize = TCG_PCR_EVENT_BASE_SIZE+logdata->eventDataSize;
++
++		buf = (unsigned char *) ima_workbuf + logdatasize;
++
++		ima_grub_pcr_usage[pcr_index] ++; /* Check the PCR usage*/
++
++#ifndef NO_DECOMPRESSION
++		if (ima_measure_gziped_file == 1)
++		    no_decompression = 1;
++#endif
++		/* Open the file */
++		if (! grub_open (filename))
++			return errnum;
++
++		eventdatasize= grub_read(buf, -1);
++		grub_close ();
++
++#ifndef NO_DECOMPRESSION
++  no_decompression = 0;
++#endif
++		if (eventdatasize<0)
++			return -1;
++
++		if (ima_benchmark)
++			grub_printf("measure_file: %d bytes - %d msec(@2GHzCPU) - load file \n",
++					eventdatasize,
++					(rdtsc() - ima_benchmark_rdtsc)>>21);
++
++		/* Call */
++		 rc = ima_hlee_select(
++				eventdatasize,
++				buf,
++				logdatasize,
++				logdata);
++
++		if (ima_benchmark) {
++			grub_printf("measure_file: %d bytes - %d msec(@2GHzCPU) - HashAll+LogExtend\n",
++				eventdatasize,
++				(rdtsc() - ima_benchmark_rdtsc)>>21);
++		}
++
++		if (ima_debug) {
++			grub_printf("measure_file(pcr=%d,type=%d,size=%d,no_decomp=%d)\ndigest=",
++				logdata->pcrIndex,
++				logdata->eventType,
++				logdata->eventDataSize,
++				no_decompression);
++			print_digest(logdata->digest, 20);
++			grub_printf("\nPress any key to go next step....\n");
++			getkey ();
++		}
++
++
++		if (rc!=0) {
++			if (rc == 3) {
++				/* TODO IBM BIOS return 3 */
++			} else {
++				print_rc("Error ",rc);
++				grub_printf("measure_file (TCG_LogExtend) was failed?\n");
++			}
++		}
++		return rc;
++	} else {
++		//grub_printf (err_no_tcg);
++		return -1;
++	}
++}
++
++
++/*
++ *  measure a file (2)
++ *
++ *   PCRn       = SHA1(PCRn-1 + file image)
++ *   event data =
++ *     UINT32 filename size
++ *     BYTE*  filename
++ *     UINT32 file size
++ *     BYTE*  filedata
++ *
++ *   2006-06-19 SM new
++ *   2006-11-03 SM update, new eventdata format
++ *              event data = file image << OLD
++ */
++int
++measure_file_as_event (
++	char *filename,
++	int pcr_index,
++	int eventtype)
++{
++	int rc=0;
++	TCG_PCR_EVENT *logdata;
++	GRUB_SPECIFIC_EVENT *grubdata;
++	int logdatasize;
++
++	if (ima_disable) return -1;
++
++	/* status check */
++	if (ima_status(NULL)) {
++		if (ima_benchmark)
++			ima_benchmark_rdtsc = rdtsc();
++
++		/* Open the file */
++		if (! grub_open (filename))
++			return errnum;
++
++		/* Read */
++		logdata = (TCG_PCR_EVENT *) ima_workbuf;
++		logdata->pcrIndex=pcr_index;
++		logdata->eventType=eventtype;
++
++		grubdata = (GRUB_SPECIFIC_EVENT *) logdata->event;
++
++		/* File name */
++		memcpy(grubdata->data,filename,grub_strlen(filename)+1);
++		nul_terminate (grubdata->data);
++		grubdata->filenameSize = grub_strlen(grubdata->data);
++
++		/* File Data */
++		grubdata->filedataSize = grub_read(&grubdata->data[grubdata->filenameSize], -1);
++
++		logdata->eventDataSize = 8 + grubdata->filenameSize + grubdata->filedataSize;
++		logdatasize = TCG_PCR_EVENT_BASE_SIZE + logdata->eventDataSize;
++
++		if (logdatasize>TCG_EVENTDATA_SIZE) {
++		  /* TODO */
++		  logdata->eventDataSize = 0;
++		  logdatasize = TCG_PCR_EVENT_BASE_SIZE;
++		}
++
++		ima_grub_pcr_usage[pcr_index] ++; /* Check the PCR usage*/
++
++		/* Close */
++		grub_close ();
++
++		if (logdata->eventDataSize<0)
++			return -1;
++
++		if (ima_benchmark) {
++			grub_printf("measure_file2: %d bytes - %d msec(@2GHzCPU) - load file\n",
++				logdata->eventDataSize,
++				(rdtsc() - ima_benchmark_rdtsc)>>21);
++			ima_benchmark_rdtsc = rdtsc();
++		}
++
++		/* BIOS Call */
++		rc = ima_hlee_select(
++			logdata->eventDataSize,
++			logdata->event,
++			logdatasize,
++			logdata);
++
++		if (ima_benchmark)
++			grub_printf("measure_file2: %d bytes - %d msec(@2GHzCPU) - HashLogExtendEvent\n",
++				logdata->eventDataSize,
++				(rdtsc() - ima_benchmark_rdtsc)>>21);
++
++		if (ima_debug){
++			grub_printf("measure_file2(pcr=%d,type=%d,size=%d(hashed=eventdata),no_decomp=%d)\n",
++				logdata->pcrIndex,
++				logdata->eventType,
++				logdata->eventDataSize,
++				no_decompression);
++			grub_printf("Press any key to go next step....\n");
++			getkey ();
++		}
++
++		if (rc!=0) {
++			if (rc == 3) {
++				/* TODO IBM BIOS return 3 */
++			} else {
++				print_rc("Error ",rc);
++				grub_printf("measure_file2 (TCG_HashLogExtendEvent) was failed?\n");
++			}
++			return (rc);
++		}
++	} else {
++		//grub_printf (err_no_tcg);
++		return -1;
++	}
++	return 0;
++}
++
++
++/*
++ *  measure mem
++ *
++ *    PCRn = SHA1(PCRn-1 + image)
++ *    event data = name
++ *
++ *  2006-06-23 SM new
++ */
++int
++measure_mem (
++	int len,
++	unsigned char *addr,
++	int pcr_index,
++	int eventtype,
++	char* eventdata)
++{
++	int rc=0;
++	TCG_PCR_EVENT *logdata;
++	int eventsize;
++	int logdatasize;
++
++	if (ima_disable) return -1;
++
++	/* status check */
++	if (ima_status(NULL)) {
++
++		if (ima_benchmark)
++			ima_benchmark_rdtsc = rdtsc();
++
++		eventsize = grub_strlen(eventdata);
++		if (eventsize > TCG_PCR_EVENT_DATA_SIZE) {
++			grub_printf("Eventsize = %d (MAX %d) is too large\n",
++			eventsize,TCG_PCR_EVENT_DATA_SIZE);
++			return -1;
++		} else {
++			logdata = (TCG_PCR_EVENT *) tcg_event_buf;
++		}
++
++		logdata->pcrIndex=pcr_index;
++		logdata->eventType=eventtype; /* TODO*/
++
++		logdata->eventDataSize = eventsize;
++		memcpy(logdata->event,eventdata,logdata->eventDataSize+1);
++		nul_terminate (logdata->event); /* delete command part */
++
++		logdatasize = TCG_PCR_EVENT_BASE_SIZE+logdata->eventDataSize;
++
++		ima_grub_pcr_usage[pcr_index] ++; /* Check the PCR usage*/
++
++		/* BIOS Call */
++		 rc = ima_hlee_select(
++			len,
++			addr,
++			logdatasize,
++			logdata);
++
++		if (ima_benchmark)
++			grub_printf("measure_mem: %d bytes - %d msec(@2GHzCPU) HashAll+LogExtend\n",
++				len,
++				(rdtsc() - ima_benchmark_rdtsc)>>21);
++
++		if (ima_debug) {
++			grub_printf("measure_mem(pcr=%d,type=%d,size=%d)\ndigest=",
++				logdata->pcrIndex,
++				logdata->eventType,
++				logdata->eventDataSize);
++				print_digest(logdata->digest, 20);
++			grub_printf("\nPress any key to go next step....\n");
++			getkey ();
++		}
++
++		if (rc!=0) {
++			if (rc == 3) {
++				/* TODO IBM BIOS return 3 */
++			} else {
++				print_rc("Error ",rc);
++				grub_printf("measure_mem (TCG_LogExtend) was failed?\n");
++			}
++		}
++		return rc;
++	} else {  // Status
++			//grub_printf (err_no_tcg);
++		return -1;
++	}
++}
++
++/*
++ *
++ *
++ *
++ */
++int
++ima_start_os_measurement(void){
++	int i;
++	unsigned char mbr[SECTOR_SIZE+8];
++	PC_SPECIFIC_EVENT *pcEvent;
++	pcEvent = (PC_SPECIFIC_EVENT *) mbr;
++
++	if (! rawread (saved_drive, 0, 0, SECTOR_SIZE, &mbr[8])) {
++		// TODO add error message
++	} else {
++		pcEvent->eventID=IMA_EV_GRUB_MBR_PCTYPE;
++		pcEvent->eventDataSize=446;
++		measure_eventdata(
++			IMA_EV_GRUB_MBR_PCR,
++			IMA_EV_GRUB_MBR_TYPE,
++			8+446,
++			mbr);
++	}
++
++	//  add Separator to PCR[4]
++	measure_eventdata(IMA_EV_GRUB_STAGE1_PCR,
++		          IMA_EV_GRUB_SEPARATOR_TYPE,
++		          grub_strlen(ima_grub_separator),
++	              ima_grub_separator);
++	//  add Separator to PCR[5]
++	measure_eventdata(IMA_EV_GRUB_CONFIG_PCR,
++		          IMA_EV_GRUB_SEPARATOR_TYPE,
++		          grub_strlen(ima_grub_separator),
++	              ima_grub_separator);
++
++
++	//  init usage flag
++	for (i=0;i<24;i++) {
++		ima_grub_pcr_usage[i]=0;
++	}
++	return 0; // TODO
++}
++/*
++ *  Measure Event Sepatator and final boot message
++ *
++ */
++int
++ima_final(char *msg){
++	int i;
++	// add event separator
++	for (i=0;i<24;i++) {
++		if (ima_grub_pcr_usage[i]>0){
++	     measure_eventdata(i,
++		               IMA_EV_GRUB_SEPARATOR_TYPE,
++		               grub_strlen(ima_os_separator),
++	                   ima_os_separator);
++		}
++	}
++	// add final message
++     measure_eventdata(IMA_EV_GRUB_BOOT_MSG_PCR,
++	              IMA_EV_GRUB_BOOT_MSG_TYPE,
++                    grub_strlen(msg),
++                    msg);
++	return 0; // TODO
++}
++
++
++/*
++ * Functions for "tpm" command
++ *  - print_pcrs
++ *
++ */
++
++int print_pcrs(void){
++	int i;
++	int pcrs=16;
++	int rc;
++	unsigned char pcr_value[SHA1_DIGEST_SIZE];
++
++	if (ima_disable) return -1;
++
++	/* status check */
++	rc =ima_status(NULL);
++
++	/* TODO To get PCR #, use GetCapability */
++	if (rc== TCG_V11) pcrs=16;
++	else if (rc== TCG_V12) pcrs=24;
++	else return -1;
++
++	/* Read pcr value */
++	for (i=0;i<pcrs;i++) {
++		rc = ima_pcr_read(i, pcr_value);
++		if (rc != 0) {
++			print_rc("Error at ima_pcr_read",rc);
++			return 0;
++		}
++		if (i<10) grub_printf("PCR[ %d]=",i);
++		else grub_printf("PCR[%d]=",i);
++		print_digest(pcr_value, 20);
++		grub_printf("\n");
++	}
++	return 0;
++}
++
++
++/*
++ *  Print Event Log
++ */
++int
++print_eventlog(void)
++{
++	unsigned char *log_addr;
++	unsigned char *log_addr_limit;
++	int i = 0;
++	int log_num = -1;
++
++	if (ima_disable) return -1;
++
++	/* status check */
++	if (ima_status( &log_addr )==0) {
++		grub_printf (err_no_tcg);
++		return -1;
++	}
++
++	log_addr_limit = log_addr + 0x10000;
++
++	while (log_addr < log_addr_limit) {
++		TCG_PCR_EVENT *event = (TCG_PCR_EVENT*)log_addr;
++		if (event->eventType == 0 && event->eventDataSize == 0) break;
++
++		if (log_num < 0 || i == log_num) {
++			// 2006-06-16 same as ascii out of tpm_bios
++			//grub_printf("[%d] ",i);
++
++			if ((event->pcrIndex<0) || (event->pcrIndex>=24)) { // TODO
++				grub_printf("wrong PCR index, broken table?\ndump=");
++				for (i=0;i<64;i++) {
++					print_hex(log_addr[i]);
++				}
++				grub_printf("...\nand dump(fw)=....");
++				log_addr -= 40;
++				for (i=0;i<40;i++) {
++					print_hex(log_addr[i]);
++				}
++				grub_printf("\n");
++				return (-1);
++			}
++
++			if (event->pcrIndex<10) grub_printf(" ");
++
++			grub_printf("%d ",event->pcrIndex);
++
++			print_digest(event->digest, 20);
++
++			if (event->eventType<10) grub_printf("  ");
++			else grub_printf(" ");
++			grub_printf("%d ",event->eventType);
++			//grub_printf(" %d ",event->eventSize);
++
++			switch((0xFF && event->eventType)) { // mask, low byte is BIOS compatible
++				case 5: {
++					char buff[40];
++					//char *src = (char *)(log_addr + sizeof(TCG_PCR_EVENT));
++					char *src = (char *)(log_addr + TCG_PCR_EVENT_BASE_SIZE);
++					int size = event->eventDataSize;
++					if (size >= sizeof(buff)) size = sizeof(buff) - 1;
++					memcpy(buff, src, size);
++					buff[size] = 0; /* add null for %s */
++					grub_printf("[");
++					grub_printf(buff);
++					grub_printf("]");
++				}
++				break;
++				case 6: { /* Platform specific */
++					PC_SPECIFIC_EVENT *pc =
++						(PC_SPECIFIC_EVENT*)(log_addr + sizeof(TCG_PCR_EVENT));
++					switch (pc->eventID) {
++						case 1:
++							grub_printf("[SMBIOS]");
++							break;
++						case 5:
++							grub_printf("[CMOS]");
++							break;
++						case 6:
++							grub_printf("[NVRAM]");
++							break;
++						case IMA_EV_GRUB_MBR_PCTYPE:
++							grub_printf("[MBR by GRUB]");
++							break;
++						default:
++							grub_printf("{PC ID=%d size=%d}", pc->eventID, pc->eventDataSize);
++						}
++					}
++					break;
++				default:
++					grub_printf("{EventSize=%d}", event->eventDataSize);
++			} // switch
++			grub_printf("\n");
++		} // if
++
++		if (ima_debug) {
++			unsigned char *buf;
++			buf = (unsigned char *)log_addr;
++			for (i=0;i<TCG_PCR_EVENT_BASE_SIZE + event->eventDataSize;i++) {
++				print_hex(buf[i]);
++			}
++			grub_printf("\n");
++		}
++
++		log_addr += TCG_PCR_EVENT_BASE_SIZE + event->eventDataSize;
++		i++;
++	} // while
++	return (0);
++}
++
++/*
++ * get digest in the last event
++ */
++int get_last_event(unsigned char *digest){
++	int rc = 0;
++	unsigned char *log_addr;
++	unsigned char *log_addr_limit;
++	int i = 0;
++	//int log_num = -1;
++	TCG_PCR_EVENT *event;
++	TCG_PCR_EVENT *event_pre;
++
++	if (ima_disable) return -1;
++
++	/* status check */
++	if (ima_status( &log_addr )==0) {
++		grub_printf (err_no_tcg);
++		return -1;
++	}
++
++	log_addr_limit = log_addr + 0x10000;
++	event = (TCG_PCR_EVENT *)log_addr;
++	event_pre = event;
++
++	while (log_addr < log_addr_limit) {
++		event_pre = event;
++		event = (TCG_PCR_EVENT *)log_addr;
++		if (event->eventType == 0 && event->eventDataSize == 0) break;
++
++		if ((event->pcrIndex<0) || (event->pcrIndex>=24)) { // TODO
++			grub_printf("wrong PCR index, broken table?\ndump=");
++			for (i=0;i<64;i++) {
++				print_hex(log_addr[i]);
++			}
++			grub_printf("...\nand dump(fw)=....");
++			log_addr -= 40;
++			for (i=0;i<40;i++) {
++				print_hex(log_addr[i]);
++			}
++			grub_printf("\n");
++			return (-1);
++		}
++
++		log_addr += TCG_PCR_EVENT_BASE_SIZE + event->eventDataSize;
++	}
++
++	/* copy last one */
++	/* TODO event is null, just use one before is correct? */
++	memcpy(digest,event_pre->digest,20);
++
++	return rc;
++}
++
++/*
++ *Verify PCR Extend Operation
++ *Return
++ *0 : OK
++ * -1 : Fail
++ */
++
++int verify_extend(
++	int pcr_index,
++	unsigned char *pcr_value,
++	unsigned char *digest,
++	int option) // 2:extend twice
++{
++	int rc = -1;
++	unsigned char new_pcr_value[20];
++	unsigned char exp_pcr_value[20];
++	unsigned char extend_buffer[40];
++
++	/* read current PCR */
++	rc = ima_pcr_read(pcr_index, new_pcr_value);
++	// TODO check rc
++
++	/* calc expected PCR */
++	memcpy(extend_buffer,pcr_value,20);
++	memcpy(&extend_buffer[20],digest,20);
++	rc = TCG_HashAll(40,extend_buffer,exp_pcr_value);
++	// TODO check rc
++
++	if (option==2) { // try again
++		memcpy(extend_buffer,exp_pcr_value,20);
++		memcpy(&extend_buffer[20],digest,20);
++		rc = TCG_HashAll(40,extend_buffer,exp_pcr_value);
++	// TODO check rc
++	}
++
++	if (grub_memcmp(new_pcr_value,exp_pcr_value,20) == 0) {
++		rc=0;
++	} else {
++		rc=-1;
++		grub_printf(" Wrong PCR Value = ");
++		print_digest (new_pcr_value, 20);
++		grub_printf("\n");
++		grub_printf("       should be = ");
++		print_digest (exp_pcr_value, 20);
++		grub_printf("\n");
++	}
++	return rc;
++}
++
++/*
++ Test Vectors
++
++ input[2] BB01
++ output[20]
++ input[2] BB01
++ output[20]
++
++
++ */
++
++#define BB01_PCRINDEX   15
++#define BB0401_PCRINDEX 14
++#define BB0402_PCRINDEX 13
++#define BB07_PCRINDEX   12
++
++/*
++ * 2006-08-16 BUG or SPEC?
++ * If type=1 IBM v1.1 BIOS just override the eventDataSize to zero
++ * but not delete the eventdata. thus BIOS broke the eventlog structure.
++ *    1h EV_POST_CODE NG
++ *    5h EV_ACTION    OK but must be string
++ *   0Dh EV_IPL
++ */
++#define BB01_EVENTTYPE    0x0D  /* EV_IPV v1.2*/
++#define BB04_EVENTTYPE    0x0D  /* EV_IPV v1.2*/
++
++#define REPORT_PCRINDEX   0x0F
++#define REPORT_EVENTTYPE  0x0D
++
++
++/* For Extend the TEST result as logevent */
++typedef struct tdTCG_BIOS_STATUS_REPORT {
++	int version;
++	unsigned char major;
++	unsigned char minor;
++	int BB00_status;
++	int BB01_status;
++	int BB02_status;
++	int BB03_status;
++	int BB04_status;
++	int BB05_status;
++	int BB06_status;
++	int BB07_status;
++} TCG_BIOS_STATUS_REPORT;
++
++// 32 BIT = 32 type
++#define TCG_BIOS_CALL_STATUS_OK		0x00000000
++#define TCG_BIOS_CALL_STATUS_UNKNOWN		0x00000100
++#define TCG_BIOS_CALL_STATUS_FAIL		0x00000200
++#define TCG_BIOS_CALL_STATUS_WRONG_PCR		0x00001000
++#define TCG_BIOS_CALL_STATUS_WRONG_EVENTLOG	0x00002000
++#define TCG_BIOS_CALL_STATUS_WRONG_DIGEST	0x00003000
++
++#define TCG_BIOS_CALL_STATUS_IBM_RC3		0x00010000
++#define TCG_BIOS_CALL_STATUS_IBM_HLEE_F2	0x00020000
++#define TCG_BIOS_CALL_STATUS_IBM_LE_WITH_EXTEND	0x00040000
++
++// MASK
++#define TCG_BIOS_CALL_STATUS_FATAL       0x0000FFFF
++#define TCG_BIOS_CALL_STATUS_BUGGY       0xFFFF0000
++
++
++int
++ima_print_digest2(
++	char *msg1, unsigned char *digest1,
++	char *msg2, unsigned char *digest2)
++{
++	grub_printf(msg1);
++	print_digest (digest1, 20);
++	grub_printf("\n");
++	grub_printf(msg2);
++	print_digest (digest2, 20);
++	grub_printf("\n");
++	return 0;
++}
++
++
++static unsigned char SHA1_BB01[20]=
++	{0xf9,0x04,0x7a,0x61,0xa3,0x30,0x0b,0xb1,0x57,0x94,0x3f,0x0e,0xc4,0x18,0x08,0x35,0xa7,0xc3,0xf8,0x8e};
++//static unsigned char SHA1_BB04[20]=
++//{0xa4,0x1a,0x39,0x8f,0x1d,0xa2,0x0a,0x7b,0x6d,0x04,0x16,0xc3,0x80,0xec,0x21,0x8d,0xe4,0x1d,0x3b,0x8f,};
++static unsigned char SHA1_BB0401[20]=
++	{0xcc,0xdd,0xff,0x40,0xae,0x48,0xba,0x23,0xa8,0xbf,0x13,0x55,0x71,0xbe,0x57,0x48,0x9f,0x85,0x62,0x10};
++static unsigned char SHA1_BB0402[20]=
++	{0xe7,0x7e,0x64,0x4d,0x32,0x46,0xaf,0x8c,0x16,0x2f,0x1f,0xde,0xb1,0xc1,0xc7,0x85,0x88,0x93,0xd8,0xc5};
++static unsigned char SHA1_BB05[20]=
++	{0x1f,0x44,0x7d,0xf3,0xef,0xef,0xbb,0xd5,0xc5,0x65,0x0a,0xad,0x38,0xbe,0x5e,0xb7,0x38,0x32,0x03,0x91};
++static unsigned char SHA1_BB07[20]=
++	{0x93,0xbe,0x85,0xc3,0x7c,0xf3,0x35,0x6a,0xbf,0x5f,0xee,0x97,0x7a,0x4d,0xb6,0xe3,0xb5,0xc4,0x60,0xff};
++
++
++static unsigned char BB01[2]   = {0xBB,0x01};
++//static unsigned char BB04[2] = {0xBB,0x04};
++static unsigned char BB0401[3] = {0xBB,0x04,0x01};
++static unsigned char BB0402[3] = {0xBB,0x04,0x02};
++static unsigned char BB05[2]   = {0xBB,0x05};
++static unsigned char BB07[2]   = {0xBB,0x07};
++
++int
++ima_diagnosis (int format)
++{
++	int rc=0;
++	int rc2=0;
++	unsigned char major;
++	unsigned char minor;
++	unsigned char *log_addr;
++	//unsigned char buf[20]={0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19};
++	unsigned char digest[20]={0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19};
++	//unsigned char str[11]={'T','C','G',' ','T','E','S','T','0',0,0};
++
++	unsigned char pcr_value[20]; /* For PCR Verification */
++	TCG_PCR_EVENT *logdata;
++	TCG_BIOS_STATUS_REPORT report;
++
++	grub_printf("Start BIOS TCG compliance check\n");
++
++	/*
++	 * TCG_StatusCheck - INT 1Ah (AH)=BBh,(AL)=00h
++	 *
++	 */
++	grub_printf("0) TCG_StatusCheck - INT 1Ah (AH)=BBh,(AL)=00h\n");
++	/* input - none */
++
++	/* call */
++	rc = TCG_StatusCheck(&major,&minor,&log_addr );
++
++	/* output */
++	if (rc) {
++		print_rc("Error ",rc);
++		return rc; /* TEST was Finish */
++	} else {
++		grub_printf("TCG Version major   : %d\n",major);
++		grub_printf("TCG Version minor   : %d\n",minor);
++		grub_printf("BIOS EventTable ptr : 0x");
++		print_u32((unsigned int)log_addr);
++		grub_printf("\n");
++		report.major = major; // TODO remove local ver
++		report.minor = minor;
++		report.BB00_status = TCG_BIOS_CALL_STATUS_OK;
++	}
++
++	/*
++	 * TCG_HashLogExtendEvent - INT 1Ah (AH)=BBh,(AL)=01h
++	 * This call has two input parametor block formats.
++	 * V1.1 IBM BIOS was using the "Format 2" and HALT with "Format 1" :-(
++	 * Thus, the reguler test should use "Format 2" temporary.
++	 */
++	grub_printf("1) TCG_HashLogExtendEvent - INT 1Ah (AH)=BBh,(AL)=01h (v1.1 & v1.2)");
++
++	/* Check PCR value before extend */
++	rc = ima_pcr_read(BB01_PCRINDEX, pcr_value);
++
++	/* input */
++	//logdata = (TCG_PCR_EVENT *) RAW_ADDR (0x100000);
++	logdata = (TCG_PCR_EVENT *) ima_workbuf;
++	logdata->pcrIndex=BB01_PCRINDEX;
++	logdata->event[0]=BB01[0];
++	logdata->event[1]=BB01[1];
++
++	logdata->eventType=BB01_EVENTTYPE; /* If type=1 IBM v1.1 BIOS override the eventDataSize to zero */
++	logdata->eventDataSize=2;
++
++	report.BB01_status = TCG_BIOS_CALL_STATUS_OK;
++
++	/* call */
++	if (format==2) {
++		grub_printf(" (Format 2)\n");
++		report.BB01_status |= TCG_BIOS_CALL_STATUS_IBM_HLEE_F2;
++
++		rc = TCG_HashLogExtendEventF2(
++				logdata->pcrIndex,
++				logdata->eventDataSize,
++				logdata->event,
++				32 + 2,
++				(unsigned char*)logdata);
++	} else {
++		grub_printf(" (Format 1)\n");
++		rc = TCG_HashLogExtendEventF1(
++				logdata->pcrIndex,
++				logdata->eventDataSize,
++				logdata->event,
++				32 + 2,
++				(unsigned char*)logdata);
++	}
++
++	/* output */
++	rc2=get_last_event(digest);
++
++	if (rc==0) {
++		if (grub_memcmp(digest,SHA1_BB01,20)==0) {
++			/* PCR */
++			if (verify_extend(BB01_PCRINDEX, pcr_value,SHA1_BB01,0) != 0) {
++				grub_printf(" Event Log is OK, but PCR[%d] has wrong value\n",BB01_PCRINDEX);
++				report.BB01_status |= TCG_BIOS_CALL_STATUS_WRONG_PCR;
++			} else {
++				grub_printf(" Good Eventlog & PCR - OK\n");
++			}
++		} else {
++			ima_print_digest2(
++				" Wrong digest = ",digest,
++				"    should be = ", SHA1_BB01);
++			report.BB01_status |= TCG_BIOS_CALL_STATUS_WRONG_EVENTLOG;
++		}
++	} else if (rc==3) {
++		if (grub_memcmp(digest,SHA1_BB01,20)==0) {
++			/* PCR */
++			if (verify_extend(BB01_PCRINDEX, pcr_value,SHA1_BB01,0) != 0) {
++				grub_printf(" Event Log is OK, but PCR[%d] has wrong value\n",BB01_PCRINDEX);
++				report.BB01_status |= TCG_BIOS_CALL_STATUS_WRONG_PCR;
++			} else {
++				report.BB01_status |= TCG_BIOS_CALL_STATUS_IBM_RC3;
++				grub_printf(" (rc=3 but it seems work, OLD IBM BIOS?) ");
++				grub_printf(" Good Eventlog & PCR - OK\n");
++			}
++		} else { /* Not supported */
++			report.BB01_status |= TCG_BIOS_CALL_STATUS_FAIL;
++			report.BB01_status |= rc;
++			grub_printf(" rc=3, BIOS Call is not supported\n");
++		}
++	} else {
++		print_rc("Error ",rc);
++		grub_printf(" Error TCG_HashLogExtendEvent Fomat %d, rc = %d\n",
++		rc,format);
++		report.BB01_status |= TCG_BIOS_CALL_STATUS_FAIL;
++		report.BB01_status |= rc;
++	}
++
++	/*
++	 * TCG_PassThroughToTPM - INT 1Ah (AH)=BBh,(AL)=02h
++	 *
++	 */
++	grub_printf("2) TCG_PassThroughToTPM - INT 1Ah (AH)=BBh,(AL)=02h\n");
++	/* input */
++	/* call */
++	rc = ima_pcr_read(BB01_PCRINDEX, digest);
++	/* output */
++	if (rc) {
++		print_rc("Error ",rc);
++		report.BB02_status = TCG_BIOS_CALL_STATUS_FAIL;
++		report.BB02_status |= rc;
++	} else {
++		grub_printf(" OK\n");
++		grub_printf("   PCR[%d]=",BB01_PCRINDEX);
++		print_digest(digest, 20);
++		grub_printf("\n");
++		report.BB02_status = TCG_BIOS_CALL_STATUS_OK;
++	}
++
++	grub_printf("3) TCG_ShutdownPreBootInterface - INT 1Ah (AH)=BBh,(AL)=03h - NA\n");
++	/* input */
++	/* call */
++	/* output */
++	grub_printf(" SKIP\n");
++	report.BB03_status = TCG_BIOS_CALL_STATUS_UNKNOWN;
++
++
++	/*
++	 *TCG_LogEvent - INT 1Ah (AH)=BBh,(AL)=04h (v1.1)
++	 * v1.1 spec is ambiguous, IBM BIOS do extend with this call.
++	 */
++	grub_printf("4-1) TCG_LogEvent (w/ Extend) - INT 1Ah (AH)=BBh,(AL)=04h (IBM/Lenovo only?)\n");
++
++	/* Check PCR value before extend */
++	rc = ima_pcr_read(BB0401_PCRINDEX, pcr_value);
++
++	/* input */
++	//logdata = (TCG_PCR_EVENT *) RAW_ADDR (0x100000);
++	logdata = (TCG_PCR_EVENT *) ima_workbuf;
++	logdata->pcrIndex=BB0401_PCRINDEX;
++	logdata->eventType=BB04_EVENTTYPE;
++	logdata->eventDataSize=3;
++	logdata->event[0]=BB0401[0];
++	logdata->event[1]=BB0401[1];
++	logdata->event[2]=BB0401[2];
++	memcpy(logdata->digest,SHA1_BB0401,20);
++
++	report.BB04_status = TCG_BIOS_CALL_STATUS_IBM_LE_WITH_EXTEND;
++
++	/* call */
++	rc = TCG_LogExtend(
++			logdata->pcrIndex,
++			logdata->eventType,
++			32 + 3, // logdata->eventDataSize,
++			(unsigned char *)logdata);
++
++	/* output */
++	rc2=get_last_event(digest);
++
++	if (rc==0) {
++		if (grub_memcmp(digest,SHA1_BB0401,20)==0) {
++			/* PCR */
++			if (verify_extend(BB0401_PCRINDEX, pcr_value,SHA1_BB0401,0) != 0) {
++				grub_printf(" Event Log is OK, but PCR[%d] has wrong value\n",BB0401_PCRINDEX);
++				report.BB04_status |= TCG_BIOS_CALL_STATUS_WRONG_PCR;
++			} else {
++				grub_printf(" Good Eventlog & PCR - OK\n");
++			}
++		} else {
++			ima_print_digest2(
++				" Wrong digest = ", digest,
++				"    should be = ", SHA1_BB0401);
++			report.BB04_status |= TCG_BIOS_CALL_STATUS_WRONG_DIGEST;
++		}
++	} else if (rc==3) {
++		if (grub_memcmp(digest,SHA1_BB0401,20)==0) {
++			/* PCR */
++			if (verify_extend(BB0401_PCRINDEX, pcr_value,SHA1_BB0401,0) != 0) {
++				grub_printf(" Event Log is OK, but PCR[%d] has wrong value\n",BB0401_PCRINDEX);
++				report.BB04_status |= TCG_BIOS_CALL_STATUS_WRONG_PCR;
++			} else {
++				report.BB04_status |= TCG_BIOS_CALL_STATUS_IBM_RC3;
++				grub_printf(" (rc=3 but it seems work, OLD IBM BIOS?) "); // TODO change the loc
++				grub_printf(" Good Eventlog & PCR - OK\n");
++			}
++		} else {
++			report.BB04_status |= TCG_BIOS_CALL_STATUS_WRONG_DIGEST;
++			report.BB04_status |= rc;
++			grub_printf(" rc=3, BIOS Call is not supported\n");
++			}
++	} else {
++		print_rc("Error ",rc);
++		grub_printf(" Error TCG_HashLogEvent Fomat %d, rc = %d\n",
++			rc,format);
++		report.BB04_status |= TCG_BIOS_CALL_STATUS_FAIL;
++		report.BB04_status |= rc;
++	}
++
++
++	/*
++	 *TCG_LogEvent - INT 1Ah (AH)=BBh,(AL)=04h (v1.2)
++	 * v1.2 spec said, this call DID NOT "extend" PCR.
++	 */
++	grub_printf("4-2) TCG_HashLogEvent (w/o Extend) - INT 1Ah (AH)=BBh,(AL)=04h (v1.2)\n");
++
++	//if (report.BB04_status & TCG_BIOS_CALL_STATUS_FATAL) { // V1.2 BIOS TODO ck ver
++	if (report.BB04_status ) { // TODO TRUE anytime
++		/* Check PCR value before extend */
++		rc = ima_pcr_read(BB0402_PCRINDEX, pcr_value);
++
++		/* Extend */
++		ima_extend(BB0402_PCRINDEX,SHA1_BB0402,digest);
++
++		/* input */
++		//logdata = (TCG_PCR_EVENT *) RAW_ADDR (0x100000);
++		logdata = (TCG_PCR_EVENT *) ima_workbuf;
++		logdata->pcrIndex=BB0402_PCRINDEX;
++		logdata->eventType=BB04_EVENTTYPE;
++		logdata->eventDataSize=3;
++		logdata->event[0]=BB0402[0];
++		logdata->event[1]=BB0402[1];
++		logdata->event[2]=BB0402[2];
++		memcpy(logdata->digest,SHA1_BB0402,20);
++
++		report.BB04_status = TCG_BIOS_CALL_STATUS_OK; /* clear BB04 state */
++
++		/* call */
++		rc = TCG_LogExtend(
++			logdata->pcrIndex,
++			logdata->eventType,
++			32 + 3,// logdata->eventDataSize,
++			(unsigned char *)logdata);
++
++		/* output */
++		rc2=get_last_event(digest);
++
++		if (rc==0) {
++			if (grub_memcmp(digest,SHA1_BB0402,20)==0) {
++				/* PCR */
++				if (verify_extend(BB0402_PCRINDEX, pcr_value,SHA1_BB0402,0) != 0) {
++					if (verify_extend(BB0402_PCRINDEX, pcr_value,SHA1_BB0402,2) != 0) {
++						grub_printf(" Event Log is OK, but PCR[%d] has wrong value\n",BB0402_PCRINDEX);
++						report.BB04_status |= TCG_BIOS_CALL_STATUS_WRONG_PCR;
++					} else {
++						report.BB04_status |= TCG_BIOS_CALL_STATUS_IBM_LE_WITH_EXTEND;
++						grub_printf(" Check PCR again...I see!\n");
++						grub_printf(" Since TCG_HashLogEvent did Extend, noncompliant BIOS with the v1.2 spec?\n");
++					}
++				} else {
++					grub_printf(" Good Eventlog & PCR - OK\n");
++				}
++			} else {
++				ima_print_digest2(
++					" Wrong digest = ", digest,
++					"    should be = ", SHA1_BB0402);
++				report.BB04_status |= TCG_BIOS_CALL_STATUS_WRONG_DIGEST;
++			}
++		} else if (rc==3) {
++			if (grub_memcmp(digest,SHA1_BB0402,20)==0) {
++				/* PCR */
++				if (verify_extend(BB0402_PCRINDEX, pcr_value,SHA1_BB0402,0) != 0) {
++					if (verify_extend(BB0402_PCRINDEX, pcr_value,SHA1_BB0402,2) != 0) {
++						grub_printf(" Event Log is OK, but PCR[%d] has wrong value\n",BB0402_PCRINDEX);
++						report.BB04_status |= TCG_BIOS_CALL_STATUS_WRONG_PCR;
++					} else {
++						report.BB04_status |= TCG_BIOS_CALL_STATUS_IBM_RC3;
++						report.BB04_status |= TCG_BIOS_CALL_STATUS_IBM_LE_WITH_EXTEND;
++						grub_printf(" Check PCR again...I see!\n");
++						grub_printf(" Since TCG_HashLogEvent did Extend, noncompliant BIOS with the v1.2 spec?\n");
++					}
++				} else {
++					report.BB04_status |= TCG_BIOS_CALL_STATUS_IBM_RC3;
++					grub_printf(" (rc=3 but it seems work, OLD IBM BIOS?) ");  // TODO change the loc
++					grub_printf(" Good Eventlog & PCR - OK\n");
++				}
++			} else {
++				report.BB04_status |= TCG_BIOS_CALL_STATUS_FAIL;
++				report.BB04_status |= rc;
++				grub_printf(" rc=3, BIOS Call is not supported\n");
++			}
++		} else {
++			print_rc("Error ",rc);
++			grub_printf(" Error TCG_HashLogEvent Fomat %d, rc = %d\n",
++				rc,format);
++			report.BB04_status |= TCG_BIOS_CALL_STATUS_FAIL;
++			report.BB04_status |= rc;
++			}
++
++	} else { // v1.1?
++		grub_printf("Skip this test since the BIOS is v1.1 IBM\n");
++		// TODO v1.2 BIOS?
++	}
++
++	/*
++	 *  TCG_HashAll - INT 1Ah (AH)=BBh,(AL)=05h
++	 *
++	 */
++	grub_printf("5) TCG_HashAll - INT 1Ah (AH)=BBh,(AL)=05h\n");
++
++	/* input */
++	/* call */
++	rc = TCG_HashAll(2,BB05,digest);
++
++	/* output */
++	if (rc) {
++		print_rc("Error ",rc);
++		report.BB05_status = TCG_BIOS_CALL_STATUS_FAIL;
++		report.BB05_status |= rc;
++	} else {
++		if (grub_memcmp(digest,SHA1_BB05,20)==0) {
++			grub_printf(" OK!\n");
++			report.BB05_status = TCG_BIOS_CALL_STATUS_OK;
++		} else {
++			ima_print_digest2(
++				" Wrong digest = ", digest,
++				"    should be = ", SHA1_BB05);
++		report.BB05_status = TCG_BIOS_CALL_STATUS_WRONG_DIGEST;
++		}
++	}
++
++	/*
++	 *  TCG_TSS - INT 1Ah (AH)=BBh,(AL)=06h- TBD
++	 */
++	grub_printf("6) TCG_TSS - INT 1Ah (AH)=BBh,(AL)=06h- TBD \n");
++	grub_printf(" SKIP\n");
++	report.BB06_status = TCG_BIOS_CALL_STATUS_UNKNOWN;
++
++	/*
++	 * TCG_CompactHashLogExtendEvent - INT 1Ah (AH)=BBh,(AL)=07h (v1.2)
++	 * PCR index = 12
++	 * EventType = 0x0c = 12
++	 */
++	grub_printf("7) TCG_CompactHashLogExtendEvent - INT 1Ah (AH)=BBh,(AL)=07h\n");
++
++	/* Check PCR value before extend */
++	rc = ima_pcr_read(BB07_PCRINDEX, pcr_value);
++
++	report.BB07_status = TCG_BIOS_CALL_STATUS_OK;
++
++	//grub_printf("BB07 addr = ");print_u32(BB07);grub_printf("\n");
++
++	/* call */
++	rc = TCG_CompactHashLogExtendEvent(
++			BB07_PCRINDEX,	// PCR index
++			2,		// size
++			BB07);		// ptr
++
++	/* output*/
++	if (rc) {
++		print_rc("Error ",rc);
++		report.BB07_status = TCG_BIOS_CALL_STATUS_FAIL;
++		report.BB07_status |= rc;
++	} else {
++		get_last_event(digest);
++		if (grub_memcmp(digest,SHA1_BB07,20)==0) {
++			/* PCR */
++			if (verify_extend(BB07_PCRINDEX, pcr_value,SHA1_BB07,0) != 0) {
++				grub_printf(" Event Log is OK, but PCR[%d] has wrong value\n",BB07_PCRINDEX);
++				report.BB07_status = TCG_BIOS_CALL_STATUS_WRONG_PCR;
++			} else {
++				grub_printf(" OK!\n"); // GOOD!!
++			}
++		} else {
++			ima_print_digest2(
++				" Wrong digest = ", digest,
++				"    should be = ", SHA1_BB07);
++			report.BB07_status = TCG_BIOS_CALL_STATUS_WRONG_EVENTLOG;
++			grub_printf(" Sorry, This might be a BUG of Transitive Trust patch\n");
++		}
++	}
++
++#if 0
++	/* Option - Extend Test Summary */
++	report.version = 0x00000200; // TODO 0.2.0
++	grub_printf("\nBB00 ");print_u32(report.BB00_status);
++	grub_printf("\nBB01 ");print_u32(report.BB01_status);
++	grub_printf("\nBB02 ");print_u32(report.BB02_status);
++	grub_printf("\nBB03 ");print_u32(report.BB03_status);
++	grub_printf("\nBB04 ");print_u32(report.BB04_status);
++	grub_printf("\nBB05 ");print_u32(report.BB05_status);
++	grub_printf("\nBB06 ");print_u32(report.BB06_status);
++	grub_printf("\nBB07 ");print_u32(report.BB07_status);
++
++	/* Extend 6 Log the TEST report */
++	measure_eventdata (
++        REPORT_PCRINDEX,
++        REPORT_EVENTTYPE,
++        4+2+32,// TODO int eventsize,
++        (unsigned char *)&report);
++#endif
++	return (0);
++}
++
++
++#endif /* TRANSITIVE_TRUST */
+Index: grub-0.97/stage2/start_eltorito.S
+===================================================================
+--- grub-0.97/stage2/start_eltorito.S	(revision 17)
++++ grub-0.97/stage2/start_eltorito.S	(working copy)
+@@ -24,6 +24,7 @@
+  It has been very heavily modified.
+ */
+ 
++
+ #define ASM_FILE
+ #include "stage1.h"
+ #include "shared.h"
+@@ -108,7 +109,9 @@
+ 	call	getlinsec
+ 	mov	%ds, %ax
+ 	mov	%ax, %es
+-
++#ifdef  ENABLE_IMA
++	call    tcg_measure
++#endif
+ 	MSG(notification_done)
+ bootit:
+ 	/* save the sector number of the second sector in %ebp */
+@@ -201,8 +204,10 @@
+ 
+ .real_error:
+ 	MSG(read_error_string)
++#ifndef ENABLE_IMA
+ 	mov	%dl, %al
+ 	call	printhex2
++#endif /* ENABLE_IMA */
+ 	popal
+ 	jmp	stop
+ 
+@@ -230,6 +235,7 @@
+ 	jne	1b		/* if not end of string, jmp to display */
+ 	ret
+ 
++#ifndef ENABLE_IMA
+ /*
+  * printhex[248]: Write a hex number in (AL, AX, EAX) to the console
+  */
+@@ -263,18 +269,33 @@
+ 	loop	1b
+ 	popal
+ 	ret
++#endif /* ENABLE_IMA */
+ 
++
++
+ /**************************************************************************/
++#ifdef  ENABLE_IMA
+ #ifdef STAGE1_5
++notification_string:	.string "s1.5"
++#else
++notification_string:	.string "s2"
++#endif
++#else /* ! ENABLE_IMA */
++#ifdef STAGE1_5
+ notification_string:	.string "Loading stage1.5 "
+ #else
+ notification_string:	.string "Loading stage2 "
+ #endif
++#endif /* ! ENABLE_IMA */
+ 
+ notification_step:	.string "."
+ notification_done:	.string "\r\n"
+ 
++#ifdef  ENABLE_IMA
++read_error_string:	.string "RE 0x"
++#else /* ! ENABLE_IMA */
+ read_error_string:	.string "Read error 0x"
++#endif /* ! ENABLE_IMA */
+ 
+ /*
+  * EBIOS disk address packet
+@@ -295,8 +316,110 @@
+ VARIABLE(RetryCount)
+ 	.byte 0
+ 
++#ifdef ENABLE_IMA
++/*
++ *  Please call this routine after all image was loaded into STAGE_ADDR,
++ *  note) we remove printhex call to get space of this.
++ *
++ *  TCG_StatusCheck and TCG_HashLogExtendEvent are used so it must work on 1.1b and 1.2 PCs.
++ */
++tcg_measure:
++	pushal
++	push    %ds
++	push    %es
+ 
++	/* Setup IPB */
++	movw    %ds, %di
++	xorw    %ax, %ax		/* ax =0 */
++	movw    %ax, %ds		/* ds =0 */
++	movw    %ax, %es		/* es =0 */
++
+ /*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=00h" TCG_StatusCheck
++ *	Call with
++ *          %ah = 0xBB
++ *	    %al = 0x00
++ *	Return:
++ *	    %eax = TCG_STATUS
++ *	    %ebx = 'TCPA'
++ *
++ * Ref:
++ *  TCG PC Client Specific Implementation Specification for Conventional BIOS v1.2,
++ *  Section 12.5 (page 85)
++ */
++tcg_statuscheck:
++	movw    $0xbb00, %ax		/* TCG_LogEvent */
++	int     $0x1a
++	test	%eax, %eax
++	jnz	tcg_goback
++/*
++ * BIOS call "INT 1Ah, (AH)=BBh,(AL)=01h" TCG_HashLogExtendEvent
++ *	Call with
++ *          %ah = 0xBB
++ *	    %al = 0x01
++ *          %es:%di = segment:offset of input parametor block
++ *          %ds:%si = segment:offset of output parametor block
++ *          %ebx = 'TCPA'
++ *          %ecx = 0
++ *          %edx = 0
++ *	Return:
++ *          %eax = TCG_STATUS
++ *          %ds:%si = ?
++ *
++ * Ref:
++ *  TCG PC Client Specific Implementation Specification for Conventional BIOS v1.2,
++ *  Section 12.6 (page 86)
++ *
++ */
++tcg_hashlogextendevent:
++
++	movw    $ABS(hlee_ipb), %di	/* ES:DI = IPB */
++	mov	ABS(bi_length), %eax	/* HashDataLen */
++	movl    %eax,  8(%di)		/* set to IPB */
++
++	/* Call */
++	movw    $0xbb01, %ax		/* TCG_LogEvent */
++	movw	$0x2E00, %si		/* OPB = 0x2E00 */
++	xorl    %ecx, %ecx		/* ECX = 0 */
++	xorl    %edx, %edx		/* EDX = 0 */
++	int     $0x1a
++
++#ifndef IMA_IGNORE_BIOS_RC3
++	test	%eax, %eax
++	jz	tcg_end
++tcg_error:
++	MSG(tcg_error_string)
++#endif /*  IMA_IGNORE_BIOS_RC3 */
++
++tcg_goback:
++	pop     %es
++	pop     %ds
++	popal
++	ret
++
++/* TCG_HashLogExtendEvent Input Parameter Block Format 2. p88 Table 15 */
++hlee_ipb: /* 28 bytes */
++hlee_opb: /* 28 bytes */
++	.word   (hlee_ipb_end - hlee_ipb)	/*  0 block size   */
++	.word   0				/*  2 reserved     */
++	.long   STAGE_ADDR			/*  4 data pointer */
++	.long   0x0816				/*  8 data size  (init by DEBUG Signature)  */
++	.long   IMA_EV_GRUB_STAGE15_PCR		/*  C PCR index    */
++	.long	0				/* 10 reserved (event type)	*/
++	.long   ABS(tcg_pcr_event)		/* 14 log pointer  */
++	.long   32				/* 18 log size     */
++hlee_ipb_end:
++
++/* TCG_PCR_EVENT data structure 32-bytes */
++tcg_pcr_event:
++	.long   IMA_EV_GRUB_STAGE15_PCR		/* PCR index    */
++tcg_pcr_event_type:
++	.long   IMA_EV_GRUB_STAGE15_TYPE	/* event type   */
++	.space  20				/* PCR value    */
++	.long   0				/* event size   */
++#endif /* ENABLE_IMA */
++
++/*
+  *  This area is an empty space between the main body of code below which
+  *  grows up (fixed after compilation, but between releases it may change
+  *  in size easily), and the lists of sectors to read, which grows down
+@@ -305,9 +428,9 @@
+ 
+ 	.word 0
+ 	.word 0
+-
++#if 1
+ 	. = _start + SECTOR_SIZE - BOOTSEC_LISTSIZE
+-
++#endif
+ 	/* fill the first data listing with the default */
+ blocklist_default_start:/* this is the sector start parameter, in logical
+ 			   sectors from the start of the disk, sector 0 */
+Index: grub-0.97/stage2/Makefile.am
+===================================================================
+--- grub-0.97/stage2/Makefile.am	(revision 17)
++++ grub-0.97/stage2/Makefile.am	(working copy)
+@@ -97,7 +97,7 @@
+ 	fsys_fat.c fsys_ffs.c fsys_iso9660.c fsys_jfs.c fsys_minix.c \
+ 	fsys_reiserfs.c fsys_ufs2.c fsys_vstafs.c fsys_xfs.c gunzip.c \
+ 	hercules.c md5.c serial.c smp-imps.c stage2.c terminfo.c tparm.c \
+-	graphics.c
++	graphics.c ima.c
+ pre_stage2_exec_CFLAGS = $(STAGE2_COMPILE) $(FSYS_CFLAGS)
+ pre_stage2_exec_CCASFLAGS = $(STAGE2_COMPILE) $(FSYS_CFLAGS)
+ pre_stage2_exec_LDFLAGS = $(PRE_STAGE2_LINK)

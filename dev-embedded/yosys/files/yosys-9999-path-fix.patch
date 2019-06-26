@@ -2,12 +2,12 @@ diff --git a/Makefile b/Makefile
 index 3dff837..357a81a 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -18,7 +18,7 @@ ENABLE_LIBYOSYS := 0
- ENABLE_GPROF := 0
- ENABLE_NDEBUG := 0
+@@ -36,7 +36,7 @@
  
+ 
+ OS := $(shell uname -s)
 -PREFIX ?= /usr/local
 +PREFIX ?= /usr
  INSTALL_SUDO :=
  
- TARGET_BINDIR := $(DESTDIR)$(PREFIX)/bin
+ BINDIR := $(PREFIX)/bin

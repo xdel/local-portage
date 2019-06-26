@@ -30,6 +30,7 @@ PATCHES=(
 	"${FILESDIR}"/${PV}-prll-install.patch
 	"${FILESDIR}"/${PV}-brokentest.patch
 	"${FILESDIR}"/${PV}_migrate_gh_functions.patch
+	# "${FILESDIR}"/${PV}-fix-guile-2.2.patch
 )
 
 src_prepare() {

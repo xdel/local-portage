@@ -4,6 +4,7 @@
 # @ECLASS: golang-vcs-snapshot.eclass
 # @MAINTAINER:
 # William Hubbs <williamh@gentoo.org>
+# @SUPPORTED_EAPIS: 5 6
 # @BLURB: support eclass for unpacking VCS snapshot tarballs for
 # software written in the Go programming language
 # @DESCRIPTION:
@@ -34,7 +35,7 @@
 #
 # inherit golang-vcs-snapshot
 #
-# SRC_URI="http://github.com/example/${PN}/tarball/v${PV} -> ${P}.tar.gz
+# SRC_URI="https://github.com/example/${PN}/tarball/v${PV} -> ${P}.tar.gz
 # ${EGO_VENDOR_URI}"
 # @CODE
 #

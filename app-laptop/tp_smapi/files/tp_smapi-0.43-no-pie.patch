@@ -1,0 +1,11 @@
+--- a/Makefile
++++ b/Makefile
+@@ -172,7 +172,7 @@
+ #####################################################################
+ # This part runs as a submake in kernel Makefile context:
+ 
+-EXTRA_CFLAGS := $(CFLAGS) -I$(M)/include
++EXTRA_CFLAGS := $(CFLAGS) -I$(M)/include -fno-PIE
+ obj-m        := $(TP_MODULES)
+ 
+ endif

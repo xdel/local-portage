@@ -34,7 +34,6 @@ RDEPEND="${DEPEND}"
 REQUIRED_USE="blaster? ( || ( ftdi ftd2xx ) ) ftdi? ( !ftd2xx )"
 
 src_prepare() {
-    epatch "${FILESDIR}"/${PN}-XCF.patch
 	if [[ ${PV} == "9999" ]] ; then
 		sed -i -e "/@include version.texi/d" doc/${PN}.texi || die
 		AT_NO_RECURSIVE=yes eautoreconf
@@ -50,7 +49,12 @@ src_configure() {
 
 	if use usb; then
 		myconf="${myconf} --enable-usbprog --enable-jlink --enable-rlink \
-			--enable-vsllink --enable-arm-jtag-ew"
+			--enable-vsllink --enable-arm-jtag-ew --enable-stlink \
+			--enable-ti-icdi --enable-ulink --enable-usb-blaster-2 \
+			--enable-ft232r --enable-xds110 --enable-osbdm --enable-opendous \
+			--enable-aice --enable-armjtagew --enable-kitprog --enable-cmsis-dap \
+			--enable-openjtag --enable-jtag_vpi --enable-zy1000-master \
+			--enable-zy1000 --enable-ep93xx --enable-bcm2835gpio --enable-sysfsgpio"
 	fi
 
 	# add explicitely the path to libftd2xx

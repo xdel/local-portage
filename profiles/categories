@@ -20,3 +20,14 @@ cross-mips64-linux-gnu
 cross-mips-linux-gnu
 cross-sparc64-linux-gnu
 cross-sparc-linux-gnu
+cross-armv5-softfloat-linux-gnueabi
+cross-armv5te-softfloat-linux-gnueabi
+cross-powerpc-linux-gnu
+cross-riscv32-linux-gnu
+cross-riscv64-linux-gnu
+cross-ia64-linux-gnu
+cross-riscv-linux-gnu
+cross-alpha-linux-gnu
+cross-m68k-linux-gnu
+cross-powerpc64-linux-gnu
+cross-avr

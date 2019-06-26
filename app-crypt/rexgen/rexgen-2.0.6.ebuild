@@ -4,7 +4,7 @@
 
 EAPI=5
 
-PYTHON_COMPAT=( python3_5 )
+PYTHON_COMPAT=( python3_6 )
 
 inherit cmake-utils python-single-r1
 
@@ -39,6 +39,7 @@ CMAKE_USE_DIR="${S}/src"
 
 src_configure() {
 	epatch "${FILESDIR}/add-missing-lib-prefix.patch"
+	epatch "${FILESDIR}/glibc-2.26.patch"
 	local mycmakeargs=(
 		$(cmake-utils_use python USE_PYTHON)
 		$(cmake-utils_use lua USE_LUA)

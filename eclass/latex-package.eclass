@@ -1,4 +1,4 @@
-# Copyright 1999-2016 Gentoo Foundation
+# Copyright 1999-2018 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: latex-package.eclass
@@ -7,6 +7,7 @@
 # @AUTHOR:
 # Matthew Turk <satai@gentoo.org>
 # Martin Ehmsen <ehmsen@gentoo.org>
+# @SUPPORTED_EAPIS: 0 1 2 3 4 5 6 7
 # @BLURB: An eclass for easy installation of LaTeX packages
 # @DESCRIPTION:
 # This eClass is designed to be easy to use and implement.  The vast majority of
@@ -54,13 +55,16 @@
 
 case ${EAPI:-0} in
 	0|1|2|3|4|5) inherit base eutils ;;
-	6) ;;
-	*) die "Unknown EAPI ${EAPI} for ${ECLASS}" ;;
 esac
 
 RDEPEND="virtual/latex-base"
 DEPEND="${RDEPEND}
 	>=sys-apps/texinfo-4.2-r5"
+case ${EAPI:-0} in
+	0|1|2|3|4|5|6) ;;
+	7) BDEPEND="${DEPEND}"; DEPEND="" ;;
+	*) die "${ECLASS}: Unknown EAPI ${EAPI}" ;;
+esac
 HOMEPAGE="http://www.tug.org/"
 TEXMF="/usr/share/texmf-site"
 
@@ -139,11 +143,11 @@ latex-package_src_doinstall() {
 					do
 						[ -n "${LATEX_PACKAGE_SKIP}" ] && has ${i##*/} ${LATEX_PACKAGE_SKIP} && continue
 						einfo "Making documentation: $i"
-						if pdflatex ${LATEX_DOC_ARGUMENTS} --interaction=batchmode $i &> /dev/null ; then
-							pdflatex ${LATEX_DOC_ARGUMENTS} --interaction=batchmode $i &> /dev/null || die
+						if pdflatex ${LATEX_DOC_ARGUMENTS} --halt-on-error --interaction=nonstopmode $i ; then
+							pdflatex ${LATEX_DOC_ARGUMENTS} --halt-on-error --interaction=nonstopmode $i || die
 						else
 							einfo "pdflatex failed, trying texi2dvi"
-							texi2dvi -q -c --language=latex $i &> /dev/null || die
+							texi2dvi -q -c --language=latex $i || die
 						fi
 					done
 				fi
@@ -205,7 +209,7 @@ latex-package_src_compile() {
 	for i in `find \`pwd\` -maxdepth 1 -type f -name "*.ins"`
 	do
 		einfo "Extracting from $i"
-		latex --interaction=batchmode $i &> /dev/null || die
+		latex --halt-on-error --interaction=nonstopmode $i || die
 	done
 }
 

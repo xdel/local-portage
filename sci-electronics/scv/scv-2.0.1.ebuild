@@ -29,6 +29,7 @@ pkg_nofetch() {
 }
 
 src_configure() {
+	sed -i "s/-\$SYSC_TARGET/\$\(echo \$SYSC_TARGET \| sed \"s\/linux\/\/g\" )/g" configure configure.ac
 	econf $(use_enable static-libs static) \
 	--with-systemc="${EPREFIX}/usr" \
 	CXX=$(tc-getCXX)

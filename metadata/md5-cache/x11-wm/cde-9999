@@ -1,0 +1,11 @@
+DEFINED_PHASES=compile install postinst prepare unpack
+DEPEND=x11-libs/libXp x11-libs/libXt x11-libs/libXmu x11-libs/libXft x11-libs/libXinerama x11-libs/libXpm >=x11-libs/motif-2.3 x11-libs/libXaw x11-libs/libX11 x11-libs/libXScrnSaver net-libs/libtirpc x11-apps/xset ( || ( media-libs/jpeg:62 media-libs/libjpeg-turbo ) ) media-libs/freetype:2 dev-lang/tcl app-shells/ksh app-arch/ncompress media-fonts/font-adobe-100dpi media-fonts/font-adobe-utopia-100dpi media-fonts/font-bh-100dpi media-fonts/font-bh-lucidatypewriter-100dpi media-fonts/font-bitstream-100dpi net-nds/rpcbind x11-misc/xbitmaps >=dev-vcs/git-1.8.2.1[curl]
+DESCRIPTION=The Common Desktop Environment, the classic UNIX desktop
+EAPI=4
+HOMEPAGE=http://cdesktopenv.sourceforge.net/
+KEYWORDS=~x86 ~amd64
+LICENSE=LGPL-2.1
+RDEPEND=x11-libs/libXp x11-libs/libXt x11-libs/libXmu x11-libs/libXft x11-libs/libXinerama x11-libs/libXpm >=x11-libs/motif-2.3 x11-libs/libXaw x11-libs/libX11 x11-libs/libXScrnSaver net-libs/libtirpc x11-apps/xset ( || ( media-libs/jpeg:62 media-libs/libjpeg-turbo ) ) media-libs/freetype:2 dev-lang/tcl app-shells/ksh app-arch/ncompress media-fonts/font-adobe-100dpi media-fonts/font-adobe-utopia-100dpi media-fonts/font-bh-100dpi media-fonts/font-bh-lucidatypewriter-100dpi media-fonts/font-bitstream-100dpi net-nds/rpcbind x11-misc/xbitmaps
+SLOT=0
+_eclasses_=git-r3	0d4635eeb5a96cd5315597a47eba25c9
+_md5_=90cc5f2eed863b4a36b27619e22b7e95

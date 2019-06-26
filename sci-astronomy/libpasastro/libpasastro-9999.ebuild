@@ -19,6 +19,9 @@ DEPEND="dev-lang/lazarus"
 RDEPEND="${DEPEND}"
 
 src_install() {
+	if use amd64; then
+		sed -i 's/destdir\/lib/destdir\/lib64/g' "${S}/install.sh"
+	fi
 	emake DESTDIR="${D}" PREFIX="${D}/usr" INSTALL_PROGRAM="install" install || die "install failed"
 }
 

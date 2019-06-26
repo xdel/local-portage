@@ -5,8 +5,8 @@ EAPI="5"
 
 inherit eutils toolchain-funcs
 if [[ ${PV} == "9999" ]] ; then
-	ESVN_REPO_URI="https://code.coreboot.org/svn/flashrom/trunk"
-	inherit subversion
+	EGIT_REPO_URI="https://review.coreboot.org/flashrom.git"
+	inherit git-r3
 else
 	SRC_URI="http://download.flashrom.org/releases/${P}.tar.bz2"
 	KEYWORDS="~amd64 ~arm ~arm64 ~mips ~ppc ~ppc64 ~sparc ~x86"
@@ -21,10 +21,10 @@ SLOT="0"
 # Note: Do not list bitbang_spi as it is not a programmer; it's a backend used
 # by some other spi programmers.
 IUSE_PROGRAMMERS="
-atahpt +atapromise +atavia +buspirate_spi ch341a_spi dediprog +drkaiser +dummy
-+ft2232_spi +gfxnvidia +internal +it8212 +linux_spi mstarddc_spi +nic3com
-+nicintel +nicintel_eeprom +nicintel_spi nicnatsemi +nicrealtek +ogp_spi
-+pickit2_spi +pony_spi +rayer_spi +satamv +satasii +serprog +usbblaster_spi"
+atahpt +atapromise +atavia +buspirate_spi ch341a_spi dediprog +developerbox_spi +digilent_spi
++drkaiser +dummy +ft2232_spi +gfxnvidia +internal +it8212 +jlink_spi +linux_mtd +linux_spi 
+mstarddc_spi +nic3com +nicintel +nicintel_eeprom +nicintel_spi nicnatsemi +nicrealtek 
++ogp_spi +pickit2_spi +pony_spi +rayer_spi +satamv +satasii +serprog +usbblaster_spi"
 IUSE="${IUSE_PROGRAMMERS} +internal_dmi static tools +wiki"
 
 LIB_DEPEND="atahpt? ( sys-apps/pciutils[static-libs(+)] )

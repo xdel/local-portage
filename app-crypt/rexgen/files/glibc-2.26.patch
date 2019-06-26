@@ -1,0 +1,11 @@
+--- a/src/librexgen/string/simplestring.h
++++ b/src/librexgen/string/simplestring.h
+@@ -26,7 +26,7 @@
+ #include <librexgen/osdepend.h>
+ #include <string.h>
+ #include <stdlib.h>
+-#include <xlocale.h>
++#include <locale.h>
+ #include <string>
+ #include <algorithm>
+ #include <cassert>

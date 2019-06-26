@@ -1,0 +1,13 @@
+DEFINED_PHASES=compile configure install postinst prepare setup
+DEPEND=aac? ( media-libs/faad2 ) alsa? ( media-libs/alsa-lib ) cdda? ( dev-libs/libcdio media-libs/libcddb ) cover? ( media-libs/imlib2 ) ffmpeg? ( virtual/ffmpeg ) flac? ( media-libs/flac ) gtk? ( x11-libs/gtk+:2 ) lastfm? ( net-misc/curl ) notify? ( sys-apps/dbus ) midi? ( media-sound/timidity-freepats ) mms? ( media-libs/libmms ) mp3? ( media-libs/libmad ) musepack? ( media-sound/musepack-tools ) pulseaudio? ( media-sound/pulseaudio ) sndfile? ( media-libs/libsndfile ) src? ( media-libs/libsamplerate ) vorbis? ( media-libs/libvorbis ) wavpack? ( media-sound/wavpack ) zip? ( dev-libs/libzip infobar? ( media-sound/deadbeef-infobar ) sys-libs/zlib )
+DESCRIPTION=foobar2k-like music player
+EAPI=4
+HOMEPAGE=http://deadbeef.sourceforge.net/
+IUSE=adplug aac alsa ao ape cdda cover cover-imlib2 dts dumb converter curl ffmpeg flac gme gtk hotkeys lastfm m3u midi mms mp3 musepack nls notify nullout oss pulseaudio rpath shellexec shn sid sndfile src static supereq threads tta vorbis vtx wavpack zip infobar
+KEYWORDS=~x86 ~amd64
+LICENSE=GPL-2 LGPL-2.1 ZLIB ao? ( BSD XMAME ) dumb? ( DUMB-0.9.2 ) shn? ( shorten )
+RDEPEND=aac? ( media-libs/faad2 ) alsa? ( media-libs/alsa-lib ) cdda? ( dev-libs/libcdio media-libs/libcddb ) cover? ( media-libs/imlib2 ) ffmpeg? ( virtual/ffmpeg ) flac? ( media-libs/flac ) gtk? ( x11-libs/gtk+:2 ) lastfm? ( net-misc/curl ) notify? ( sys-apps/dbus ) midi? ( media-sound/timidity-freepats ) mms? ( media-libs/libmms ) mp3? ( media-libs/libmad ) musepack? ( media-sound/musepack-tools ) pulseaudio? ( media-sound/pulseaudio ) sndfile? ( media-libs/libsndfile ) src? ( media-libs/libsamplerate ) vorbis? ( media-libs/libvorbis ) wavpack? ( media-sound/wavpack ) zip? ( dev-libs/libzip infobar? ( media-sound/deadbeef-infobar ) sys-libs/zlib )
+SLOT=0
+SRC_URI=mirror://sourceforge/deadbeef/deadbeef-0.5.2.tar.bz2
+_eclasses_=desktop	b1d22ac8bdd4679ab79c71aca235009d	epatch	a1bf4756dba418a7238f3be0cb010c54	estack	43ddf5aaffa7a8d0482df54d25a66a1f	eutils	6e6c2737b59a4b982de6fb3ecefd87f8	fdo-mime	995b19d3f30e956b4e1bc5a91fdc4ea7	ltprune	08f9e1d9ee0af8f5d9a7854efbcd8c0e	multilib	b2f01ad412baf81650c23fcf0975fa33	preserve-libs	ef207dc62baddfddfd39a164d9797648	toolchain-funcs	f164325a2cdb5b3ea39311d483988861	vcs-clean	2a0f74a496fa2b1552c4f3398258b7bf
+_md5_=e8ea87dc75a1f1cb0e5667f3535523a6

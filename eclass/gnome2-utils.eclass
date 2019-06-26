@@ -4,6 +4,7 @@
 # @ECLASS: gnome2-utils.eclass
 # @MAINTAINER:
 # gnome@gentoo.org
+# @SUPPORTED_EAPIS: 0 1 2 3 4 5 6
 # @BLURB: Auxiliary functions commonly used by Gnome packages.
 # @DESCRIPTION:
 # This eclass provides a set of auxiliary functions needed by most Gnome
@@ -207,7 +208,9 @@ gnome2_gconf_uninstall() {
 # @FUNCTION: gnome2_icon_savelist
 # @DESCRIPTION:
 # Find the icons that are about to be installed and save their location
-# in the GNOME2_ECLASS_ICONS environment variable.
+# in the GNOME2_ECLASS_ICONS environment variable. This is only
+# necessary for eclass implementations that call
+# gnome2_icon_cache_update conditionally.
 # This function should be called from pkg_preinst.
 gnome2_icon_savelist() {
 	has ${EAPI:-0} 0 1 2 && ! use prefix && ED="${D}"
@@ -218,8 +221,7 @@ gnome2_icon_savelist() {
 
 # @FUNCTION: gnome2_icon_cache_update
 # @DESCRIPTION:
-# Updates Gtk+ icon cache files under /usr/share/icons if the current ebuild
-# have installed anything under that location.
+# Updates Gtk+ icon cache files under /usr/share/icons.
 # This function should be called from pkg_postinst and pkg_postrm.
 gnome2_icon_cache_update() {
 	has ${EAPI:-0} 0 1 2 && ! use prefix && EROOT="${ROOT}"
@@ -230,40 +232,35 @@ gnome2_icon_cache_update() {
 		return
 	fi
 
-	if [[ -z "${GNOME2_ECLASS_ICONS}" ]]; then
-		debug-print "No icon cache to update"
-		return
-	fi
-
 	ebegin "Updating icons cache"
 
 	local retval=0
 	local fails=( )
 
-	for dir in ${GNOME2_ECLASS_ICONS}
+	for dir in "${EROOT%/}"/usr/share/icons/*
 	do
-		if [[ -f "${EROOT}${dir}/index.theme" ]] ; then
+		if [[ -f "${dir}/index.theme" ]] ; then
 			local rv=0
 
-			"${updater}" -qf "${EROOT}${dir}"
+			"${updater}" -qf "${dir}"
 			rv=$?
 
 			if [[ ! $rv -eq 0 ]] ; then
-				debug-print "Updating cache failed on ${EROOT}${dir}"
+				debug-print "Updating cache failed on ${dir}"
 
 				# Add to the list of failures
-				fails[$(( ${#fails[@]} + 1 ))]="${EROOT}${dir}"
+				fails+=( "${dir}" )
 
 				retval=2
 			fi
-		elif [[ $(ls "${EROOT}${dir}") = "icon-theme.cache" ]]; then
+		elif [[ $(ls "${dir}") = "icon-theme.cache" ]]; then
 			# Clear stale cache files after theme uninstallation
-			rm "${EROOT}${dir}/icon-theme.cache"
+			rm "${dir}/icon-theme.cache"
 		fi
 
-		if [[ -z $(ls "${EROOT}${dir}") ]]; then
+		if [[ -z $(ls "${dir}") ]]; then
 			# Clear empty theme directories after theme uninstallation
-			rmdir "${EROOT}${dir}"
+			rmdir "${dir}"
 		fi
 	done
 
@@ -363,7 +360,8 @@ gnome2_scrollkeeper_update() {
 # @FUNCTION: gnome2_schemas_savelist
 # @DESCRIPTION:
 # Find if there is any GSettings schema to install and save the list in
-# GNOME2_ECLASS_GLIB_SCHEMAS variable.
+# GNOME2_ECLASS_GLIB_SCHEMAS variable. This is only necessary for eclass
+# implementations that call gnome2_schemas_update conditionally.
 # This function should be called from pkg_preinst.
 gnome2_schemas_savelist() {
 	has ${EAPI:-0} 0 1 2 && ! use prefix && ED="${D}"
@@ -375,7 +373,7 @@ gnome2_schemas_savelist() {
 # @FUNCTION: gnome2_schemas_update
 # @USAGE: gnome2_schemas_update
 # @DESCRIPTION:
-# Updates GSettings schemas if GNOME2_ECLASS_GLIB_SCHEMAS has some.
+# Updates GSettings schemas.
 # This function should be called from pkg_postinst and pkg_postrm.
 gnome2_schemas_update() {
 	has ${EAPI:-0} 0 1 2 && ! use prefix && EROOT="${ROOT}"
@@ -383,11 +381,6 @@ gnome2_schemas_update() {
 
 	if [[ ! -x ${updater} ]]; then
 		debug-print "${updater} is not executable"
-		return
-	fi
-
-	if [[ -z ${GNOME2_ECLASS_GLIB_SCHEMAS} ]]; then
-		debug-print "No GSettings schemas to update"
 		return
 	fi
 

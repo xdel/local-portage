@@ -94,10 +94,7 @@ RDEPEND="
 	selinux? ( sec-policy/selinux-wireshark )
 "
 PATCHES=(
-	"${FILESDIR}"/${PN}-1.99.8-qtchooser.patch
-	"${FILESDIR}"/${PN}-2.1.0-sse4_2-r1.patch
 	"${FILESDIR}"/${PN}-2.4-androiddump.patch
-	"${FILESDIR}"/${PN}-99999999-androiddump.patch
 )
 
 pkg_setup() {
