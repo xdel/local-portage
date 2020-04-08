@@ -10,7 +10,6 @@ cross-msp430-elf
 cross-i686-pc-linux-gnu
 cross-aarch64-unknown-linux-gnu
 cross-armv7a-hardfloat-linux-gnueabi
-cross-riscv64-unknown-linux-gnu
 cross-armv4tl-softfloat-linux-gnueabi
 cross-armv6tl-softfloat-linux-gnueabi
 cross-aarch64-linux-gnu
@@ -31,3 +30,7 @@ cross-alpha-linux-gnu
 cross-m68k-linux-gnu
 cross-powerpc64-linux-gnu
 cross-avr
+cross-riscv32-linux-gnueabi
+cross-riscv32-unknown-elf
+cross-riscv64-unknown-linux-gnu
+cross-riscv32-unknown-linux-gnu

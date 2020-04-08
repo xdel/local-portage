@@ -7,7 +7,7 @@ EAPI="5"
 inherit flag-o-matic toolchain-funcs pax-utils git-r3
 
 EGIT_BRANCH="bleeding-jumbo"
-EGIT_REPO_URI="git://github.com/magnumripper/JohnTheRipper.git"
+EGIT_REPO_URI="https://github.com/magnumripper/JohnTheRipper.git"
 
 DESCRIPTION="fast password cracker"
 HOMEPAGE="http://www.openwall.com/john/"
@@ -110,6 +110,11 @@ src_install() {
 	doins run/*.chr run/password.lst
 	doins run/*.conf
 	doins run/*.chr
+	doins -r run/opencl
+	doins -r run/dns
+	doins -r run/rules
+	doins -r run/lib
+	doins -r run/ztex
 
 	# documentation
 	dodoc -r doc

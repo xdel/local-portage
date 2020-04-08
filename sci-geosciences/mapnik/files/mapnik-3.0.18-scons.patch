@@ -28,12 +28,3 @@
              if env.get('XML2_INCLUDES'):
                  inc_path = env['XML2_INCLUDES']
                  env.AppendUnique(CPPPATH = fix_path(inc_path))
-@@ -1428,8 +1431,6 @@
-         else:
-             env['SKIPPED_DEPS'].extend(['dlfcn'])
- 
--    OPTIONAL_LIBSHEADERS = []
--
-     if env['JPEG']:
-         OPTIONAL_LIBSHEADERS.append(['jpeg', ['stdio.h', 'jpeglib.h'], False,'C','-DHAVE_JPEG'])
-         inc_path = env['%s_INCLUDES' % 'JPEG']

@@ -3,13 +3,14 @@
 # $Header: $
 
 EAPI=5
-inherit base eutils git-2
+inherit base eutils git-r3
 
 LICENSE="OWPL-1"
 DESCRIPTION="The Open Watcom compiler"
 HOMEPAGE="http://www.openwatcom.org"
-EGIT_REPO_URI="git://github.com/open-watcom/open-watcom-v2.git"
-EGIT_COMMIT="6c82fa8b15caae8259c410da7b0cebda95bbcb39"
+EGIT_REPO_URI="https://github.com/open-watcom/open-watcom-v2.git"
+#EGIT_COMMIT="6c82fa8b15caae8259c410da7b0cebda95bbcb39"
+EGIT_COMMIT="e3e5816c4902834e273b6c704789571c46414f96"
 
 KEYWORDS="amd64 x86"
 SLOT="0"
@@ -19,7 +20,7 @@ DEPEND="sys-devel/gcc
 	games-emulation/dosbox"
 
 RESTRICT="strip"
-S=${WORKDIR}/OW9999
+# S=${WORKDIR}/OW9999
 
 src_compile() {
 	epatch "${FILESDIR}/dosbox.env.patch"

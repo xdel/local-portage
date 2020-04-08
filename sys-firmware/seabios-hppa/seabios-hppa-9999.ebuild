@@ -50,11 +50,11 @@ _emake() {
 
 src_compile() {
 
-	_emake 
-	mv out/hppa-firmware.img ../ || die
+	_emake CROSS_PREFIX=hppa-linux-gnu- parisc
+	mv out/hppa-firmware.img ../hppa-firmware-master.img || die
 }
 
 src_install() {
 	insinto /usr/share/qemu
-	doins ../hppa-firmware.img
+	doins ../hppa-firmware-master.img
 }

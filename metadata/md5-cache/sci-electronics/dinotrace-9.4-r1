@@ -1,0 +1,13 @@
+DEFINED_PHASES=compile install postinst
+DEPEND=x11-libs/libX11 doc? ( sys-apps/texinfo ) emacs? ( virtual/emacs ) x11-libs/motif
+DESCRIPTION=X11 waveform viewer
+EAPI=4
+HOMEPAGE=https://www.veripool.org/wiki/dinotrace
+IUSE=+doc emacs
+KEYWORDS=~amd64 ~x86
+LICENSE=GPL-3
+RDEPEND=x11-libs/libX11 doc? ( sys-apps/texinfo ) emacs? ( virtual/emacs ) x11-libs/motif
+SLOT=0
+SRC_URI=http://www.veripool.org/ftp/dinotrace-9.4e.tgz
+_eclasses_=eapi7-ver	f9ec87e93172b25ce65a85303dc06964	elisp-common	504a3383c45504fde86b00426619a709	multilib	1d91b03d42ab6308b5f4f6b598ed110e	toolchain-funcs	512eb3367f507ebaa1d1d43ab7d66e6c
+_md5_=7cfeff1e537abc72a2844b5ee227039c

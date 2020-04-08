@@ -3,7 +3,7 @@
 # $Header: $
 
 EAPI=5
-inherit base autotools eutils git-2
+inherit base autotools eutils git-r3
 
 DESCRIPTION="Hardware access and backend library for sigrok"
 HOMEPAGE="http://www.sigrok.org"

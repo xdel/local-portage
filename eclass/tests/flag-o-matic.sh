@@ -8,7 +8,7 @@ inherit flag-o-matic
 
 CFLAGS="-a -b -c=1 --param l1-cache-size=32"
 CXXFLAGS="-x -y -z=2"
-LDFLAGS="-l -m -n=3"
+LDFLAGS="-l -m -n=3 -Wl,--remove-me"
 ftend() {
 	local ret=$?
 	local msg="Failed; flags are:"
@@ -53,9 +53,25 @@ done <<<"
 	1	-n
 "
 
-tbegin "strip-unsupported-flags"
+tbegin "strip-unsupported-flags for -z=2"
 strip-unsupported-flags
 [[ ${CFLAGS} == "--param l1-cache-size=32" ]] && [[ ${CXXFLAGS} == "-z=2" ]] && [[ ${LDFLAGS} == "" ]]
+ftend
+
+CFLAGS="-O2 -B/foo -O1"
+CXXFLAGS="-O2 -B/foo -O1"
+LDFLAGS="-O2 -B/foo -O1"
+tbegin "strip-unsupported-flags for '-B/foo'"
+strip-unsupported-flags
+[[ ${CFLAGS} == "-O2 -B/foo -O1" ]] && [[ ${CXXFLAGS} == "-O2 -B/foo -O1" ]] && [[ ${LDFLAGS} == "-O2 -B/foo -O1" ]]
+ftend
+
+CFLAGS="-O2 -B /foo -O1"
+CXXFLAGS="-O2 -B /foo -O1"
+LDFLAGS="-O2 -B /foo -O1"
+tbegin "strip-unsupported-flags for '-B /foo'"
+strip-unsupported-flags
+[[ ${CFLAGS} == "-O2 -B /foo -O1" ]] && [[ ${CXXFLAGS} == "-O2 -B /foo -O1" ]] && [[ ${LDFLAGS} == "-O2 -B /foo -O1" ]]
 ftend
 
 for var in $(all-flag-vars) ; do
@@ -123,6 +139,12 @@ out=$(test-flags-CC -O3)
 [[ $? -eq 0 && ${out} == "-O3" ]]
 ftend
 
+tbegin "test-flags-CC (valid flags, absolute path)"
+absolute_CC=$(type -P $(tc-getCC))
+out=$(CC=${absolute_CC} test-flags-CC -O3)
+[[ $? -eq 0 && ${out} == "-O3" ]]
+ftend
+
 tbegin "test-flags-CC (invalid flags)"
 out=$(test-flags-CC -finvalid-flag)
 [[ $? -ne 0 && -z ${out} ]]
@@ -139,10 +161,12 @@ out=$(CC=clang test-flags-CC -finvalid-flag)
 [[ $? -ne 0 && -z ${out} ]]
 ftend
 
-tbegin "test-flags-CC (gcc-valid but clang-invalid flags)"
-out=$(CC=clang test-flags-CC -finline-limit=1200)
-[[ $? -ne 0 && -z ${out} ]]
-ftend
+### '-finline-limit=1200' is 'ignored' flag, not invalid.
+### We don't filter out ignored flags currently, bug #712488
+#tbegin "test-flags-CC (gcc-valid but clang-invalid flags)"
+#out=$(CC=clang test-flags-CC -finline-limit=1200)
+#[[ $? -ne 0 && -z ${out} ]]
+#ftend
 
 tbegin "test-flags-CC (unused flags w/clang)"
 out=$(CC=clang test-flags-CC -Wl,-O1)

@@ -1,0 +1,12 @@
+DEFINED_PHASES=prepare unpack
+DEPEND=x11-libs/gtk+:3 dev-libs/glib:2 media-sound/pulseaudio[glib] x11-libs/libnotify x11-libs/libX11 virtual/pkgconfig >=app-portage/elt-patches-20170815 || ( >=sys-devel/automake-1.16.1:1.16 >=sys-devel/automake-1.15.1:1.15 ) >=sys-devel/autoconf-2.69 >=sys-devel/libtool-2.4 >=dev-vcs/git-1.8.2.1[curl]
+DESCRIPTION=systray-applet that allows you to control some of PulseAudio's features.
+EAPI=5
+HOMEPAGE=https://github.com/fernandotcl/pa-applet
+KEYWORDS=~amd64
+LICENSE=BSD
+PROPERTIES=live
+RDEPEND=x11-libs/gtk+:3 dev-libs/glib:2 media-sound/pulseaudio[glib] x11-libs/libnotify x11-libs/libX11
+SLOT=0
+_eclasses_=autotools	7d999b62b8749fad43fff00620cedf47	git-r3	86a0188f2ad9eb3d65e4d031ab8a0422	libtool	f143db5a74ccd9ca28c1234deffede96	multilib	1d91b03d42ab6308b5f4f6b598ed110e	toolchain-funcs	512eb3367f507ebaa1d1d43ab7d66e6c
+_md5_=6554fe6c43cbd97ec40a04fe294c5b4d

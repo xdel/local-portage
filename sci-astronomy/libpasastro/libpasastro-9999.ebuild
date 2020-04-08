@@ -3,12 +3,13 @@
 # $Header: $
 
 EAPI=5
-inherit base eutils subversion
+inherit base eutils git-r3
 
 MY_PV=${PV:0:3}-${PV:4:2}
 DESCRIPTION="Provide Pascal interface for standard astronomy libraries"
 HOMEPAGE="http://www.sourceforge.net/projects/libpasastro/"
-ESVN_REPO_URI="https://svn.code.sf.net/p/libpasastro/code/trunk"
+EGIT_REPO_URI="https://github.com/pchev/libpasastro.git"
+EGIT_BRANCH="master"
 
 LICENSE="GPL-2+"
 SLOT="0"

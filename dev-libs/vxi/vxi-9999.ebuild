@@ -4,7 +4,7 @@
 
 EAPI=4
 
-inherit git-2 autotools
+inherit git-r3 autotools eutils
 
 DESCRIPTION="A free VXI-11 implementation."
 HOMEPAGE="http://www.librevisa.org/"
@@ -24,9 +24,10 @@ RDEPEND="
 CFLAGS="${CFLAGS} -fPIC"
 
 src_prepare() {
-	eautoreconf $(use_with libtirpc) || die "autoreconf failed"
+	epatch "${FILESDIR}/glibc-2.26.patch"
+	eautoreconf || die "autoreconf failed"
 }
 
-#src_configure() {
-#	CFLAGS="-fPIC" econf
-#}
+src_configure() {
+	CFLAGS="-fPIC" econf $(use_with libtirpc)
+}

@@ -1,0 +1,38 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -12,7 +12,24 @@
+ AC_PROG_RANLIB
+ 
+ # Checks for libraries.
++AC_ARG_WITH([libtirpc],
++	    AS_HELP_STRING([--with-libtirpc], [Use libtirpc as RPC implementation (instead of sunrpc)]),
++	    [], [ with_libtirpc=no ])
+ 
++AS_IF([test "x$with_libtirpc" != xno], 
++      [PKG_CHECK_MODULES([TIRPC], 
++                         [libtirpc], 
++                         [RPC_CFLAGS=$TIRPC_CFLAGS; RPC_LIBS=$TIRPC_LIBS;],
++			 [AC_MSG_ERROR([libtirpc requested, but library not found.])]
++	                )], 
++      [AC_CHECK_HEADER(rpc/rpc.h, 
++		       [RPC_CFLAGS=""; RPC_LIBS="";],
++		       [AC_MSG_ERROR([sunrpc requested, but headers are not present.])]
++	              )]
++)
++
++AC_SUBST(RPC_CFLAGS)
++AC_SUBST(RPC_LIBS)
+ # Checks for header files.
+ 
+ # Checks for typedefs, structures, and compiler characteristics.
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -1,5 +1,8 @@
+ lib_LIBRARIES = libvxiclient.a libvxiserver.a
+ 
++CFLAGS = @RPC_CFLAGS@ @CFLAGS@
++LDFLAGS = @RPC_LIBS@ @LDFLAGS@
++
+ nodist_libvxiclient_a_SOURCES = \
+ 	vxi_clnt.c \
+ 	vxi_intr_svr.c \

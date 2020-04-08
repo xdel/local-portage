@@ -6,9 +6,9 @@ EAPI="4"
 
 inherit eutils
 if [[ ${PV} == "9999" ]] ; then
-	inherit autotools git-2
+	inherit autotools git-r3
 	KEYWORDS=""
-	EGIT_REPO_URI="git://repo.or.cz/${PN}.git"
+	EGIT_REPO_URI="https://repo.or.cz/${PN}.git"
 else
 	KEYWORDS="~amd64 ~x86"
 	SRC_URI="mirror://sourceforge/project/${PN}/${PN}/${PV}/${P}.tar.bz2"
@@ -45,7 +45,8 @@ src_configure() {
 	myconf="--enable-buspirate --enable-ioutil --disable-werror
 	--disable-internal-jimtcl --enable-amtjtagaccel
 	--enable-ep93xx --enable-at91rm9200 --enable-gw16012
-	--enable-oocd_trace"
+	--enable-oocd_trace --enable-remote-bitbang --enable-imx_gpio \
+	--enable-bcm2835gpio --enable-sysfsgpio"
 
 	if use usb; then
 		myconf="${myconf} --enable-usbprog --enable-jlink --enable-rlink \
@@ -53,8 +54,8 @@ src_configure() {
 			--enable-ti-icdi --enable-ulink --enable-usb-blaster-2 \
 			--enable-ft232r --enable-xds110 --enable-osbdm --enable-opendous \
 			--enable-aice --enable-armjtagew --enable-kitprog --enable-cmsis-dap \
-			--enable-openjtag --enable-jtag_vpi --enable-zy1000-master \
-			--enable-zy1000 --enable-ep93xx --enable-bcm2835gpio --enable-sysfsgpio"
+			--enable-openjtag --enable-jtag_vpi --enable-zy1000-master --enable-usb-blaster \
+			--enable-zy1000"
 	fi
 
 	# add explicitely the path to libftd2xx

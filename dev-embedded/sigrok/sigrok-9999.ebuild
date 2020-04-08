@@ -3,7 +3,7 @@
 # $Header: $
 
 EAPI=5
-inherit base autotools eutils git-2
+inherit base autotools eutils git-r3
 
 DESCRIPTION="Command line UI for sigrok"
 HOMEPAGE="http://www.sigrok.org"

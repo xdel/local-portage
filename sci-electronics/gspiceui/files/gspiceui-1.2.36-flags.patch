@@ -1,0 +1,27 @@
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -98,14 +98,7 @@
+ #  -Os           Optimize for size
+ #  -Og           Optimize debugging experience but don't break debugging
+ #  -std=[C++NO]  The C++ standard to use where C++NO is eg. c++98, c++03, c++11, c++14, c++17, etc.
+-ifeq ($(GSPICEUI_DEBUG),0)
+-  # Options for release (not using -Wall since it's GCC specific)
+-  CXXFLAGS := -O3 -std=c++11 -pipe $(shell $(WXCFG) --cxxflags)
+-else
+-  # Options for development
+-  CXXFLAGS := -g -Og -std=c++11 -Wall -Wextra -Wpedantic -pipe $(shell $(WXCFG) --cxxflags)
+-endif
+-
++CXXFLAGS += $(shell $(WXCFG) --cxxflags)
+ # I like to compile using the option "-Wall". Tests that are not of interest or break wxWidgets are
+ # turned off below :
+ ifeq ($(GSPICEUI_DEBUG),1)
+@@ -199,7 +192,7 @@
+ #   -o     specify the output file name
+ 
+ $(BINDIR)/$(PROG) : $(OBJS)
+-	$(LD) -pipe -o $(BINDIR)/$(PROG) obj/*.o $(LIBS)
++	$(LD) -pipe -o $(BINDIR)/$(PROG) obj/*.o $(LDFLAGS) $(LIBS)
+ ifeq ($(ROOT)/GSpiceUI.app,$(wildcard $(ROOT)/GSpiceUI.app))
+ 	cp $(BINDIR)/$(PROG) $(ROOT)/GSpiceUI.app/Contents/MacOS/gspiceui
+ endif

@@ -1,0 +1,158 @@
+commit ef01b4201a459e708f4580a8f65c0f1d335f8af6
+Author: Dominik Röttsches <drott@chromium.org>
+Date:   Thu May 2 16:11:00 2019 +0000
+
+    Move from UTrie2 to UCPTrie for custom character property functions
+    
+    Previously we were using a non-public ICU API when building against
+    Chromium's own ICU. Now that ICU 63 is released which has a public
+    UCPTrie API, we can switch to the public version.
+    
+    In this first step CL, update our API usage to UCPTrie. In a following
+    step, remove the obsolete parts in character.cc that are behind
+    USING_SYSTEM_ICU - we no longer need those as even the system ICU
+    version now has the publicly available UCPTrie.
+    
+    Test: character_test.cc
+    Bug: 882279
+    Change-Id: Iebd94a1d69128768bcfbd4cf9975a5629f26246f
+    Reviewed-on: https://chromium-review.googlesource.com/c/chromium/src/+/1591845
+    Commit-Queue: Emil A Eklund <eae@chromium.org>
+    Reviewed-by: Emil A Eklund <eae@chromium.org>
+    Cr-Commit-Position: refs/heads/master@{#656040}
+
+diff --git a/third_party/blink/renderer/platform/BUILD.gn b/third_party/blink/renderer/platform/BUILD.gn
+index 277254a4f8cd..2bbf4f6ab12d 100644
+--- a/third_party/blink/renderer/platform/BUILD.gn
++++ b/third_party/blink/renderer/platform/BUILD.gn
+@@ -134,6 +134,7 @@ executable("character_data_generator") {
+   configs += [ "//third_party/blink/renderer:config" ]
+   deps = [
+     # Default manifest on Windows (a no-op elsewhere).
++    "//base",
+     "//build/win:default_exe_manifest",
+     "//third_party/icu",
+   ]
+diff --git a/third_party/blink/renderer/platform/text/character.cc b/third_party/blink/renderer/platform/text/character.cc
+index 381135cce3d0..faba1e4f0122 100644
+--- a/third_party/blink/renderer/platform/text/character.cc
++++ b/third_party/blink/renderer/platform/text/character.cc
+@@ -43,8 +43,7 @@
+ #if defined(USING_SYSTEM_ICU)
+ #include <unicode/uniset.h>
+ #else
+-#define MUTEX_H  // Prevent compile failure of utrie2.h on Windows
+-#include <utrie2.h>
++#include <unicode/ucptrie.h>
+ #endif
+ 
+ namespace blink {
+@@ -73,21 +72,22 @@ static icu::UnicodeSet* createUnicodeSet(const UChar32* characters,
+     unicodeSet = CREATE_UNICODE_SET(name);      \
+   return unicodeSet->contains(c);
+ #else
+-static UTrie2* CreateTrie() {
++static UCPTrie* CreateTrie() {
+   // Create a Trie from the value array.
+   ICUError error;
+-  UTrie2* trie = utrie2_openFromSerialized(
+-      UTrie2ValueBits::UTRIE2_16_VALUE_BITS, kSerializedCharacterData,
+-      kSerializedCharacterDataSize, nullptr, &error);
++  UCPTrie* trie = ucptrie_openFromBinary(
++      UCPTrieType::UCPTRIE_TYPE_FAST, UCPTrieValueWidth::UCPTRIE_VALUE_BITS_16,
++      kSerializedCharacterData, kSerializedCharacterDataSize, nullptr, &error);
+   DCHECK_EQ(error, U_ZERO_ERROR);
+   return trie;
+ }
+ 
+ static bool HasProperty(UChar32 c, CharacterProperty property) {
+-  static UTrie2* trie = nullptr;
++  static UCPTrie* trie = nullptr;
+   if (!trie)
+     trie = CreateTrie();
+-  return UTRIE2_GET16(trie, c) & static_cast<CharacterPropertyType>(property);
++  return UCPTRIE_FAST_GET(trie, UCPTRIE_16, c) &
++         static_cast<CharacterPropertyType>(property);
+ }
+ 
+ #define RETURN_HAS_PROPERTY(c, name) \
+diff --git a/third_party/blink/renderer/platform/text/character_property_data_generator.cc b/third_party/blink/renderer/platform/text/character_property_data_generator.cc
+index 893d52759fa8..13cb44b0c3da 100644
+--- a/third_party/blink/renderer/platform/text/character_property_data_generator.cc
++++ b/third_party/blink/renderer/platform/text/character_property_data_generator.cc
+@@ -4,14 +4,16 @@
+ 
+ #include "third_party/blink/renderer/platform/text/character_property_data.h"
+ 
++#include "base/logging.h"
++
+ #include <stdio.h>
+ #include <cassert>
+ #include <cstring>
+ #include <memory>
+ #include "third_party/blink/renderer/platform/text/character_property.h"
+ #if !defined(USING_SYSTEM_ICU)
+-#define MUTEX_H  // Prevent compile failure of utrie2.h on Windows
+-#include <utrie2.h>
++#include <unicode/ucptrie.h>
++#include <unicode/umutablecptrie.h>
+ #endif
+ 
+ namespace blink {
+@@ -87,7 +89,8 @@ static void GenerateCharacterPropertyData(FILE* fp) {
+ 
+   // Create a trie from the value array.
+   UErrorCode error = U_ZERO_ERROR;
+-  UTrie2* trie = utrie2_open(0, 0, &error);
++  std::unique_ptr<UMutableCPTrie, decltype(&umutablecptrie_close)> trie(
++      umutablecptrie_open(0, 0, &error), umutablecptrie_close);
+   assert(error == U_ZERO_ERROR);
+   UChar32 start = 0;
+   CharacterProperty value = values[0];
+@@ -95,8 +98,8 @@ static void GenerateCharacterPropertyData(FILE* fp) {
+     if (c < kSize && values[c] == value)
+       continue;
+     if (static_cast<uint32_t>(value)) {
+-      utrie2_setRange32(trie, start, c - 1, static_cast<uint32_t>(value), TRUE,
+-                        &error);
++      umutablecptrie_setRange(trie.get(), start, c - 1,
++                              static_cast<uint32_t>(value), &error);
+       assert(error == U_ZERO_ERROR);
+     }
+     if (c >= kSize)
+@@ -105,19 +108,28 @@ static void GenerateCharacterPropertyData(FILE* fp) {
+     value = values[start];
+   }
+ 
+-  // Freeze and serialize the trie to a byte array.
+-  utrie2_freeze(trie, UTrie2ValueBits::UTRIE2_16_VALUE_BITS, &error);
++  // Convert to immutable UCPTrie in order to be able to serialize.
++  std::unique_ptr<UCPTrie, decltype(&ucptrie_close)> immutable_trie(
++      umutablecptrie_buildImmutable(trie.get(), UCPTrieType::UCPTRIE_TYPE_FAST,
++                                    UCPTrieValueWidth::UCPTRIE_VALUE_BITS_16,
++                                    &error),
++      ucptrie_close);
++
+   assert(error == U_ZERO_ERROR);
+-  int32_t serialized_size = utrie2_serialize(trie, nullptr, 0, &error);
++
++  int32_t serialized_size =
++      ucptrie_toBinary(immutable_trie.get(), nullptr, 0, &error);
+   error = U_ZERO_ERROR;
++
+   std::unique_ptr<uint8_t[]> serialized(new uint8_t[serialized_size]);
+-  serialized_size =
+-      utrie2_serialize(trie, serialized.get(), serialized_size, &error);
++  // Ensure 32-bit alignment, as ICU requires that to the ucptrie_toBinary call.
++  CHECK(!(reinterpret_cast<intptr_t>(serialized.get()) % 4));
++
++  serialized_size = ucptrie_toBinary(immutable_trie.get(), serialized.get(),
++                                     serialized_size, &error);
+   assert(error == U_ZERO_ERROR);
+ 
+   GenerateUTrieSerialized(fp, serialized_size, serialized.get());
+-
+-  utrie2_close(trie);
+ }
+ #endif
+ 

@@ -1,0 +1,10 @@
+DEFINED_PHASES=install prepare
+DEPEND=app-arch/bzip2 app-arch/unzip
+DESCRIPTION=Mapnik World Boundaries
+EAPI=4
+HOMEPAGE=http://wiki.openstreetmap.org/wiki/Mapnik#World%20boundaries
+KEYWORDS=~amd64 ~ppc ~x86
+LICENSE=dbcl-10 public-domain
+SLOT=0
+SRC_URI=http://tile.openstreetmap.org/world_boundaries-spherical.tgz http://tile.openstreetmap.org/processed_p.tar.bz2 http://tile.openstreetmap.org/shoreline_300.tar.bz2 http://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_populated_places.zip http://www.naturalearthdata.com/http//www.naturalearthdata.com/download/110m/cultural/ne_110m_admin_0_boundary_lines_land.zip
+_md5_=6533256258fa627fd780729add0fa722

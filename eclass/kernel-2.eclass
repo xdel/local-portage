@@ -1,4 +1,4 @@
-# Copyright 1999-2018 Gentoo Foundation
+# Copyright 1999-2019 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: kernel-2.eclass
@@ -191,9 +191,7 @@
 # If you do change them, there is a chance that we will not fix resulting bugs;
 # that of course does not mean we're not willing to help.
 
-PYTHON_COMPAT=( python{2_6,2_7} )
-
-inherit toolchain-funcs python-any-r1
+inherit toolchain-funcs
 [[ ${EAPI:-0} == [012345] ]] && inherit epatch
 [[ ${EAPI:-0} == [0123456] ]] && inherit estack eapi7-ver
 case ${EAPI:-0} in
@@ -213,7 +211,7 @@ if [[ ${CTARGET} == ${CHOST} && ${CATEGORY/cross-} != ${CATEGORY} ]]; then
 	export CTARGET=${CATEGORY/cross-}
 fi
 
-HOMEPAGE="https://www.kernel.org/ https://www.gentoo.org/ ${HOMEPAGE}"
+HOMEPAGE="https://www.kernel.org/ https://wiki.gentoo.org/wiki/Kernel ${HOMEPAGE}"
 : ${LICENSE:="GPL-2"}
 
 # This is the latest KV_PATCH of the deblob tool available from the
@@ -297,7 +295,7 @@ handle_genpatches() {
 			UNIPATCH_LIST_GENPATCHES+=" ${DISTDIR}/${tarball}"
 			debug-print "genpatches tarball: $tarball"
 		fi
-		GENPATCHES_URI+=" ${use_cond_start}mirror://gentoo/${tarball}${use_cond_end}"
+		GENPATCHES_URI+=" ${use_cond_start}$(echo https://dev.gentoo.org/~{alicef,mpagano,whissi}/dist/genpatches/${tarball})${use_cond_end}"
 	done
 }
 
@@ -373,17 +371,17 @@ detect_version() {
 
 		# at this point 031412, Linus is putting all 3.x kernels in a
 		# 3.x directory, may need to revisit when 4.x is released
-		KERNEL_BASE_URI="mirror://kernel/linux/kernel/v${KV_MAJOR}.x"
+		KERNEL_BASE_URI="https://www.kernel.org/pub/linux/kernel/v${KV_MAJOR}.x"
 
 		[[ -n "${K_LONGTERM}" ]] &&
 			KERNEL_BASE_URI="${KERNEL_BASE_URI}/longterm/v${KV_MAJOR}.${KV_PATCH_ARR}"
 	else
-		#KERNEL_BASE_URI="mirror://kernel/linux/kernel/v${KV_MAJOR}.0"
-		#KERNEL_BASE_URI="mirror://kernel/linux/kernel/v${KV_MAJOR}.${KV_MINOR}"
+		#KERNEL_BASE_URI="https://www.kernel.org/pub/linux/kernel/v${KV_MAJOR}.0"
+		#KERNEL_BASE_URI="https://www.kernel.org/pub/linux/kernel/v${KV_MAJOR}.${KV_MINOR}"
 		if [[ ${KV_MAJOR} -ge 3 ]]; then
-			KERNEL_BASE_URI="mirror://kernel/linux/kernel/v${KV_MAJOR}.x"
+			KERNEL_BASE_URI="https://www.kernel.org/pub/linux/kernel/v${KV_MAJOR}.x"
 		else
-			KERNEL_BASE_URI="mirror://kernel/linux/kernel/v${KV_MAJOR}.${KV_MINOR}"
+			KERNEL_BASE_URI="https://www.kernel.org/pub/linux/kernel/v${KV_MAJOR}.${KV_MINOR}"
 		fi
 
 		[[ -n "${K_LONGTERM}" ]] &&
@@ -509,7 +507,7 @@ detect_version() {
 
 			# as of 12/5/2017, the rc patch is no longer offered as a compressed
 			# file, and no longer is it mirrored on kernel.org
-			if [[ ${KV_MAJOR} -ge 4 ]] && [[ ${KV_PATCH} -ge 12 ]]; then
+			if ver_test "${KV_MAJOR}.${KV_PATCH}" -ge "4.12"; then
 				KERNEL_URI="https://git.kernel.org/torvalds/p/v${KV_FULL}/v${OKV} -> patch-${KV_FULL}.patch
 							${KERNEL_BASE_URI}/linux-${OKV}.tar.xz"
 				UNIPATCH_LIST_DEFAULT="${DISTDIR}/patch-${CKV//_/-}.patch"
@@ -621,11 +619,16 @@ if [[ ${ETYPE} == sources ]]; then
 				kernel_is le 2 6 ${DEBLOB_MAX_VERSION} && \
 					K_DEBLOB_AVAILABLE=1
 		if [[ ${K_DEBLOB_AVAILABLE} == "1" ]] ; then
+			PYTHON_COMPAT=( python2_7 )
+
+			inherit python-any-r1
+
 			IUSE="${IUSE} deblob"
 
 			# Reflect that kernels contain firmware blobs unless otherwise
-			# stripped
-			LICENSE="${LICENSE} !deblob? ( linux-firmware )"
+			# stripped. Starting with version 4.14, the whole firmware
+			# tree has been dropped from the kernel.
+			kernel_is lt 4 14 && LICENSE+=" !deblob? ( linux-firmware )"
 
 			DEPEND+=" deblob? ( ${PYTHON_DEPS} )"
 
@@ -654,10 +657,10 @@ if [[ ${ETYPE} == sources ]]; then
 					${DEBLOB_URI}
 					${DEBLOB_CHECK_URI}
 				)"
-		else
-			# We have no way to deblob older kernels, so just mark them as
-			# tainted with non-libre materials.
-			LICENSE="${LICENSE} linux-firmware"
+		elif kernel_is lt 4 14; then
+			# Deblobbing is not available, so just mark kernels older
+			# than 4.14 as tainted with non-libre materials.
+			LICENSE+=" linux-firmware"
 		fi
 	fi
 
@@ -1226,17 +1229,35 @@ unipatch() {
 			UNIPATCH_LIST_GENPATCHES+=" ${DISTDIR}/${tarball}"
 			debug-print "genpatches tarball: $tarball"
 
-			# check gcc version < 4.9.X uses patch 5000 and = 4.9.X uses patch 5010
-			if [[ $(gcc-major-version) -eq 4 ]] && [[ $(gcc-minor-version) -ne 9 ]]; then
-				# drop 5000_enable-additional-cpu-optimizations-for-gcc-4.9.patch
-				if [[ $UNIPATCH_DROP != *"5010_enable-additional-cpu-optimizations-for-gcc-4.9.patch"* ]]; then
+			local GCC_MAJOR_VER=$(gcc-major-version)
+			local GCC_MINOR_VER=$(gcc-minor-version)
+
+			# optimization patch for gcc < 8.X and kernel > 4.13
+			if kernel_is ge 4 13 ; then 
+				if [[ ${GCC_MAJOR_VER} -lt 8 ]] && [[ ${GCC_MAJOR_VER} -gt 4 ]]; then
+					UNIPATCH_DROP+=" 5011_enable-cpu-optimizations-for-gcc8.patch"
+					UNIPATCH_DROP+=" 5012_enable-cpu-optimizations-for-gcc91.patch"
+				# optimization patch for gcc >= 8 and kernel ge 4.13
+				elif [[ "${GCC_MAJOR_VER}" -eq 8 ]]; then
+					# support old kernels for a period. For now, remove as all gcc versions required are masked
+					UNIPATCH_DROP+=" 5010_enable-additional-cpu-optimizations-for-gcc.patch"
 					UNIPATCH_DROP+=" 5010_enable-additional-cpu-optimizations-for-gcc-4.9.patch"
+					UNIPATCH_DROP+=" 5012_enable-cpu-optimizations-for-gcc91.patch"
+				elif [[ "${GCC_MAJOR_VER}" -eq 9 ]] && [[ ${GCC_MINOR_VER} -ge 1 ]]; then
+					UNIPATCH_DROP+=" 5010_enable-additional-cpu-optimizations-for-gcc.patch"
+					UNIPATCH_DROP+=" 5010_enable-additional-cpu-optimizations-for-gcc-4.9.patch"
+					UNIPATCH_DROP+=" 5011_enable-cpu-optimizations-for-gcc8.patch"
+				else
+					UNIPATCH_DROP+=" 5010_enable-additional-cpu-optimizations-for-gcc.patch"
+					UNIPATCH_DROP+=" 5010_enable-additional-cpu-optimizations-for-gcc-4.9.patch"
+					UNIPATCH_DROP+=" 5011_enable-cpu-optimizations-for-gcc8.patch"
+					UNIPATCH_DROP+=" 5012_enable-cpu-optimizations-for-gcc91.patch"
 				fi
 			else
-				if [[ $UNIPATCH_DROP != *"5000_enable-additional-cpu-optimizations-for-gcc.patch"* ]]; then
-					#drop 5000_enable-additional-cpu-optimizations-for-gcc.patch
-					UNIPATCH_DROP+=" 5000_enable-additional-cpu-optimizations-for-gcc.patch"
-				fi
+				UNIPATCH_DROP+=" 5010_enable-additional-cpu-optimizations-for-gcc.patch"
+				UNIPATCH_DROP+=" 5010_enable-additional-cpu-optimizations-for-gcc-4.9.patch"
+				UNIPATCH_DROP+=" 5011_enable-cpu-optimizations-for-gcc8.patch"
+				UNIPATCH_DROP+=" 5012_enable-cpu-optimizations-for-gcc91.patch"
 			fi
 		fi
 	done

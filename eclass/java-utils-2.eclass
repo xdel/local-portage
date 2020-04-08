@@ -1,4 +1,4 @@
-# Copyright 2004-2018 Gentoo Foundation
+# Copyright 2004-2018 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: java-utils-2.eclass
@@ -15,7 +15,10 @@
 # you should inherit java-pkg-2 for Java packages or java-pkg-opt-2 for packages
 # that have optional Java support. In addition you can inherit java-ant-2 for
 # Ant-based packages.
-inherit eutils versionator multilib
+
+# EAPI 7 has version functions built-in. Use eapi7-ver for all earlier eclasses.
+# Keep versionator inheritance in case consumers are using it implicitly.
+[[ ${EAPI} == [0123456] ]] && inherit eapi7-ver eutils multilib versionator
 
 IUSE="elibc_FreeBSD"
 
@@ -24,6 +27,8 @@ export WANT_JAVA_CONFIG="2"
 
 # Prefix variables are only available for EAPI>=3
 has "${EAPI:-0}" 0 1 2 && ED="${D}" EPREFIX= EROOT="${ROOT}"
+
+has test ${JAVA_PKG_IUSE} && RESTRICT+=" !test? ( test )"
 
 # @VARIABLE: JAVA_PKG_E_DEPEND
 # @INTERNAL
@@ -1518,8 +1523,8 @@ java-pkg_is-vm-version-eq() {
 
 	local vm_version="$(java-pkg_get-vm-version)"
 
-	vm_version="$(get_version_component_range 1-2 "${vm_version}")"
-	needed_version="$(get_version_component_range 1-2 "${needed_version}")"
+	vm_version="$(ver_cut 1-2 "${vm_version}")"
+	needed_version="$(ver_cut 1-2 "${needed_version}")"
 
 	if [[ -z "${vm_version}" ]]; then
 		debug-print "Could not get JDK version from DEPEND"
@@ -1570,7 +1575,7 @@ java-pkg_is-vm-version-ge() {
 		debug-print "Could not get JDK version from DEPEND"
 		return 1
 	else
-		if version_is_at_least "${needed_version}" "${vm_version}"; then
+		if ver_test "${vm_version}" -ge "${needed_version}"; then
 			debug-print "Detected a JDK(${vm_version}) >= ${needed_version}"
 			return 0
 		else
@@ -2029,7 +2034,9 @@ eant() {
 
 	if [[ ${cp#:} ]]; then
 		# It seems ant does not like single quotes around ${cp}
-		antflags="${antflags} -Dgentoo.classpath=\"${cp#:}\""
+		# And ant 1.9.13+ also does not like double quotes around ${cp}
+		# https://bz.apache.org/bugzilla/show_bug.cgi?id=58898
+		antflags="${antflags} -Dgentoo.classpath=${cp#:}"
 	fi
 
 	[[ -n ${JAVA_PKG_DEBUG} ]] && echo ant ${antflags} "${@}"
@@ -2724,10 +2731,13 @@ java-pkg_jar-list() {
 java-pkg_verify-classes() {
 	#$(find ${D} -type f -name '*.jar' -o -name '*.class')
 
-	local version_verify="/usr/bin/class-version-verify.py"
+	local version_verify_1="${EPREFIX}/usr/$(get_libdir)/javatoolkit/bin/class-version-verify.py"
+	local version_verify_2="${EPREFIX}/usr/libexec/javatoolkit/class-version-verify.py"
 
-	if [[ ! -x "${version_verify}" ]]; then
-		version_verify="/usr/$(get_libdir)/javatoolkit/bin/class-version-verify.py"
+	if [[ -x "${version_verify_1}" ]]; then
+		local version_verify=${version_verify_1}
+	else
+		local version_verify=${version_verify_2}
 	fi
 
 	if [[ ! -x "${version_verify}" ]]; then

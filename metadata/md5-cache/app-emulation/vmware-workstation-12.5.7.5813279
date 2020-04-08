@@ -1,0 +1,15 @@
+DEFINED_PHASES=config install postinst postrm preinst prepare prerm unpack
+DEPEND=>=dev-util/patchelf-0.9 virtual/pkgconfig dev-libs/libxslt
+DESCRIPTION=Emulate a complete PC without the performance overhead of most emulators
+EAPI=5
+HOMEPAGE=http://www.vmware.com/products/workstation/
+IUSE=bundled-libs cups doc ovftool server vix +vmware-tools
+KEYWORDS=-* ~amd64
+LICENSE=vmware GPL-2 GPL-3
+PDEPEND=~app-emulation/vmware-modules-308.5.7 vmware-tools? ( app-emulation/vmware-tools )
+RDEPEND=media-libs/alsa-lib net-print/cups x11-libs/libX11 x11-libs/libXcursor x11-libs/libXext x11-libs/libXi x11-libs/libXinerama x11-libs/libXtst x11-libs/startup-notification x11-themes/hicolor-icon-theme bundled-libs? ( media-libs/tiff:3 x11-libs/libICE x11-libs/libSM virtual/jpeg:62 ) !bundled-libs? ( dev-cpp/atkmm dev-cpp/pangomm dev-libs/atk dev-libs/glib:2 dev-libs/libgcrypt:11/11 dev-libs/libgpg-error dev-libs/libsigc++:2 dev-libs/libxml2 dev-libs/openssl:0 media-libs/fontconfig media-libs/freetype media-libs/libpng:1.2 net-misc/curl sys-fs/fuse sys-libs/zlib x11-libs/cairo x11-libs/gdk-pixbuf:2 x11-libs/gtk+:2 x11-libs/libXau x11-libs/libXcomposite x11-libs/libXdamage x11-libs/libXfixes x11-libs/libXrandr x11-libs/libXrender x11-libs/pango x11-libs/pixman ) !app-emulation/vmware-player
+RESTRICT=mirror strip
+SLOT=0
+SRC_URI=amd64? ( https://softwareupdate.vmware.com/cds/vmw-desktop/ws/12.5.7/5813279/linux/core/VMware-Workstation-12.5.7-5813279.x86_64.bundle.tar ) https://github.com/akhuettel/systemd-vmware/archive/gentoo-02.tar.gz -> vmware-systemd-gentoo-02.tgz
+_eclasses_=desktop	b1d22ac8bdd4679ab79c71aca235009d	epatch	ed88001f77c6dd0d5f09e45c1a5b480e	estack	686eaab303305a908fd57b2fd7617800	eutils	fcb2aa98e1948b835b5ae66ca52868c5	fdo-mime	995b19d3f30e956b4e1bc5a91fdc4ea7	flag-o-matic	7472ddc437760e4f626968f95daed685	gnome2-utils	532371cfcba45b2ab0d2950547c97d95	ltprune	2729691420b6deeda2a90b1f1183fb55	multilib	1d91b03d42ab6308b5f4f6b598ed110e	pam	a1771fc1e5831c201eaf18451747d94b	preserve-libs	ef207dc62baddfddfd39a164d9797648	readme.gentoo-r1	22ae82e140bdd95d17a34fd5fd733190	systemd	71fd8d2065d102753fb9e4d20eaf3e9f	toolchain-funcs	512eb3367f507ebaa1d1d43ab7d66e6c	vcs-clean	2a0f74a496fa2b1552c4f3398258b7bf	versionator	2352c3fc97241f6a02042773c8287748	vmware-bundle	103215ad2cbe486527636cd8fec1ed3d	xdg-utils	ff2ff954e6b17929574eee4efc5152ba
+_md5_=cf5902b2ba6a252351a430cc6b1c6ecb

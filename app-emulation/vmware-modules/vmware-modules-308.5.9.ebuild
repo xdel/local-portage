@@ -75,6 +75,10 @@ src_unpack() {
 }
 
 src_prepare() {
+	find -iname Makefile | while read m ; do
+		convert_to_m "${m}"
+	done
+
 	epatch "${FILESDIR}/${PV_MAJOR}-makefile-kernel-dir.patch"
 	epatch "${FILESDIR}/${PV_MAJOR}-makefile-include.patch"
 	epatch "${FILESDIR}/${PV_MAJOR}-netdevice.patch"
@@ -102,7 +106,7 @@ src_prepare() {
 	kernel_is ge 4 5 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.05-00-vmblock-follow_link.patch"
 	kernel_is ge 4 6 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.06-00-user-pages.patch"
 	kernel_is ge 4 7 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.07-01-readlink_copy.patch"
-	kernel_is ge 4 8 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.08-00-nr_anon_mapped.patch"
+	kernel_is ge 4 8 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.08-00-vmmon-fix-page-accounting.patch"
 	kernel_is ge 4 9 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.09-00-user-pages.patch"
 	kernel_is ge 4 10 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.10-00-generic_readlink.patch"
 	kernel_is ge 4 11 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.11-00-missing-headers.patch"
@@ -111,6 +115,21 @@ src_prepare() {
 	kernel_is ge 4 12 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.12-01-vmci-do_once.patch"
 	kernel_is ge 4 12 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.12-02-vmci-pci_enable_msix.patch"
 	kernel_is ge 4 13 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.13-00-vmnet-refcount.patch"
+	kernel_is ge 4 13 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.13-01-vmmon-fix-page-accounting.patch"
+	kernel_is ge 4 14 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.14-00-vmmon-global-page-state.patch"
+	kernel_is ge 4 14 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.14-01-deprecated-asm-uaccess.patch"
+	kernel_is ge 4 15 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.15-00-init_timer.patch"
+	kernel_is ge 4 16 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.16-00-vmblock-iversion.patch"
+	kernel_is ge 4 17 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.17-00-vsock-getname.patch"
+	kernel_is ge 5 00 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.00-00-totalram_pages.patch"
+	kernel_is ge 5 00 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.00-01-access_ok.patch"
+	kernel_is ge 5 00 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.00-02-do_gettimeofday.patch"
+	kernel_is ge 5 01 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.01-00-vm_fault_t.patch"
+	kernel_is ge 5 01 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.01-01-kernel_ds.patch"
+
+	if kernel_is -lt 4 5 ; then
+		kernel_is ge 4 4 167 && epatch "${FILESDIR}/${PV_MAJOR}-4.4-get-user-pages.patch"
+	fi
 
 	# Allow user patches so they can support RC kernels and whatever else
 	epatch "${FILESDIR}/${PV_MAJOR}-5.5-vmmon-fix-smp.patch"

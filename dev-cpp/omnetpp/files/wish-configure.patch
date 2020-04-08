@@ -1,0 +1,25 @@
+--- a/omnetpp-5.5.1/configure.in
++++ b/omnetpp-5.5.1/configure.in
+@@ -911,15 +911,15 @@
+     if test "$WISH" = nope; then
+        AC_MSG_ERROR([Cannot find wish, part of Tcl/Tk -- maybe it is not in the PATH or has some exotic name (tested names were: wish wish86 wish8.6 wish85 wish8.5)])
+     fi
+-    if echo 'puts OK; exit' | $WISH | grep OK >/dev/null; then :; else
+-        AC_MSG_ERROR([Cannot run wish (wish command "puts OK; exit" failed): maybe you are not running X or DISPLAY environment variable not set?])
+-    fi
+-    if echo 'catch {package require Tk 8.5; puts OK}; exit' | $WISH | grep OK >/dev/null; then :; else
+-        AC_MSG_ERROR([wish command "package require Tk 8.5" failed: your Tcl/Tk installation is likely too old, version 8.5.0+ is required])
+-    fi
++#    if echo 'puts OK; exit' | $WISH | grep OK >/dev/null; then :; else
++#        AC_MSG_ERROR([Cannot run wish (wish command "puts OK; exit" failed): maybe you are not running X or DISPLAY environment variable not set?])
++#    fi
++#    if echo 'catch {package require Tk 8.5; puts OK}; exit' | $WISH | grep OK >/dev/null; then :; else
++#        AC_MSG_ERROR([wish command "package require Tk 8.5" failed: your Tcl/Tk installation is likely too old, version 8.5.0+ is required])
++#    fi
+ 
+     # note: square brackets necessary otherwise M4 messes up the Tcl command
+-    [tcl_library=`echo 'puts [info library]; exit' | $WISH`]
++    [tcl_library=`whereis tcl | awk '{print $2}'`]
+ 
+     # if we got through until here, enable building of the following progs:
+ fi # end of Tcl tests ($WITH_TKENV branch)

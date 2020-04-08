@@ -1,9 +1,9 @@
-# Copyright 1999-2015 Gentoo Foundation
+# Copyright 1999-2019 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: pam.eclass
 # @MAINTAINER:
-# pam-bugs@gentoo.org
+# Mikle Kolyada <zlogene@gentoo.org>
 # @AUTHOR:
 # Diego Pettenò <flameeyes@gentoo.org>
 # @BLURB: Handles pam related tasks
@@ -94,7 +94,7 @@ newpamsecurity() {
 # @DESCRIPTION:
 # Returns the pam modules' directory for current implementation
 getpam_mod_dir() {
-	if has_version sys-libs/pam || has_version sys-libs/openpam; then
+	if has_version sys-libs/pam; then
 		PAM_MOD_DIR=/$(get_libdir)/security
 	else
 		# Unable to find PAM implementation... defaulting

@@ -1,7 +1,7 @@
 # Distributed under the terms of the GNU General Public License v2+
 
 EAPI=4
-inherit eutils multilib git-2
+inherit eutils multilib git-r3
 
 EGIT_REPO_URI="git://git.zerfleddert.de/usb-driver"
 

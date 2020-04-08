@@ -3,7 +3,7 @@
 # $Header: $
 
 EAPI=5
-inherit base autotools eutils git-2
+inherit base autotools eutils git-r3
 
 DESCRIPTION="Library for VISA standard for interfacing test and measurement equipment"
 HOMEPAGE="http://www.librevisa.org/"

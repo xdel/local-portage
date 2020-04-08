@@ -8,7 +8,7 @@ inherit cmake-utils
 
 if [[ ${PV} == 9999* ]] ; then
 	EGIT_REPO_URI="https://github.com/nitram2342/${PN}"
-	inherit git-2
+	inherit git-r3
 fi
 
 DESCRIPTION="Open source software for chip reverse engineering"
