@@ -45,7 +45,7 @@ CDEPEND="x11-libs/gtk+:2
 RDEPEND="${CDEPEND}
 	x11-misc/xplanet"
 DEPEND="${CDEPEND}
-	>=dev-lang/lazarus-1.0.4
+	<dev-lang/lazarus-1.8.0
 	>=dev-lang/fpc-2.6.0"
 
 S=${WORKDIR}/${PN}-${MY_PV}-src

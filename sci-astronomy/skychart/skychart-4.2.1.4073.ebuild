@@ -46,7 +46,7 @@ RDEPEND="${CDEPEND}
 	x11-misc/xplanet
 	sci-astronomy/libpasastro"
 DEPEND="${CDEPEND}
-	>=dev-lang/lazarus-1.0.4
+	>=dev-lang/lazarus-2.0.0
 	>=dev-lang/fpc-2.6.0"
 
 S=${WORKDIR}/${PN}-${MY_PV}-src
