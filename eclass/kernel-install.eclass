@@ -20,6 +20,13 @@
 # Additionally, the inherited mount-boot eclass exports pkg_pretend.
 # It also stubs out pkg_preinst and pkg_prerm defined by mount-boot.
 
+# @ECLASS-VARIABLE: KV_LOCALVERSION
+# @DEFAULT_UNSET
+# @DESCRIPTION:
+# A string containing the kernel LOCALVERSION, e.g. '-gentoo'.
+# Needs to be set only when installing binary kernels,
+# kernel-build.eclass obtains it from kernel config.
+
 if [[ ! ${_KERNEL_INSTALL_ECLASS} ]]; then
 
 case "${EAPI:-0}" in
@@ -92,6 +99,12 @@ kernel-install_get_image_path() {
 		amd64|x86)
 			echo arch/x86/boot/bzImage
 			;;
+		arm64)
+			echo arch/arm64/boot/Image.gz
+			;;
+		arm)
+			echo arch/arm/boot/zImage
+			;;
 		*)
 			die "${FUNCNAME}: unsupported ARCH=${ARCH}"
 			;;
@@ -139,6 +152,7 @@ kernel-install_update_symlink() {
 	else
 		local symlink_target=$(readlink "${target}")
 		local symlink_ver=${symlink_target#${target##*/}-}
+		local updated=
 		if [[ ${symlink_target} == ${target##*/}-* && \
 				-z ${symlink_ver//[0-9.]/} ]]
 		then
@@ -151,7 +165,13 @@ kernel-install_update_symlink() {
 				ebegin "Updating ${target} symlink"
 				ln -f -n -s "${target##*/}-${version}" "${target}"
 				eend ${?}
+				updated=1
 			fi
+		fi
+
+		if [[ ! ${updated} ]]; then
+			elog "${target} points at another kernel, leaving it as-is."
+			elog "Please use 'eselect kernel' to update it when desired."
 		fi
 	fi
 }
@@ -168,6 +188,12 @@ kernel-install_get_qemu_arch() {
 			;;
 		x86)
 			echo i386
+			;;
+		arm)
+			echo arm
+			;;
+		arm64)
+			echo aarch64
 			;;
 		*)
 			die "${FUNCNAME}: unsupported ARCH=${ARCH}"
@@ -241,6 +267,29 @@ kernel-install_test() {
 	EOF
 }
 
+# @FUNCTION: kernel-install_pkg_pretend
+# @DESCRIPTION:
+# Check for missing optional dependencies and output warnings.
+kernel-install_pkg_pretend() {
+	debug-print-function ${FUNCNAME} "${@}"
+
+	if ! has_version -d sys-kernel/linux-firmware; then
+		ewarn "sys-kernel/linux-firmware not found installed on your system."
+		ewarn "This package provides various firmware files that may be needed"
+		ewarn "for your hardware to work.  If in doubt, it is recommended"
+		ewarn "to pause or abort the build process and install it before"
+		ewarn "resuming."
+
+		if use initramfs; then
+			elog
+			elog "If you decide to install linux-firmware later, you can rebuild"
+			elog "the initramfs via issuing a command equivalent to:"
+			elog
+			elog "    emerge --config ${CATEGORY}/${PN}"
+		fi
+	fi
+}
+
 # @FUNCTION: kernel-install_src_test
 # @DESCRIPTION:
 # Boilerplate function to remind people to call the tests.
@@ -269,21 +318,22 @@ kernel-install_pkg_postinst() {
 	if [[ -z ${ROOT} ]]; then
 		mount-boot_pkg_preinst
 
+		local ver="${PV}${KV_LOCALVERSION}"
 		local image_path=$(kernel-install_get_image_path)
 		if use initramfs; then
 			# putting it alongside kernel image as 'initrd' makes
 			# kernel-install happier
 			kernel-install_build_initramfs \
-				"${EROOT}/usr/src/linux-${PV}/${image_path%/*}/initrd" \
-				"${PV}"
+				"${EROOT}/usr/src/linux-${ver}/${image_path%/*}/initrd" \
+				"${ver}"
 		fi
 
-		kernel-install_install_kernel "${PV}" \
-			"${EROOT}/usr/src/linux-${PV}/${image_path}" \
-			"${EROOT}/usr/src/linux-${PV}/System.map"
+		kernel-install_install_kernel "${ver}" \
+			"${EROOT}/usr/src/linux-${ver}/${image_path}" \
+			"${EROOT}/usr/src/linux-${ver}/System.map"
 	fi
 
-	kernel-install_update_symlink "${EROOT}/usr/src/linux" "${PV}"
+	kernel-install_update_symlink "${EROOT}/usr/src/linux" "${ver}"
 }
 
 # @FUNCTION: kernel-install_pkg_prerm
@@ -303,15 +353,40 @@ kernel-install_pkg_postrm() {
 	debug-print-function ${FUNCNAME} "${@}"
 
 	if [[ -z ${ROOT} ]] && use initramfs; then
+		local ver="${PV}${KV_LOCALVERSION}"
 		local image_path=$(kernel-install_get_image_path)
 		ebegin "Removing initramfs"
-		rm -f "${EROOT}/usr/src/linux-${PV}/${image_path%/*}/initrd" &&
-			find "${EROOT}/usr/src/linux-${PV}" -depth -type d -empty -delete
+		rm -f "${EROOT}/usr/src/linux-${ver}/${image_path%/*}/initrd" &&
+			find "${EROOT}/usr/src/linux-${ver}" -depth -type d -empty -delete
 		eend ${?}
 	fi
+}
+
+# @FUNCTION: kernel-install_pkg_config
+# @DESCRIPTION:
+# Rebuild the initramfs and reinstall the kernel.
+kernel-install_pkg_config() {
+	[[ -z ${ROOT} ]] || die "ROOT!=/ not supported currently"
+
+	mount-boot_pkg_preinst
+
+	local ver="${PV}${KV_LOCALVERSION}"
+	local image_path=$(kernel-install_get_image_path)
+	if use initramfs; then
+		# putting it alongside kernel image as 'initrd' makes
+		# kernel-install happier
+		kernel-install_build_initramfs \
+			"${EROOT}/usr/src/linux-${ver}/${image_path%/*}/initrd" \
+			"${ver}"
+	fi
+
+	kernel-install_install_kernel "${ver}" \
+		"${EROOT}/usr/src/linux-${ver}/${image_path}" \
+		"${EROOT}/usr/src/linux-${ver}/System.map"
 }
 
 _KERNEL_INSTALL_ECLASS=1
 fi
 
 EXPORT_FUNCTIONS src_test pkg_preinst pkg_postinst pkg_prerm pkg_postrm
+EXPORT_FUNCTIONS pkg_config pkg_pretend

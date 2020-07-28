@@ -1,0 +1,13 @@
+--- a/third_party/webrtc/rtc_base/physical_socket_server.cc
++++ b/third_party/webrtc/rtc_base/physical_socket_server.cc
+@@ -31,6 +31,10 @@
+ #include <unistd.h>
+ #endif
+ 
++#if defined(WEBRTC_LINUX)
++#include <linux/sockios.h>
++#endif
++
+ #if defined(WEBRTC_WIN)
+ #include <windows.h>
+ #include <winsock2.h>

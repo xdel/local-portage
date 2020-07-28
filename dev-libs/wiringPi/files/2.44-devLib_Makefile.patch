@@ -1,0 +1,21 @@
+--- devLib/Makefile	2017-04-18 22:47:02.066600061 +0100
++++ devLib/Makefile	2017-04-18 22:49:34.305024481 +0100
+@@ -37,7 +37,7 @@
+ #DEBUG	= -g -O0
+ DEBUG	= -O2
+ CC	= gcc
+-INCLUDE	= -I.
++INCLUDE	= -I. -I../wiringPi
+ DEFS	= -D_GNU_SOURCE
+ CFLAGS	= $(DEBUG) $(DEFS) -Wformat=2 -Wall -Winline $(INCLUDE) -pipe -fPIC
+ 
+@@ -93,8 +93,7 @@
+ 	$Q echo "[Install Dynamic Lib]"
+ 	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/lib
+ 	$Q install -m 0755 libwiringPiDev.so.$(VERSION)			$(DESTDIR)$(PREFIX)/lib/libwiringPiDev.so.$(VERSION)
+-	$Q ln -sf $(DESTDIR)$(PREFIX)/lib/libwiringPiDev.so.$(VERSION)	$(DESTDIR)/lib/libwiringPiDev.so
+-	$Q $(LDCONFIG)
++	$Q ln -sf --relative $(DESTDIR)$(PREFIX)/lib/libwiringPiDev.so.$(VERSION)	$(DESTDIR)/lib/libwiringPiDev.so
+ 
+ .PHONY:	install-static
+ install-static:	$(STATIC)

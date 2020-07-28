@@ -155,6 +155,7 @@ PATCHES=(
 	"${FILESDIR}/00-utrie2-to-ucptrie.patch"
 	"${FILESDIR}/01-remove-alternative-codepath.patch"
 	"${FILESDIR}/02-vertical-char-icu.patch"
+	"${FILESDIR}/chromium-linux-missing-header.patch"
 )
 
 pre_build_checks() {

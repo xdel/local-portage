@@ -96,15 +96,15 @@ src_configure() {
 		"CUSTOM_LDFLAGS=${LDFLAGS}"
 		"CUSTOM_LDFLAGS+=-L${ED}/usr/$(get_libdir)"
 	)
-	escons "${MYSCONS[@]}" configure
+	./scons/scons.py "${MYSCONS[@]}" configure
 }
 
 src_compile() {
-	escons "${MYSCONS[@]}"
+	./scons/scons.py "${MYSCONS[@]}"
 }
 
 src_install() {
-	escons "${MYSCONS[@]}" DESTDIR="${D}" install
+	./scons/scons.py "${MYSCONS[@]}" DESTDIR="${D}" install
 
 	dodoc AUTHORS.md README.md CHANGELOG.md
 }

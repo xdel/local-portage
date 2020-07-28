@@ -34,6 +34,8 @@ DEPEND="${RDEPEND}
 src_prepare() {
 	cd "${S}"
 	epatch "${FILESDIR}"/wish-configure.patch
+	epatch "${FILESDIR}"/remove-cmdline-args.diff
+	sed -i "s/WITH_OSGEARTH=.*/WITH_OSGEARTH=no/g" ${S}/configure.user
 	eautoreconf
 	default
 }
@@ -45,7 +47,15 @@ src_configure() {
 	export TCL_LIBRARY=$(whereis tcl | awk '{print $2}')
 	export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${S}/lib"
 
-	econf || die 'econf failed'
+	econf WITH_OSGEARTH=no || die 'econf failed'
+}
+
+src_compile() {
+	export PATH="${PATH}:${S}/bin"
+	export TCL_LIBRARY=$(whereis tcl | awk '{print $2}')
+	export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${S}/lib"
+
+	emake
 }
 
 src_install() {

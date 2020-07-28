@@ -1,15 +1,15 @@
 --- a/config.mk
 +++ b/config.mk
-@@ -15,9 +15,9 @@
+@@ -18,9 +18,9 @@
  endif
  WARN_LEVEL ?= all
  
 -LDLIBS = -lm -lstdc++
--CFLAGS += -MD -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(C_STD) -I$(PREFIX)/include
--CXXFLAGS += -MD -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(CXX_STD) -I$(PREFIX)/include
+-CFLAGS += -MD -MP -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(C_STD) -I$(PREFIX)/include
+-CXXFLAGS += -MD -MP -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(CXX_STD) -I$(PREFIX)/include
 +override LDLIBS = -lm -lstdc++
-+override CFLAGS += -MD -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(C_STD) -I$(PREFIX)/include
-+override CXXFLAGS += -MD -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(CXX_STD) -I$(PREFIX)/include
++override CFLAGS += -MD -MP -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(C_STD) -I$(PREFIX)/include
++override CXXFLAGS += -MD -MP -O$(OPT_LEVEL) $(DBG_LEVEL) -W$(WARN_LEVEL) -std=$(CXX_STD) -I$(PREFIX)/include
  
  DESTDIR ?=
- CHIPDB_SUBDIR ?= icebox
+ CHIPDB_SUBDIR ?= $(PROGRAM_PREFIX)icebox

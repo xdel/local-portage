@@ -1,0 +1,24 @@
+diff -ru wiringPi-2.44.orig/devLib/Makefile wiringPi-2.44/devLib/Makefile
+--- wiringPi-2.44.orig/devLib/Makefile	2020-07-25 22:24:37.516666666 -0000
++++ wiringPi-2.44/devLib/Makefile	2020-07-25 22:31:09.126666666 -0000
+@@ -94,7 +94,7 @@
+ 	$Q echo "[Install Dynamic Lib]"
+ 	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ 	$Q install -m 0755 libwiringPiDev.so.$(VERSION)			$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)/libwiringPiDev.so.$(VERSION)
+-	$Q ln -sf --relative $(DESTDIR)$(PREFIX)/lib/libwiringPiDev.so.$(VERSION)	$(DESTDIR)/$(LIBSUBDIR)/libwiringPiDev.so
++	$Q ln -sf --relative $(DESTDIR)$(PREFIX)/$(LIBSUBDIR)/libwiringPiDev.so.$(VERSION)	$(DESTDIR)/$(LIBSUBDIR)/libwiringPiDev.so
+ 
+ .PHONY:	install-static
+ install-static:	$(STATIC)
+diff -ru wiringPi-2.44.orig/wiringPiD/Makefile wiringPi-2.44/wiringPiD/Makefile
+--- wiringPi-2.44.orig/wiringPiD/Makefile	2017-03-01 11:55:19.000000000 -0000
++++ wiringPi-2.44/wiringPiD/Makefile	2020-07-25 22:31:57.403333332 -0000
+@@ -35,7 +35,7 @@
+ INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall -Wextra $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L$(DESTDIR)$(PREFIX)/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LIBS    = -lwiringPi -lwiringPiDev -lpthread -lrt -lm -lcrypt
+ 
+ # May not need to  alter anything below this line

@@ -1,0 +1,33 @@
+--- a/FindlibFTD2XX.cmake
++++ b/FindlibFTD2XX.cmake
+@@ -34,6 +34,8 @@
+ 			${LIBFTD2XX_PKG_LIBRARY_DIRS}
+ 		PATHS
+ 			/usr/lib
++			/usr/lib64
++			/usr/lib32
+ 			/usr/local/lib
+ 	)
+ 
+--- a/Findlibftdi.cmake	
++++ b/Findlibftdi.cmake
+@@ -42,6 +42,8 @@
+             ${LIBFTDI_PKG_LIBRARY_DIRS}
+         PATHS
+             /usr/lib
++            /usr/lib64
++            /usr/lib32
+             /usr/local/lib
+     )
+ 
+--- a/Findlibusb.cmake
++++ b/Findlibusb.cmake
+@@ -43,6 +43,8 @@
+             ${LIBUSB_PKG_LIBRARY_DIRS}
+         PATHS
+             /usr/lib
++            /usr/lib64
++            /usr/lib32
+             /usr/local/lib
+     )
+ 

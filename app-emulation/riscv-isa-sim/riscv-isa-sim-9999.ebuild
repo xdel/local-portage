@@ -10,3 +10,8 @@ LICENSE="BSD"
 SLOT="0/${PV}"
 KEYWORDS="amd64"
 IUSE=""
+
+src_prepare() {
+	sed -i "s/^install_libs_dir\ :=.*/install_libs_dir\ :=\ \$\(INSTALLDIR\)\/$(get_libdir)/g" \
+	${S}/Makefile.in || die "Failed to fix Makefile"
+}

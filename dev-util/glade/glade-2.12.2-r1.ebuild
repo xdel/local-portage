@@ -25,7 +25,7 @@ RDEPEND=">=dev-libs/libxml2-2.4.1:2
 DEPEND="${RDEPEND}
 		virtual/pkgconfig
 		sys-devel/gettext
-		>=app-text/scrollkeeper-0.1.4
+		app-text/rarian
 		>=dev-util/intltool-0.28"
 
 DOCS="AUTHORS ChangeLog FAQ NEWS README TODO"

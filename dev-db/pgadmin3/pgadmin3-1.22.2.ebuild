@@ -7,7 +7,7 @@ inherit eutils multilib versionator wxwidgets
 
 DESCRIPTION="wxWidgets GUI for PostgreSQL"
 HOMEPAGE="https://www.pgadmin.org/"
-SRC_URI="mirror://postgresql/pgadmin/pgadmin3/v${PV}/src/${P}.tar.gz"
+SRC_URI="https://ftp.postgresql.org/pub/pgadmin/pgadmin3/v${PV}/src/${P}.tar.gz"
 
 LICENSE="POSTGRESQL"
 KEYWORDS="amd64 ppc x86 ~x86-fbsd"

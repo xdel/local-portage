@@ -30,7 +30,7 @@ LICENSE="GPL-2 NVIDIA-r2"
 SLOT="0/${PV%.*}"
 
 COMMON="
-	app-eselect/eselect-opencl
+	virtual/opencl
 	kernel_linux? (
 		>=sys-libs/glibc-2.6.1
 		acct-group/video
@@ -470,7 +470,7 @@ pkg_postinst() {
 
 	# Switch to the nvidia implementation
 	use X && "${ROOT}"/usr/bin/eselect opengl set --use-old nvidia
-	"${ROOT}"/usr/bin/eselect opencl set --use-old nvidia
+	# "${ROOT}"/usr/bin/eselect opencl set --use-old nvidia
 
 	readme.gentoo_print_elog
 

@@ -19,7 +19,7 @@ IUSE="ocl-icd ocl20"
 
 BDEPEND="${PYTHON_DEPS}
 	virtual/pkgconfig"
-COMMON="app-eselect/eselect-opencl
+COMMON="virtual/opencl
 	media-libs/mesa[X(+),${MULTILIB_USEDEP}]
 	<sys-devel/clang-8.0.0:=[static-analyzer,${MULTILIB_USEDEP}]
 	>=x11-libs/libdrm-2.4.70[video_cards_intel,${MULTILIB_USEDEP}]
@@ -96,9 +96,9 @@ pkg_postinst() {
 	elog "It remains the recommended solution for Sandy Bridge, Ivy Bridge and Haswell."
 	elog ""
 
-	if use ocl-icd; then
-		"${ROOT}"/usr/bin/eselect opencl set --use-old ocl-icd
-	else
-		"${ROOT}"/usr/bin/eselect opencl set --use-old beignet
-	fi
+	# if use ocl-icd; then
+	#	"${ROOT}"/usr/bin/eselect opencl set --use-old ocl-icd
+	# else
+	#	"${ROOT}"/usr/bin/eselect opencl set --use-old beignet
+	# fi
 }
