@@ -3,7 +3,7 @@ inherit eutils autotools git-r3
 
 DESCRIPTION="RISC-V proxy kernel"
 HOMEPAGE="http://riscv.org/download.html#tab_pk"
-EGIT_REPO_URI="git://github.com/riscv/riscv-pk"
+EGIT_REPO_URI="https://github.com/riscv/riscv-pk.git"
 EGIT_BRANCH="master"
 
 LICENSE="BSD"
@@ -17,7 +17,7 @@ src_configure() {
 	mkdir build
 	cd build
 	export ECONF_SOURCE=".."
-	export CHOST="riscv64-unknown-linux-gnu"
+	export CHOST="riscv64-linux-gnu"
 	export CFLAGS="-U_FORTIFY_SOURCE -fno-stack-protector"
 	econf
 }

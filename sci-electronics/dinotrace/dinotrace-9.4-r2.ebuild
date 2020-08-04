@@ -3,7 +3,7 @@
 EAPI=4
 inherit multilib elisp-common
 
-MY_P="${P}"e
+MY_P="${P}"f
 DESCRIPTION="X11 waveform viewer"
 HOMEPAGE="https://www.veripool.org/wiki/dinotrace"
 SRC_URI="http://www.veripool.org/ftp/${MY_P}.tgz"
