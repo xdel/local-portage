@@ -66,6 +66,8 @@ PATCHES=(
 	# Another compatibility patch from launchpad bug 1075399
 	"${FILESDIR}"/${PN}-1.7.3-bitrate-property.patch
 	"${FILESDIR}"/${PN}-fix-ncurses.patch
+	# Fix autoconnect with active window
+	"${FILESDIR}"/fix-833929-no-autoconnect-when-GUI-is-open.patch
 )
 
 src_prepare() {
