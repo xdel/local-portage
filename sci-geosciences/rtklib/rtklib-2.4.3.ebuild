@@ -44,6 +44,7 @@ src_compile() {
 
 src_install() {
 	# emake INSTALL_ROOT="${D}" install
+	dodoc -r doc/
 	exeinto /usr/bin
 	for i in pos2kml str2str rnx2rtkp convbin rtkrcv
 		do doexe ./app/${i}/gcc/${i}
