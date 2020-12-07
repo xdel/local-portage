@@ -1,0 +1,96 @@
+--- a/lib/access_code_prefixer.cc
++++ b/lib/access_code_prefixer.cc
+@@ -35,7 +35,7 @@
+ 	    message_port_register_out(pmt::mp("out"));
+ 
+ 	    message_port_register_in(pmt::mp("in"));
+-	    set_msg_handler(pmt::mp("in"), boost::bind(&access_code_prefixer_impl::make_frame, this, _1));
++	    set_msg_handler(pmt::mp("in"), boost::bind(&access_code_prefixer_impl::make_frame, this, boost::placeholders::_1));
+ 	    buf[0] = pad & 0xFF;
+ 
+ 	    for(int i = 4; i > 0; i--) {
+--- a/lib/mac.cc
++++ b/lib/mac.cc
+@@ -43,9 +43,9 @@
+ 	d_num_packets_received(0) {
+ 
+ 	message_port_register_in(pmt::mp("app in"));
+-	set_msg_handler(pmt::mp("app in"), boost::bind(&mac_impl::app_in, this, _1));
++	set_msg_handler(pmt::mp("app in"), boost::bind(&mac_impl::app_in, this, boost::placeholders::_1));
+ 	message_port_register_in(pmt::mp("pdu in"));
+-	set_msg_handler(pmt::mp("pdu in"), boost::bind(&mac_impl::mac_in, this, _1));
++	set_msg_handler(pmt::mp("pdu in"), boost::bind(&mac_impl::mac_in, this, boost::placeholders::_1));
+ 
+ 	message_port_register_out(pmt::mp("app out"));
+ 	message_port_register_out(pmt::mp("pdu out"));
+--- a/lib/phr_prefixer_impl.cc
++++ b/lib/phr_prefixer_impl.cc
+@@ -53,7 +53,7 @@
+       // define message ports
+       message_port_register_out(pmt::mp("out"));
+       message_port_register_in(pmt::mp("in"));
+-      set_msg_handler(pmt::mp("in"), boost::bind(&phr_prefixer_impl::prefix_phr, this, _1));
++      set_msg_handler(pmt::mp("in"), boost::bind(&phr_prefixer_impl::prefix_phr, this, boost::placeholders::_1));
+     }
+ 
+     /*
+--- a/lib/phr_removal_impl.cc
++++ b/lib/phr_removal_impl.cc
+@@ -49,7 +49,7 @@
+       // define message ports
+       message_port_register_out(pmt::mp("out"));
+       message_port_register_in(pmt::mp("in"));
+-      set_msg_handler(pmt::mp("in"), boost::bind(&phr_removal_impl::remove_phr, this, _1));
++      set_msg_handler(pmt::mp("in"), boost::bind(&phr_removal_impl::remove_phr, this, boost::placeholders::_1));
+     }
+ 
+     /*
+--- a/lib/rime_stack.cc
++++ b/lib/rime_stack.cc
+@@ -55,7 +55,7 @@
+ 
+ 		message_port_register_in(mac_in);
+ 		set_msg_handler(mac_in, 
+-						boost::bind(&rime_stack_impl::unpack, this, _1));
++						boost::bind(&rime_stack_impl::unpack, this, boost::placeholders::_1));
+ 		message_port_register_out(mac_out);
+ 
+ 		//register broadcast message ports
+@@ -102,7 +102,7 @@
+ 				bc_connection *to_add = new bc_connection(this, channels[i],
+ 						inport, outport, d_rime_add);
+ 				set_msg_handler(inport,
+-						boost::bind(&bc_connection::pack, to_add, _1));
++						boost::bind(&bc_connection::pack, to_add, boost::placeholders::_1));
+ 				d_connections.push_back(to_add);
+ 				break;
+ 			}
+@@ -111,7 +111,7 @@
+ 				uc_connection *to_add = new uc_connection(this, channels[i],
+ 						inport, outport, d_rime_add);
+ 				set_msg_handler(inport,
+-						boost::bind(&uc_connection::pack, to_add, _1));
++						boost::bind(&uc_connection::pack, to_add, boost::placeholders::_1));
+ 				d_connections.push_back(to_add);
+ 				break;
+ 			}
+@@ -120,7 +120,7 @@
+ 				ruc_connection *to_add = new ruc_connection(this, channels[i],
+ 						inport, outport, d_rime_add);
+ 				set_msg_handler(inport,
+-						boost::bind(&ruc_connection::pack, to_add, _1));
++						boost::bind(&ruc_connection::pack, to_add, boost::placeholders::_1));
+ 				d_connections.push_back(to_add);
+ 				break;
+ 			}
+--- a/lib/zeropadding_b_impl.cc
++++ b/lib/zeropadding_b_impl.cc
+@@ -49,7 +49,7 @@
+ 
+       // define message port
+       message_port_register_in(pmt::mp("in"));
+-      set_msg_handler(pmt::mp("in"), boost::bind(&zeropadding_b_impl::pad_zeros, this, _1));      
++      set_msg_handler(pmt::mp("in"), boost::bind(&zeropadding_b_impl::pad_zeros, this, boost::placeholders::_1));      
+     }
+ 
+     /*

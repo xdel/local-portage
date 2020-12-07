@@ -25,6 +25,7 @@ RESTRICT="strip" # includes non-native binaries
 # libftd2xx is the default because it is reported to work better.
 DEPEND="dev-lang/jimtcl
 	dev-embedded/libjaylink
+	dev-libs/hidapi
 	usb? ( virtual/libusb )
 	presto? ( dev-embedded/libftd2xx )
 	ftd2xx? ( dev-embedded/libftd2xx )
@@ -55,7 +56,7 @@ src_configure() {
 			--enable-ft232r --enable-xds110 --enable-osbdm --enable-opendous \
 			--enable-aice --enable-armjtagew --enable-kitprog --enable-cmsis-dap \
 			--enable-openjtag --enable-jtag_vpi --enable-zy1000-master --enable-usb-blaster \
-			--enable-zy1000"
+			--disable-zy1000 --enable-xlnx-pcie-xvc"
 	fi
 
 	# add explicitely the path to libftd2xx

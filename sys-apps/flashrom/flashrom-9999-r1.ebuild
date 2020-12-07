@@ -25,7 +25,7 @@ atahpt +atapromise +atavia +buspirate_spi ch341a_spi dediprog +developerbox_spi 
 +drkaiser +dummy +ene_lpc +ft2232_spi +gfxnvidia +internal +it8212 +jlink_spi +linux_mtd
 +linux_spi +lspcon_i2c_spi +mec1308 +mstarddc_spi ni845x_spi +nic3com +nicintel
 +nicintel_eeprom +nicintel_spi +nicnatsemi +nicrealtek +ogp_spi +pickit2_spi +pony_spi
-+raiden +rayer_spi +realtek_mst_i2c_spi +satamv +satasii +serprog +stlinkv3_spi
++raiden_debug_spi +rayer_spi +realtek_mst_i2c_spi +satamv +satasii +serprog +stlinkv3_spi
 +usbblaster_spi"
 IUSE="${IUSE_PROGRAMMERS} +internal_dmi static tools +wiki"
 

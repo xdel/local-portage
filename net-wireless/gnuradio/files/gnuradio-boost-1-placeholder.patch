@@ -1,0 +1,11 @@
+--- a/gr-uhd/lib/usrp_block_impl.cc
++++ b/gr-uhd/lib/usrp_block_impl.cc
+@@ -263,7 +263,7 @@
+                 get_mboard_sensor_names(mboard_index),
+                 sensor_name,
+                 boost::bind(
+-                    &usrp_block_impl::get_mboard_sensor, this, _1, mboard_index))) {
++                    &usrp_block_impl::get_mboard_sensor, this, boost::placeholders::_1, mboard_index))) {
+             GR_LOG_WARN(
+                 d_logger,
+                 boost::format(

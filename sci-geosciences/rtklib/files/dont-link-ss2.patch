@@ -1,0 +1,10 @@
+--- a/src/src.pro
++++ b/src/src.pro
+@@ -58,7 +58,6 @@
+     rcv/rt17.c \
+     rcv/septentrio.c \
+     rcv/skytraq.c \
+-    rcv/ss2.c \
+     rcv/ublox.c \
+     rcv/tersus.c \
+     rcv/comnav.c \

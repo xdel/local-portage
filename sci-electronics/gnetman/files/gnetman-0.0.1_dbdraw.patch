@@ -1,0 +1,22 @@
+--- a/gnetman-0.0.1/src/batch/configure
++++ b/gnetman-0.0.1/src/batch/configure
+@@ -73,7 +73,7 @@
+ swig -tcl8 ../tcl/tclfunc.i
+ 
+ CFLAGS="-g -Wall -W -Wno-unused-parameter -Wno-unused-function -DDD_DEBUG -I../include -I../spice -I/usr/include/tcl8.4"
+-LIBS="-lpopt -ltcl8.4 -lddutil-dbg"
++LIBS="-lpopt -ltcl8.4 -lddutil"
+ 
+ echo "CC=$CC
+ CFLAGS=$CFLAGS
+--- a/gnetman-0.0.1/src/batch/configure.rdp
++++ b/gnetman-0.0.1/src/batch/configure.rdp
+@@ -73,7 +73,7 @@
+ ~/local/bin/swig -tcl8 ../tcl/tclfunc.i
+ 
+ CFLAGS="$CFLAGS -g -Wall -W -Wno-unused-parameter -Wno-unused-function -DDD_DEBUG -I../include -I../spice -I/usr/include/tcl8.3 -I/home/rdp/local/include"
+-LIBS="-L/home/rdp/local/lib -lpopt -ltcl8.3 -lddutil-dbg"
++LIBS="-L/home/rdp/local/lib -lpopt -ltcl8.3 -lddutil"
+ 
+ echo "CC=$CC
+ CFLAGS=$CFLAGS
