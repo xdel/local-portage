@@ -2,8 +2,9 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=5
-inherit base eutils git-r3
+EAPI=6
+
+inherit eutils git-r3
 
 LICENSE="OWPL-1"
 DESCRIPTION="The Open Watcom compiler"
@@ -43,5 +44,5 @@ src_install() {
 		INCLUDE=${INSTALL_DIR}/lh
 		PATH=${INSTALL_DIR}/binl
 	EOF
-	doenvd ${env_file} || die "doenvd ${env_file} failed"
+	# doenvd ${env_file} || die "doenvd ${env_file} failed"
 }

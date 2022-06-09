@@ -1,7 +1,8 @@
 # Copyright 1999-2017 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=6
+EAPI=7
+WX_GTK_VER="3.0"
 
 inherit autotools git-r3 wxwidgets
 
@@ -35,7 +36,6 @@ DEPEND="dev-lang/lua:0
 RDEPEND="${DEPEND}"
 
 S="${WORKDIR}/${P}/client_generic"
-WX_GTK_VER=3.0
 
 src_prepare() {
 	default

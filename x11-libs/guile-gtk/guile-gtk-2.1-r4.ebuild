@@ -1,12 +1,12 @@
 # Copyright 1999-2016 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=6
 
 AUTOTOOLS_AUTORECONF=true
 WANT_AUTOMAKE=1.9
 
-inherit autotools-utils virtualx
+inherit autotools virtualx
 
 DESCRIPTION="GTK+ bindings for guile"
 HOMEPAGE="https://www.gnu.org/software/guile-gtk/"
@@ -35,7 +35,11 @@ PATCHES=(
 
 src_prepare() {
 	sed -i 's/AM_CONFIG_HEADER/AC_CONFIG_HEADERS/g' configure.ac || die
-	autotools-utils_src_prepare
+	default
+}
+
+src_configure() {
+	eautoreconf
 }
 
 src_test() {
@@ -44,7 +48,7 @@ src_test() {
 }
 
 src_install() {
-	autotools-utils_src_install
+	default
 	insinto /usr/share/doc/${PF}/
 	doins -r examples
 }

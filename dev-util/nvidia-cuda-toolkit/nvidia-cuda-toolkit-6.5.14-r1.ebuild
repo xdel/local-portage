@@ -1,11 +1,11 @@
 # Copyright 1999-2015 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=7
 
-inherit check-reqs cuda unpacker versionator eutils
+inherit check-reqs cuda unpacker eutils
 
-MYD=$(get_version_component_range 1)_$(get_version_component_range 2)
+MYD=$(ver_cut 1)_$(ver_cut 2)
 
 DESCRIPTION="NVIDIA CUDA Toolkit (compiler and friends)"
 HOMEPAGE="http://developer.nvidia.com/cuda"
@@ -63,7 +63,9 @@ src_prepare() {
 	sed \
 		-e "s:CUDA_SUPPORTED_GCC:${cuda_supported_gcc}:g" \
 		"${FILESDIR}"/cuda-config.in > "${T}"/cuda-config || die
-	epatch "${FILESDIR}"/glibc-2.26.patch
+	cd ${WORKDIR}
+	eapply "${FILESDIR}"/glibc-2.26.patch
+	eapply_user
 }
 
 src_install() {

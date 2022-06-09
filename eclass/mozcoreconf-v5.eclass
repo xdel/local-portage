@@ -1,4 +1,4 @@
-# Copyright 1999-2017 Gentoo Foundation
+# Copyright 1999-2021 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 #
 # @ECLASS: mozcoreconf-v5.eclass
@@ -17,7 +17,7 @@
 if [[ ! ${_MOZCORECONF} ]]; then
 
 PYTHON_COMPAT=( python2_7 )
-PYTHON_REQ_USE='ncurses,sqlite,ssl,threads'
+PYTHON_REQ_USE='ncurses,sqlite,ssl,threads(+)'
 
 inherit multilib toolchain-funcs flag-o-matic python-any-r1 versionator
 
@@ -124,6 +124,7 @@ mozconfig_init() {
 	declare FF=$([[ ${PN} == firefox ]] && echo true || echo false)
 	declare SM=$([[ ${PN} == seamonkey ]] && echo true || echo false)
 	declare TB=$([[ ${PN} == thunderbird ]] && echo true || echo false)
+	declare WF=$([[ ${PN} == waterfox* ]] && echo true || echo false)
 
 	####################################
 	#
@@ -136,7 +137,7 @@ mozconfig_init() {
 		*xulrunner)
 			cp xulrunner/config/mozconfig .mozconfig \
 				|| die "cp xulrunner/config/mozconfig failed" ;;
-		*firefox)
+		*firefox|waterfox*)
 			cp browser/config/mozconfig .mozconfig \
 				|| die "cp browser/config/mozconfig failed" ;;
 		seamonkey)

@@ -1,0 +1,100 @@
+#!/bin/bash
+#
+# NAME
+#     ijupdate - Checks for new available ImageJ and instructs update.
+#
+# SYNOPSIS
+#     ijupdate option1 [option2] [option3]
+#
+# DESCRIPTION
+#     This script expects at least one switch, or does nothing.
+#     --ignore (-i) --help (-h) --version (-V) are allowed.
+
+declare -r SCRIPT=${0##*/}
+declare -r VER="0.2"
+declare -r TMP="/tmp"
+ignore=0
+
+# ! FIXME: Check to see if eix package exists, since this script 
+#          depends on it to query the ImageJ version
+#
+# + FIXME: Add pretty colors to output
+
+function help {
+    printf "%s\n\n%s\n%s\n%s\n%s\n" "usage: $SCRIPT <options>" \
+        "options: -[i:hV]" "-i, --ignore (sync)" "-h, --help" "-V, --version"
+}
+declare -r help
+
+function sync {
+    # Create index.html of available source tarballs
+    rm $TMP/index.html
+    wget -P $TMP \
+        http://rsb.info.nih.gov/ij/download/src/
+}
+declare -r sync
+
+# Process the parameters
+#
+while [ $# -gt 0 ] ; do
+    case "$1" in
+    -h | --help)
+        help
+        exit 0
+        ;;
+    -V | --version)
+        printf "%s\n" "$SCRIPT $VER"
+        exit 0
+        ;;
+    -i | --ignore)
+        printf "%s\n%s\n\n" "! Not fetching list of ImageJ versions from:" \
+            "http://rsb.info.nih.gov/ij/download/src/"
+        ignore=1
+        ;;
+    -*) printf "$SCRIPT:$LINENO: %s\n\n" "switch $1 not supported" >&2
+        help
+        exit 192
+        ;;
+    * ) printf "$SCRIPT:$LINENO: %s\n\n" "extra argument or missing switch" >&2
+        help
+        exit 192
+        ;;
+    esac
+    shift
+done
+
+if [ $ignore == 0 ]; then
+    # Fetch available ImageJ versions
+    sync
+fi
+
+# Detect installed version of ImageJ
+i=`eix -*c imagej | cut -b26-30 | sed 's/\@//'`
+
+# List versions of tarballs
+list=`grep -o \>ij.*-src.zip $TMP/index.html | \
+    sed -e 's/>ij//' -e 's/-src.zip//' -e 's/\([0-9]\)\(.*\)/\1.\2/'`
+
+# Show installed        
+printf "%s\n" "ImageJ tarballs available:"
+if [ -z $i ]; then
+    printf "%s\n" $list
+    printf "\n%s\n%s\n%s\n" "No imagej ebuild found using 'eix'" \
+        "Please get it from:" "http://bugs.gentoo.org/112275" \
+        "Or maybe you need to run update-eix"
+else
+    echo $list | grep --color $i
+    latest=`printf "%s\n" $list | tail --bytes=6 | sed s/' '//`
+    if [ "$latest" == "$i" ]; then
+        printf "\n%s\n" "Already up to date"
+    else
+        printf "\n%s\n\n%s\n%s\n%s\n\n%s\n" \
+            "You can create the $latest ebuild by running:" \
+            "  cd /usr/local/portage/sci-misc/imagej/" \
+            "  cp imagej-$i.ebuild imagej-$latest.ebuild" \
+            "  ebuild imagej-$latest.ebuild manifest" \
+            "Then use your favorite command to install"
+    fi
+fi
+
+exit 0

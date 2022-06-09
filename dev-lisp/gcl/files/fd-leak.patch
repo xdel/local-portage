@@ -1,0 +1,25 @@
+commit 9857e82ddfa35233eae73a3431b9a921ba898f48
+Author: Petr Zima <zima@matfyz.cz>
+Date:   Thu Apr 2 12:23:39 2020 +0200
+
+    fd-leak.patch
+
+diff --git a/gcl/o/run_process.c b/gcl/o/run_process.c
+index 6c4243dc6..8b65f4613 100755
+--- a/gcl/o/run_process.c
++++ b/gcl/o/run_process.c
+@@ -540,10 +540,10 @@ char **argv;
+   fdout = ostream->sm.sm_int;
+   if (pfork() == 0)
+     { /* the child --- replace standard in and out with descriptors given */
+-      close(0);
+-      massert(dup(fdin)>=0);
+-      close(1);
+-      massert(dup(fdout)>=0);
++      massert(dup2(fdin, 0)>=0);
++      massert(dup2(fdout, 1)>=0);
++      close(fdin);
++      close(fdout);
+       emsg("\n***** Spawning process %s ", pname);
+       if (execvp(pname, argv) == -1)
+ 	{

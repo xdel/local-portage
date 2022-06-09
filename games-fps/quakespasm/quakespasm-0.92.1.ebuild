@@ -2,9 +2,9 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI="2"
+EAPI="6"
 
-inherit games
+inherit eutils
 
 DESCRIPTION="A *nix firendly FitzQuake with new features"
 HOMEPAGE="http://quakespasm.sourceforge.net/"

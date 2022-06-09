@@ -1,0 +1,24 @@
+
+# HG changeset patch
+# User Petr Sumbera <petr.sumbera@oracle.com>
+# Date 1613033839 0
+# Node ID 8edb010df11ba151179bed0e6acfcd4f23162205
+# Parent  c138550a43f9e6558fb087b293012d930a35d3c1
+Bug 1497581 - Avoid debug assertion with --disable-updater r=zbraniecki DONTBUILD
+
+Differential Revision: https://phabricator.services.mozilla.com/D104655
+
+diff --git a/intl/locale/LocaleService.cpp b/intl/locale/LocaleService.cpp
+--- a/intl/locale/LocaleService.cpp
++++ b/intl/locale/LocaleService.cpp
+@@ -523,8 +523,10 @@
+   nsAutoCString localesString;
+   if (GetGREFileContents("res/multilocale.txt", &localesString)) {
+     localesString.Trim(" \t\n\r");
++#ifdef MOZ_UPDATER
+     // This should never be empty in a correctly-built product.
+     MOZ_ASSERT(!localesString.IsEmpty());
++#endif
+     SplitLocaleListStringIntoArray(localesString, mPackagedLocales);
+   }
+ 

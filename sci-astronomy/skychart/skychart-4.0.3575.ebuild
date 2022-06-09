@@ -44,7 +44,7 @@ CDEPEND="x11-libs/gtk+:2
 	x11-libs/libX11"
 RDEPEND="${CDEPEND}
 	x11-misc/xplanet
-	sci-astronomy/libpasastro"
+	sci-libs/libpasastro"
 DEPEND="${CDEPEND}
 	<dev-lang/lazarus-1.8.0
 	>=dev-lang/fpc-2.6.0"

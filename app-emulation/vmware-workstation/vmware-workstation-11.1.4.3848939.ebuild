@@ -1,9 +1,9 @@
 # Copyright 1999-2017 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=6
 
-inherit eutils versionator readme.gentoo fdo-mime systemd gnome2-utils pam vmware-bundle
+inherit eutils versionator readme.gentoo-r1 fdo-mime systemd gnome2-utils pam vmware-bundle
 
 MY_PN="VMware-Workstation"
 MY_PV=$(get_version_component_range 1-3)

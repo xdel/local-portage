@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=5
+EAPI=6
 
 ESVN_REPO_URI="http://src.chromium.org/svn/trunk/tools/depot_tools"
 PYTHON_COMPAT=( python2_7 )

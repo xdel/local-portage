@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=4
+EAPI=6
 inherit eutils
 DESCRIPTION="Simple disk I/0 latency measuring tool"
 HOMEPAGE="https://github.com/koct9i/ioping"

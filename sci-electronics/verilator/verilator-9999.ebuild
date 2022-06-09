@@ -1,6 +1,6 @@
 # Distributed under the terms of the GNU General Public License v2+
 
-EAPI=4
+EAPI=6
 inherit autotools multilib git-r3
 
 EGIT_REPO_URI="http://git.veripool.org/git/verilator"

@@ -1,11 +1,11 @@
 # Copyright 1999-2017 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=6
+EAPI=7
 
-inherit cuda eutils flag-o-matic portability toolchain-funcs unpacker versionator
+inherit cuda eutils flag-o-matic portability toolchain-funcs unpacker
 
-MYD=$(get_version_component_range 1)_$(get_version_component_range 2)
+MYD=$(ver_rs 1)_$(ver_rs 2)
 
 DESCRIPTION="NVIDIA CUDA Software Development Kit"
 HOMEPAGE="http://developer.nvidia.com/cuda"

@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=4
+EAPI=6
 
 inherit git-r3 autotools eutils
 
@@ -16,8 +16,8 @@ KEYWORDS="~amd64 ~x86"
 IUSE="+libtirpc"
 
 RDEPEND="
-    libtirpc? ( net-libs/libtirpc )
-    !libtirpc? ( elibc_glibc? ( sys-libs/glibc[rpc(-)] ) )
+	libtirpc? ( net-libs/libtirpc )
+	!libtirpc? ( elibc_glibc? ( sys-libs/glibc[rpc(-)] ) )
 "
 
 
@@ -26,6 +26,7 @@ CFLAGS="${CFLAGS} -fPIC"
 src_prepare() {
 	epatch "${FILESDIR}/glibc-2.26.patch"
 	eautoreconf || die "autoreconf failed"
+	default
 }
 
 src_configure() {

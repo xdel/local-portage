@@ -3,7 +3,8 @@
 
 EAPI="6"
 
-PYTHON_COMPAT=( python3_{4,5,6,7} )
+PYTHON_COMPAT=( python3_8 python3_9 )
+
 inherit eutils git-r3 python-any-r1
 
 ABCREV="3709744c60696c5e3f4cc123939921ce8107fe04"

@@ -24,7 +24,6 @@ src_prepare(){
 	epatch "${FILESDIR}"/${P}-gcc34.patch \
 		"${FILESDIR}"/${P}-gcc4.patch \
 		"${FILESDIR}"/${P}-gcc43.patch
-	eautoreconf
 }
 
 src_configure() {

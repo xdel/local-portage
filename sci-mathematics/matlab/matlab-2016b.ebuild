@@ -2,7 +2,7 @@
 # Distributed under the terms of the ISC licence
 # $Header: $
 
-EAPI=5
+EAPI=6
 
 inherit cdrom
 

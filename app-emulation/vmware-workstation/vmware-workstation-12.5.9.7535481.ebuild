@@ -1,7 +1,7 @@
 # Copyright 1999-2017 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=6
 
 inherit eutils versionator readme.gentoo-r1 fdo-mime gnome2-utils pam systemd vmware-bundle
 
@@ -237,6 +237,7 @@ Before you can use ${PN}, you must configure a default network setup.
 You can do this by running 'emerge --config ${PN}'.\n
 To be able to run ${PN} your user must be in the vmware group.\n
 "
+	default
 }
 
 src_install() {

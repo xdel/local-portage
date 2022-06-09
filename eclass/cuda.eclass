@@ -1,11 +1,11 @@
-# Copyright 1999-2016 Gentoo Foundation
+# Copyright 1999-2021 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 case "${EAPI:-0}" in
-	0|1|2|3|4)
+	[0-6])
 		die "Unsupported EAPI=${EAPI:-0} (too old) for ${ECLASS}"
 		;;
-	5|6|7)
+	7|8)
 		;;
 	*)
 		die "Unsupported EAPI=${EAPI} (unknown) for ${ECLASS}"
@@ -14,8 +14,8 @@ esac
 
 # @ECLASS: cuda.eclass
 # @MAINTAINER:
-# Justin Lecher <jlec@gentoo.org>
-# @SUPPORTED_EAPIS: 5 6 7
+# Gentoo Science Project <sci@gentoo.org>
+# @SUPPORTED_EAPIS: 7 8
 # @BLURB: Common functions for cuda packages
 # @DESCRIPTION:
 # This eclass contains functions to be used with cuda package. Currently it is

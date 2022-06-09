@@ -1,4 +1,4 @@
-# Copyright 1999-2016 Gentoo Foundation
+# Copyright 1999-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: mate.eclass
@@ -7,7 +7,7 @@
 # @AUTHOR:
 # Authors: NP-Hardass <NP-Hardass@gentoo.org> based upon the gnome2
 # and autotools-utils eclasses
-# @SUPPORTED_EAPIS: 6
+# @SUPPORTED_EAPIS: 6 7
 # @BLURB: Provides phases for MATE based packages.
 # @DESCRIPTION:
 # Exports portage base functions used by ebuilds written for packages using the
@@ -16,7 +16,7 @@
 
 # Check EAPI only
 case "${EAPI:-0}" in
-	6) ;;
+	6|7) ;;
 	*) die "EAPI=${EAPI:-0} is not supported" ;;
 esac
 
@@ -26,15 +26,20 @@ esac
 # @DESCRIPTION:
 # Available values for MATE_LA_PUNT:
 # - "no": will not clean any .la files
+# - In EAPI < 7:
 # - "yes": will run prune_libtool_files --modules
 # - If it is not set, it will run prune_libtool_files
+# - In EAPI 7:
+# - Any non-"no" value will run
+#	find "${ED}" -name '*.la' -delete || die
 # MATE_LA_PUNT is a stub to GNOME2_LA_PUNT
-GNOME2_LA_PUNT=${MATE_LA_PUNT:-""}
+MATE_LA_PUNT=${MATE_LA_PUNT:-""}
+GNOME2_LA_PUNT="${MATE_LA_PUNT}"
 
 inherit gnome2 autotools mate-desktop.org
 
 case "${EAPI:-0}" in
-	6) EXPORT_FUNCTIONS src_prepare src_configure src_install pkg_preinst pkg_postinst pkg_postrm ;;
+	6|7) EXPORT_FUNCTIONS src_prepare src_configure src_install pkg_preinst pkg_postinst pkg_postrm ;;
 	*) die "EAPI=${EAPI:-0} is not supported" ;;
 esac
 
@@ -115,7 +120,17 @@ mate_src_prepare() {
 # MATE specific configure handling
 # Stub to gnome2_src_configure()
 mate_src_configure() {
-	gnome2_src_configure "$@"
+
+	local mateconf=()
+
+	# Pass --disable-static whenever possible
+	if ! in_iuse static-libs || ! use static-libs; then
+		if grep -q "enable-static" "${ECONF_SOURCE:-.}"/configure; then
+			mateconf+=( --disable-static )
+		fi
+	fi
+
+	gnome2_src_configure "${mateconf[@]}" "$@"
 }
 
 # @FUNCTION: mate_src_install

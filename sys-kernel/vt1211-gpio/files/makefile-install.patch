@@ -1,0 +1,28 @@
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,10 @@
+-CURRENT = $(shell uname -r)
+-KDIR = /lib/modules/$(CURRENT)/build
+-PWD = $(shell pwd)
+-DEST = /lib/modules/$(CURRENT)/misc
++KVER	?= $(shell uname -r)
++KBASE	?= /lib/modules/$(KVER)
++KSRC	?= $(KBASE)/source
++KBUILD	?= $(KBASE)/build
++MOD_DIR	?= $(KBASE)/kernel
++PWD	:= $(shell pwd)
++DEST = /lib/modules/$(KVER)/misc
+ TARGET = vt1211_gpio
+ 
+ ccflags-y := -std=gnu99 -Wno-declaration-after-statement
+@@ -10,7 +13,9 @@
+ obj-m := $(TARGET).o
+ 
+ default:
+-	$(MAKE) -C $(KDIR) M=$(PWD) modules
++	$(MAKE) -C $(KBUILD) M=$(PWD) O=$(KBUILD) modules
++install:
++	$(MAKE) -C $(KBUILD) M=$(PWD) O=$(KBUILD) modules_install
+ clean:
+ 	@rm -f *.o .*.cmd .*.flags *.mod.c *.order
+ 	@rm -f .*.*.cmd *.symvers *~ *.*~ TODO.*

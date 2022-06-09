@@ -1,8 +1,8 @@
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI="5"
+EAPI="6"
 
-PYTHON_COMPAT=( python3_{5,6,7} pypy3 )
+PYTHON_COMPAT=( python3_{8,9,10} pypy3 )
 
 inherit eutils distutils-r1
 
@@ -22,8 +22,7 @@ IUSE=""
 DEPEND="dev-python/setuptools[${PYTHON_USEDEP}]"
 RDEPEND="${DEPEND}
 	dev-python/pyflakes
-	dev-python/virtualenv
-	>=dev-python/pep8-1.5.7"
+	dev-python/virtualenv"
 
 python_install_all() {
 	cp -a "${FILESDIR}"/rompar.pdf "${S}"

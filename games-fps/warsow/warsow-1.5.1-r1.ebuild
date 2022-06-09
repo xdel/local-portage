@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Id$
 
-EAPI=5
+EAPI=6
 inherit eutils check-reqs gnome2-utils flag-o-matic toolchain-funcs
 
 # BASE_DATA_PV=1.0

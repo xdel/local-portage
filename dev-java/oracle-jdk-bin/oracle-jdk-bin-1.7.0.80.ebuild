@@ -37,7 +37,7 @@ SRC_URI+=" jce? ( ${JCE_FILE} )"
 
 LICENSE="Oracle-BCLA-JavaSE examples? ( BSD )"
 SLOT="1.7"
-KEYWORDS="~amd64 ~x86 ~amd64-linux ~x86-linux ~x64-macos ~x86-macos ~sparc-solaris ~sparc64-solaris ~x64-solaris ~x86-solaris"
+KEYWORDS="~amd64 ~x86"
 IUSE="+X alsa aqua derby doc examples +fontconfig jce nsplugin pax_kernel selinux source"
 
 RESTRICT="strip"
@@ -104,30 +104,7 @@ pkg_nofetch() {
 }
 
 src_unpack() {
-	# Special case for ARM soft VS hard float.
-	if use arm ; then
-		if [[ ${CHOST} == *-hardfloat-* ]] ; then
-			unpack jdk-${MY_PV}-linux-arm-vfp-hflt.tar.gz
-			use examples && unpack jdk-${MY_PV}-linux-arm-vfp-hflt-demos.tar.gz
-		else
-			unpack jdk-${MY_PV}-linux-arm-vfp-sflt.tar.gz
-			use examples && unpack jdk-${MY_PV}-linux-arm-vfp-sflt-demos.tar.gz
-		fi
-		use examples && unpack javafx_samples-${FX_VERSION}-linux.zip
-		use jce && unpack ${JCE_FILE}
-	elif use x86-macos || use x64-macos ; then
-		pushd "${T}" > /dev/null
-		mkdir dmgmount
-		hdiutil attach "${DISTDIR}"/jdk-${MY_PV}-macosx-x64.dmg \
-			-mountpoint "${T}"/dmgmount
-		xar -xf dmgmount/JDK\ $(get_version_component_range 2)\ Update\ $(get_version_component_range 4).pkg
-		hdiutil detach "${T}"/dmgmount
-		zcat jdk1${MY_PV/u/0}.pkg/Payload | cpio -idv
-		mv Contents/Home "${S}"
-		popd > /dev/null
-	else
-		default
-	fi
+	default
 }
 
 src_prepare() {
@@ -190,7 +167,6 @@ src_install() {
 		cp -p src.zip "${ddest}" || die
 	fi
 
-	if use !arm && use !x86-macos && use !x64-macos ; then
 		# Install desktop file for the Java Control Panel.
 		# Using ${PN}-${SLOT} to prevent file collision with jre and or
 		# other slots.  make_desktop_entry can't be used as ${P} would
@@ -205,7 +181,6 @@ src_install() {
 			jre/lib/desktop/applications/sun_java.desktop \
 			> "${T}"/jcontrol-${PN}-${SLOT}.desktop || die
 		domenu "${T}"/jcontrol-${PN}-${SLOT}.desktop
-	fi
 
 	# Prune all fontconfig files so libfontconfig will be used and only install
 	# a Gentoo specific one if fontconfig is disabled.
@@ -240,32 +215,6 @@ src_install() {
 
 	# Remove empty dirs we might have copied
 	find "${D}" -type d -empty -exec rmdir -v {} + || die
-
-	if use x86-macos || use x64-macos ; then
-		# fix misc install_name issues
-		pushd "${ddest}"/jre/lib > /dev/null || die
-		local lib needed nlib npath
-		for lib in \
-				libJObjC libdecora-sse libglass libjavafx-{font,iio} \
-				libjfxmedia libjfxwebkit libprism-es2 ;
-		do
-			lib=${lib}.dylib
-			einfo "Fixing self-reference of ${lib}"
-			install_name_tool \
-				-id "${EPREFIX}${dest}/jre/lib/${lib}" \
-				"${lib}"
-		done
-		popd > /dev/null
-		for nlib in jdk1{5,6} ; do
-			install_name_tool -change \
-				/usr/lib/libgcc_s_ppc64.1.dylib \
-				/usr/lib/libSystem.B.dylib \
-				"${ddest}"/lib/visualvm/profiler/lib/deployed/${nlib}/mac/libprofilerinterface.jnilib
-			install_name_tool -id \
-				"${EPREFIX}${dest}"/lib/visualvm/profiler/lib/deployed/${nlib}/mac/libprofilerinterface.jnilib \
-				"${ddest}"/lib/visualvm/profiler/lib/deployed/${nlib}/mac/libprofilerinterface.jnilib
-		done
-	fi
 
 	set_java_env
 	java-vm_revdep-mask

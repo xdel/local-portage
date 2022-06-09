@@ -2,9 +2,9 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Id$
 
-EAPI=5
+EAPI=6
 
-PYTHON_COMPAT=( python3_6 )
+PYTHON_COMPAT=( python3_8 python3_9 )
 
 inherit cmake-utils python-single-r1
 
@@ -39,9 +39,10 @@ CMAKE_USE_DIR="${S}/src"
 
 src_configure() {
 	epatch "${FILESDIR}/add-missing-lib-prefix.patch"
+	epatch "${FILESDIR}/rexgen-static.patch"
 	local mycmakeargs=(
-		$(cmake-utils_use python USE_PYTHON)
-		$(cmake-utils_use lua USE_LUA)
+		-DUSE_PYTHON=$(usex python)
+		-DUSE_LUA=$(usex lua)
 	)
 	cmake-utils_src_configure
 }

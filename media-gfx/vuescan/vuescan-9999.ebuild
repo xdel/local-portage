@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI="2"
+EAPI="6"
 inherit eutils
 
 DESCRIPTION="A high-quality scanning and digital camera raw image processing software."
@@ -22,12 +22,12 @@ DEPEND=""
 RDEPEND=">=x11-libs/gtk+-2.0
 		media-gfx/sane-backends
 	x86? ( dev-libs/libusb
-	      || ( sys-libs/libstdc++-v3 =sys-devel/gcc-3.3* ) )
+		|| ( sys-libs/libstdc++-v3 =sys-devel/gcc-3.3* ) )
 
 	amd64? ( app-emulation/emul-linux-x86-baselibs
-		 app-emulation/emul-linux-x86-compat
-		 app-emulation/emul-linux-x86-xlibs
-		 app-emulation/emul-linux-x86-gtklibs )"
+		app-emulation/emul-linux-x86-compat
+		app-emulation/emul-linux-x86-xlibs
+		app-emulation/emul-linux-x86-gtklibs )"
 
 src_unpack() {
 	# FIXME use the common DISTDIR pathway

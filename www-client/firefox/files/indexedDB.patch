@@ -1,0 +1,858 @@
+diff -ru a/dom/indexedDB/ActorsChild.h b/dom/indexedDB/ActorsChild.h
+--- a/dom/indexedDB/ActorsChild.h	2020-08-17 21:26:23.000000000 +0300
++++ b/dom/indexedDB/ActorsChild.h	2021-10-29 20:47:31.181960366 +0300
+@@ -97,7 +97,7 @@
+     MOZ_ASSERT(mLoggingInfo.nextVersionChangeTransactionSerialNumber() >
+                INT64_MIN);
+ 
+-    if (aMode == IDBTransaction::VERSION_CHANGE) {
++    if (aMode == IDBTransaction::Mode::VersionChange) {
+       return mLoggingInfo.nextVersionChangeTransactionSerialNumber()--;
+     }
+ 
+diff -ru a/dom/indexedDB/ActorsParent.cpp b/dom/indexedDB/ActorsParent.cpp
+--- a/dom/indexedDB/ActorsParent.cpp	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/indexedDB/ActorsParent.cpp	2021-10-29 20:47:43.295395510 +0300
+@@ -7767,7 +7767,7 @@
+     MOZ_ASSERT(mLoggingInfo.nextVersionChangeTransactionSerialNumber() >
+                INT64_MIN);
+ 
+-    if (aMode == IDBTransaction::VERSION_CHANGE) {
++    if (aMode == IDBTransaction::Mode::VersionChange) {
+       return mLoggingInfo.nextVersionChangeTransactionSerialNumber()--;
+     }
+ 
+@@ -10068,11 +10068,11 @@
+   if (mConnection) {
+     mConnection->AssertIsOnConnectionThread();
+     MOZ_ASSERT(mDEBUGTransaction);
+-    MOZ_ASSERT(mDEBUGTransaction->GetMode() == IDBTransaction::READ_WRITE ||
++    MOZ_ASSERT(mDEBUGTransaction->GetMode() == IDBTransaction::Mode::ReadWrite ||
+                mDEBUGTransaction->GetMode() ==
+-                   IDBTransaction::READ_WRITE_FLUSH ||
+-               mDEBUGTransaction->GetMode() == IDBTransaction::CLEANUP ||
+-               mDEBUGTransaction->GetMode() == IDBTransaction::VERSION_CHANGE);
++                   IDBTransaction::Mode::ReadWriteFlush ||
++               mDEBUGTransaction->GetMode() == IDBTransaction::Mode::Cleanup ||
++               mDEBUGTransaction->GetMode() == IDBTransaction::Mode::VersionChange);
+ 
+     if (NS_FAILED(mConnection->RollbackSavepoint())) {
+       NS_WARNING("Failed to rollback savepoint!");
+@@ -10083,10 +10083,10 @@
+ nsresult DatabaseConnection::AutoSavepoint::Start(
+     const TransactionBase* aTransaction) {
+   MOZ_ASSERT(aTransaction);
+-  MOZ_ASSERT(aTransaction->GetMode() == IDBTransaction::READ_WRITE ||
+-             aTransaction->GetMode() == IDBTransaction::READ_WRITE_FLUSH ||
+-             aTransaction->GetMode() == IDBTransaction::CLEANUP ||
+-             aTransaction->GetMode() == IDBTransaction::VERSION_CHANGE);
++  MOZ_ASSERT(aTransaction->GetMode() == IDBTransaction::Mode::ReadWrite ||
++             aTransaction->GetMode() == IDBTransaction::Mode::ReadWriteFlush ||
++             aTransaction->GetMode() == IDBTransaction::Mode::Cleanup ||
++             aTransaction->GetMode() == IDBTransaction::Mode::VersionChange);
+ 
+   DatabaseConnection* connection = aTransaction->GetDatabase()->GetConnection();
+   MOZ_ASSERT(connection);
+@@ -12944,19 +12944,19 @@
+     return nullptr;
+   }
+ 
+-  if (NS_WARN_IF(aMode != IDBTransaction::READ_ONLY &&
+-                 aMode != IDBTransaction::READ_WRITE &&
+-                 aMode != IDBTransaction::READ_WRITE_FLUSH &&
+-                 aMode != IDBTransaction::CLEANUP)) {
++  if (NS_WARN_IF(aMode != IDBTransaction::Mode::ReadOnly &&
++                 aMode != IDBTransaction::Mode::ReadWrite &&
++                 aMode != IDBTransaction::Mode::ReadWriteFlush &&
++                 aMode != IDBTransaction::Mode::Cleanup)) {
+     ASSERT_UNLESS_FUZZING();
+     return nullptr;
+   }
+ 
+   // If this is a readwrite transaction to a chrome database make sure the child
+   // has write access.
+-  if (NS_WARN_IF((aMode == IDBTransaction::READ_WRITE ||
+-                  aMode == IDBTransaction::READ_WRITE_FLUSH ||
+-                  aMode == IDBTransaction::CLEANUP) &&
++  if (NS_WARN_IF((aMode == IDBTransaction::Mode::ReadWrite ||
++                  aMode == IDBTransaction::Mode::ReadWriteFlush ||
++                  aMode == IDBTransaction::Mode::Cleanup) &&
+                  mPrincipalInfo.type() == PrincipalInfo::TSystemPrincipalInfo &&
+                  !mChromeWriteAccessAllowed)) {
+     return nullptr;
+@@ -13016,10 +13016,10 @@
+   AssertIsOnBackgroundThread();
+   MOZ_ASSERT(aActor);
+   MOZ_ASSERT(!aObjectStoreNames.IsEmpty());
+-  MOZ_ASSERT(aMode == IDBTransaction::READ_ONLY ||
+-             aMode == IDBTransaction::READ_WRITE ||
+-             aMode == IDBTransaction::READ_WRITE_FLUSH ||
+-             aMode == IDBTransaction::CLEANUP);
++  MOZ_ASSERT(aMode == IDBTransaction::Mode::ReadOnly ||
++             aMode == IDBTransaction::Mode::ReadWrite ||
++             aMode == IDBTransaction::Mode::ReadWriteFlush ||
++             aMode == IDBTransaction::Mode::Cleanup);
+   MOZ_ASSERT(!mClosed);
+ 
+   if (IsInvalidated()) {
+@@ -13039,7 +13039,7 @@
+   uint64_t transactionId = startOp->StartOnConnectionPool(
+       GetLoggingInfo()->Id(), mMetadata->mDatabaseId,
+       transaction->LoggingSerialNumber(), aObjectStoreNames,
+-      aMode != IDBTransaction::READ_ONLY);
++      aMode != IDBTransaction::Mode::ReadOnly);
+ 
+   transaction->SetActive(transactionId);
+ 
+@@ -13161,14 +13161,14 @@
+ 
+   Transaction()->SetActiveOnConnectionThread();
+ 
+-  if (Transaction()->GetMode() == IDBTransaction::CLEANUP) {
++  if (Transaction()->GetMode() == IDBTransaction::Mode::Cleanup) {
+     nsresult rv = aConnection->DisableQuotaChecks();
+     if (NS_WARN_IF(NS_FAILED(rv))) {
+       return rv;
+     }
+   }
+ 
+-  if (Transaction()->GetMode() != IDBTransaction::READ_ONLY) {
++  if (Transaction()->GetMode() != IDBTransaction::Mode::ReadOnly) {
+     nsresult rv = aConnection->BeginWriteTransaction();
+     if (NS_WARN_IF(NS_FAILED(rv))) {
+       return rv;
+@@ -13451,10 +13451,10 @@
+     }
+ 
+     case RequestParams::TObjectStoreDeleteParams: {
+-      if (NS_WARN_IF(mMode != IDBTransaction::READ_WRITE &&
+-                     mMode != IDBTransaction::READ_WRITE_FLUSH &&
+-                     mMode != IDBTransaction::CLEANUP &&
+-                     mMode != IDBTransaction::VERSION_CHANGE)) {
++      if (NS_WARN_IF(mMode != IDBTransaction::Mode::ReadWrite &&
++                     mMode != IDBTransaction::Mode::ReadWriteFlush &&
++                     mMode != IDBTransaction::Mode::Cleanup &&
++                     mMode != IDBTransaction::Mode::VersionChange)) {
+         ASSERT_UNLESS_FUZZING();
+         return false;
+       }
+@@ -13475,10 +13475,10 @@
+     }
+ 
+     case RequestParams::TObjectStoreClearParams: {
+-      if (NS_WARN_IF(mMode != IDBTransaction::READ_WRITE &&
+-                     mMode != IDBTransaction::READ_WRITE_FLUSH &&
+-                     mMode != IDBTransaction::CLEANUP &&
+-                     mMode != IDBTransaction::VERSION_CHANGE)) {
++      if (NS_WARN_IF(mMode != IDBTransaction::Mode::ReadWrite &&
++                     mMode != IDBTransaction::Mode::ReadWriteFlush &&
++                     mMode != IDBTransaction::Mode::Cleanup &&
++                     mMode != IDBTransaction::Mode::VersionChange)) {
+         ASSERT_UNLESS_FUZZING();
+         return false;
+       }
+@@ -13658,9 +13658,9 @@
+     const ObjectStoreAddPutParams& aParams) const {
+   AssertIsOnBackgroundThread();
+ 
+-  if (NS_WARN_IF(mMode != IDBTransaction::READ_WRITE &&
+-                 mMode != IDBTransaction::READ_WRITE_FLUSH &&
+-                 mMode != IDBTransaction::VERSION_CHANGE)) {
++  if (NS_WARN_IF(mMode != IDBTransaction::Mode::ReadWrite &&
++                 mMode != IDBTransaction::Mode::ReadWriteFlush &&
++                 mMode != IDBTransaction::Mode::VersionChange)) {
+     ASSERT_UNLESS_FUZZING();
+     return false;
+   }
+@@ -14239,7 +14239,7 @@
+ VersionChangeTransaction::VersionChangeTransaction(
+     OpenDatabaseOp* aOpenDatabaseOp)
+     : TransactionBase(aOpenDatabaseOp->mDatabase,
+-                      IDBTransaction::VERSION_CHANGE),
++                      IDBTransaction::Mode::VersionChange),
+       mOpenDatabaseOp(aOpenDatabaseOp),
+       mActorWasAlive(false) {
+   AssertIsOnBackgroundThread();
+@@ -20797,7 +20797,7 @@
+   MOZ_ASSERT(mState == State::WaitingForTransactionsToComplete);
+   MOZ_ASSERT(mVersionChangeTransaction);
+   MOZ_ASSERT(mVersionChangeTransaction->GetMode() ==
+-             IDBTransaction::VERSION_CHANGE);
++             IDBTransaction::Mode::VersionChange);
+   MOZ_ASSERT(mMaybeBlockedDatabases.IsEmpty());
+ 
+   if (NS_WARN_IF(QuotaClient::IsShuttingDownOnBackgroundThread()) ||
+@@ -21973,10 +21973,10 @@
+ nsresult TransactionBase::CommitOp::WriteAutoIncrementCounts() {
+   MOZ_ASSERT(mTransaction);
+   mTransaction->AssertIsOnConnectionThread();
+-  MOZ_ASSERT(mTransaction->GetMode() == IDBTransaction::READ_WRITE ||
+-             mTransaction->GetMode() == IDBTransaction::READ_WRITE_FLUSH ||
+-             mTransaction->GetMode() == IDBTransaction::CLEANUP ||
+-             mTransaction->GetMode() == IDBTransaction::VERSION_CHANGE);
++  MOZ_ASSERT(mTransaction->GetMode() == IDBTransaction::Mode::ReadWrite ||
++             mTransaction->GetMode() == IDBTransaction::Mode::ReadWriteFlush ||
++             mTransaction->GetMode() == IDBTransaction::Mode::Cleanup ||
++             mTransaction->GetMode() == IDBTransaction::Mode::VersionChange);
+ 
+   const nsTArray<RefPtr<FullObjectStoreMetadata>>& metadataArray =
+       mTransaction->mModifiedAutoIncrementObjectStoreMetadataArray;
+@@ -22037,10 +22037,10 @@
+ void TransactionBase::CommitOp::CommitOrRollbackAutoIncrementCounts() {
+   MOZ_ASSERT(mTransaction);
+   mTransaction->AssertIsOnConnectionThread();
+-  MOZ_ASSERT(mTransaction->GetMode() == IDBTransaction::READ_WRITE ||
+-             mTransaction->GetMode() == IDBTransaction::READ_WRITE_FLUSH ||
+-             mTransaction->GetMode() == IDBTransaction::CLEANUP ||
+-             mTransaction->GetMode() == IDBTransaction::VERSION_CHANGE);
++  MOZ_ASSERT(mTransaction->GetMode() == IDBTransaction::Mode::ReadWrite ||
++             mTransaction->GetMode() == IDBTransaction::Mode::ReadWriteFlush ||
++             mTransaction->GetMode() == IDBTransaction::Mode::Cleanup ||
++             mTransaction->GetMode() == IDBTransaction::Mode::VersionChange);
+ 
+   nsTArray<RefPtr<FullObjectStoreMetadata>>& metadataArray =
+       mTransaction->mModifiedAutoIncrementObjectStoreMetadataArray;
+@@ -22068,7 +22068,7 @@
+   MOZ_ASSERT(aConnection);
+   MOZ_ASSERT(mTransaction);
+   mTransaction->AssertIsOnConnectionThread();
+-  MOZ_ASSERT(mTransaction->GetMode() != IDBTransaction::READ_ONLY);
++  MOZ_ASSERT(mTransaction->GetMode() != IDBTransaction::Mode::ReadOnly);
+ 
+   DatabaseConnection::CachedStatement pragmaStmt;
+   MOZ_ALWAYS_SUCCEEDS(aConnection->GetCachedStatement(
+@@ -22111,7 +22111,7 @@
+       IDB_LOG_ID_STRING(mBackgroundChildLoggingId),
+       mTransaction->LoggingSerialNumber(), mLoggingSerialNumber);
+ 
+-  if (mTransaction->GetMode() != IDBTransaction::READ_ONLY &&
++  if (mTransaction->GetMode() != IDBTransaction::Mode::ReadOnly &&
+       mTransaction->mHasBeenActiveOnConnectionThread) {
+     Database* database = mTransaction->GetDatabase();
+     MOZ_ASSERT(database);
+@@ -22140,7 +22140,7 @@
+             NS_WARNING_ASSERTION(NS_SUCCEEDED(mResultCode), "Commit failed!");
+ 
+             if (NS_SUCCEEDED(mResultCode) &&
+-                mTransaction->GetMode() == IDBTransaction::READ_WRITE_FLUSH) {
++                mTransaction->GetMode() == IDBTransaction::Mode::ReadWriteFlush) {
+               mResultCode = connection->Checkpoint();
+             }
+ 
+@@ -22163,7 +22163,7 @@
+ 
+       connection->FinishWriteTransaction();
+ 
+-      if (mTransaction->GetMode() == IDBTransaction::CLEANUP) {
++      if (mTransaction->GetMode() == IDBTransaction::Mode::Cleanup) {
+         connection->DoIdleProcessing(/* aNeedsCheckpoint */ true);
+ 
+         connection->EnableQuotaChecks();
+@@ -23758,7 +23758,7 @@
+   MOZ_ASSERT(aHasIndexes);
+ 
+   bool hasIndexes;
+-  if (aOp->Transaction()->GetMode() == IDBTransaction::VERSION_CHANGE &&
++  if (aOp->Transaction()->GetMode() == IDBTransaction::Mode::VersionChange &&
+       aMayHaveIndexes) {
+     // If this is a version change transaction then mObjectStoreMayHaveIndexes
+     // could be wrong (e.g. if a unique index failed to be created due to a
+diff -ru a/dom/indexedDB/IDBCursor.cpp b/dom/indexedDB/IDBCursor.cpp
+--- a/dom/indexedDB/IDBCursor.cpp	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/indexedDB/IDBCursor.cpp	2021-10-29 20:47:43.295395510 +0300
+@@ -630,7 +630,7 @@
+     return nullptr;
+   }
+ 
+-  if (mTransaction->GetMode() == IDBTransaction::CLEANUP || IsSourceDeleted() ||
++  if (mTransaction->GetMode() == IDBTransaction::Mode::Cleanup || IsSourceDeleted() ||
+       !mHaveValue || mType == Type_ObjectStoreKey || mType == Type_IndexKey ||
+       mContinueCalled) {
+     aRv.Throw(NS_ERROR_DOM_INDEXEDDB_NOT_ALLOWED_ERR);
+diff -ru a/dom/indexedDB/IDBDatabase.cpp b/dom/indexedDB/IDBDatabase.cpp
+--- a/dom/indexedDB/IDBDatabase.cpp	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/indexedDB/IDBDatabase.cpp	2021-10-29 20:47:43.295395510 +0300
+@@ -367,7 +367,7 @@
+ 
+   IDBTransaction* transaction = IDBTransaction::GetCurrent();
+   if (!transaction || transaction->Database() != this ||
+-      transaction->GetMode() != IDBTransaction::VERSION_CHANGE) {
++      transaction->GetMode() != IDBTransaction::Mode::VersionChange) {
+     aRv.Throw(NS_ERROR_DOM_INDEXEDDB_NOT_ALLOWED_ERR);
+     return nullptr;
+   }
+@@ -441,7 +441,7 @@
+ 
+   IDBTransaction* transaction = IDBTransaction::GetCurrent();
+   if (!transaction || transaction->Database() != this ||
+-      transaction->GetMode() != IDBTransaction::VERSION_CHANGE) {
++      transaction->GetMode() != IDBTransaction::Mode::VersionChange) {
+     aRv.Throw(NS_ERROR_DOM_INDEXEDDB_NOT_ALLOWED_ERR);
+     return;
+   }
+@@ -595,21 +595,21 @@
+   IDBTransaction::Mode mode;
+   switch (aMode) {
+     case IDBTransactionMode::Readonly:
+-      mode = IDBTransaction::READ_ONLY;
++      mode = IDBTransaction::Mode::ReadOnly;
+       break;
+     case IDBTransactionMode::Readwrite:
+       if (mQuotaExceeded) {
+-        mode = IDBTransaction::CLEANUP;
++        mode = IDBTransaction::Mode::Cleanup;
+         mQuotaExceeded = false;
+       } else {
+-        mode = IDBTransaction::READ_WRITE;
++        mode = IDBTransaction::Mode::ReadWrite;
+       }
+       break;
+     case IDBTransactionMode::Readwriteflush:
+-      mode = IDBTransaction::READ_WRITE_FLUSH;
++      mode = IDBTransaction::Mode::ReadWriteFlush;
+       break;
+     case IDBTransactionMode::Cleanup:
+-      mode = IDBTransaction::CLEANUP;
++      mode = IDBTransaction::Mode::Cleanup;
+       mQuotaExceeded = false;
+       break;
+     case IDBTransactionMode::Versionchange:
+@@ -643,7 +643,7 @@
+ 
+   transaction->SetBackgroundActor(actor);
+ 
+-  if (mode == IDBTransaction::CLEANUP) {
++  if (mode == IDBTransaction::Mode::Cleanup) {
+     ExpireFileActors(/* aExpireAll */ true);
+   }
+ 
+@@ -781,14 +781,14 @@
+         if (aShouldWarn) {
+           switch (transaction->GetMode()) {
+             // We ignore transactions that could not have written any data.
+-            case IDBTransaction::READ_ONLY:
++            case IDBTransaction::Mode::ReadOnly:
+               break;
+ 
+             // We warn for any transactions that could have written data.
+-            case IDBTransaction::READ_WRITE:
+-            case IDBTransaction::READ_WRITE_FLUSH:
+-            case IDBTransaction::CLEANUP:
+-            case IDBTransaction::VERSION_CHANGE:
++            case IDBTransaction::Mode::ReadWrite:
++            case IDBTransaction::Mode::ReadWriteFlush:
++            case IDBTransaction::Mode::Cleanup:
++            case IDBTransaction::Mode::VersionChange:
+               transactionsThatNeedWarning.AppendElement(transaction);
+               break;
+ 
+diff -ru a/dom/indexedDB/IDBIndex.cpp b/dom/indexedDB/IDBIndex.cpp
+--- a/dom/indexedDB/IDBIndex.cpp	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/indexedDB/IDBIndex.cpp	2021-10-29 20:47:31.195293811 +0300
+@@ -140,7 +140,7 @@
+ 
+   IDBTransaction* transaction = mObjectStore->Transaction();
+ 
+-  if (transaction->GetMode() != IDBTransaction::VERSION_CHANGE ||
++  if (transaction->GetMode() != IDBTransaction::Mode::VersionChange ||
+       mDeletedMetadata) {
+     aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
+     return;
+diff -ru a/dom/indexedDB/IDBObjectStore.cpp b/dom/indexedDB/IDBObjectStore.cpp
+--- a/dom/indexedDB/IDBObjectStore.cpp	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/indexedDB/IDBObjectStore.cpp	2021-10-29 20:47:43.295395510 +0300
+@@ -1526,7 +1526,7 @@
+   MOZ_ASSERT(aCx);
+   MOZ_ASSERT_IF(aFromCursor, aOverwrite);
+ 
+-  if (mTransaction->GetMode() == IDBTransaction::CLEANUP || mDeletedSpec) {
++  if (mTransaction->GetMode() == IDBTransaction::Mode::Cleanup || mDeletedSpec) {
+     aRv.Throw(NS_ERROR_DOM_INDEXEDDB_NOT_ALLOWED_ERR);
+     return nullptr;
+   }
+@@ -2079,7 +2079,7 @@
+     const IDBIndexParameters& aOptionalParameters, ErrorResult& aRv) {
+   AssertIsOnOwningThread();
+ 
+-  if (mTransaction->GetMode() != IDBTransaction::VERSION_CHANGE ||
++  if (mTransaction->GetMode() != IDBTransaction::Mode::VersionChange ||
+       mDeletedSpec) {
+     aRv.Throw(NS_ERROR_DOM_INDEXEDDB_NOT_ALLOWED_ERR);
+     return nullptr;
+@@ -2181,7 +2181,7 @@
+ void IDBObjectStore::DeleteIndex(const nsAString& aName, ErrorResult& aRv) {
+   AssertIsOnOwningThread();
+ 
+-  if (mTransaction->GetMode() != IDBTransaction::VERSION_CHANGE ||
++  if (mTransaction->GetMode() != IDBTransaction::Mode::VersionChange ||
+       mDeletedSpec) {
+     aRv.Throw(NS_ERROR_DOM_INDEXEDDB_NOT_ALLOWED_ERR);
+     return;
+@@ -2470,7 +2470,7 @@
+ void IDBObjectStore::SetName(const nsAString& aName, ErrorResult& aRv) {
+   AssertIsOnOwningThread();
+ 
+-  if (mTransaction->GetMode() != IDBTransaction::VERSION_CHANGE ||
++  if (mTransaction->GetMode() != IDBTransaction::Mode::VersionChange ||
+       mDeletedSpec) {
+     aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
+     return;
+diff -ru a/dom/indexedDB/IDBTransaction.h b/dom/indexedDB/IDBTransaction.h
+--- a/dom/indexedDB/IDBTransaction.h	2020-08-17 21:26:23.000000000 +0300
++++ b/dom/indexedDB/IDBTransaction.h	2021-10-29 20:47:15.811831188 +0300
+@@ -50,18 +50,17 @@
+   friend class WorkerHolder;
+ 
+  public:
+-  enum Mode {
+-    READ_ONLY = 0,
+-    READ_WRITE,
+-    READ_WRITE_FLUSH,
+-    CLEANUP,
+-    VERSION_CHANGE,
+-
+-    // Only needed for IPC serialization helper, should never be used in code.
+-    MODE_INVALID
++  enum struct Mode {
++    ReadOnly = 0,
++    ReadWrite,
++    ReadWriteFlush,
++    Cleanup,
++    VersionChange,
++     // Only needed for IPC serialization helper, should never be used in code.
++    Invalid
+   };
+ 
+-  enum ReadyState { INITIAL = 0, LOADING, COMMITTING, DONE };
++  enum struct ReadyState { Initial = 0, Loading, Inactive, Committing, Done };
+ 
+  private:
+   RefPtr<IDBDatabase> mDatabase;
+@@ -133,7 +132,7 @@
+   void ClearBackgroundActor() {
+     AssertIsOnOwningThread();
+ 
+-    if (mMode == VERSION_CHANGE) {
++    if (mMode == Mode::VersionChange) {
+       mBackgroundActor.mVersionChangeBackgroundActor = nullptr;
+     } else {
+       mBackgroundActor.mNormalBackgroundActor = nullptr;
+@@ -157,19 +156,20 @@
+   bool IsCommittingOrDone() const {
+     AssertIsOnOwningThread();
+ 
+-    return mReadyState == COMMITTING || mReadyState == DONE;
++    return mReadyState == ReadyState::Committing ||
++           mReadyState == ReadyState::Done;
+   }
+ 
+   bool IsDone() const {
+     AssertIsOnOwningThread();
+ 
+-    return mReadyState == DONE;
++    return mReadyState == ReadyState::Done;
+   }
+ 
+   bool IsWriteAllowed() const {
+     AssertIsOnOwningThread();
+-    return mMode == READ_WRITE || mMode == READ_WRITE_FLUSH ||
+-           mMode == CLEANUP || mMode == VERSION_CHANGE;
++    return mMode == Mode::ReadWrite || mMode == Mode::ReadWriteFlush ||
++           mMode == Mode::Cleanup || mMode == Mode::VersionChange;
+   }
+ 
+   bool IsAborted() const {
+diff -ru a/dom/indexedDB/ProfilerHelpers.h b/dom/indexedDB/ProfilerHelpers.h
+--- a/dom/indexedDB/ProfilerHelpers.h	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/indexedDB/ProfilerHelpers.h	2021-10-29 20:47:43.295395510 +0300
+@@ -110,19 +110,19 @@
+     Append(kCommaSpace);
+ 
+     switch (aTransaction->GetMode()) {
+-      case IDBTransaction::READ_ONLY:
++      case IDBTransaction::Mode::ReadOnly:
+         AppendLiteral("\"readonly\"");
+         break;
+-      case IDBTransaction::READ_WRITE:
++      case IDBTransaction::Mode::ReadWrite:
+         AppendLiteral("\"readwrite\"");
+         break;
+-      case IDBTransaction::READ_WRITE_FLUSH:
++      case IDBTransaction::Mode::ReadWriteFlush:
+         AppendLiteral("\"readwriteflush\"");
+         break;
+-      case IDBTransaction::CLEANUP:
++      case IDBTransaction::Mode::Cleanup:
+         AppendLiteral("\"cleanup\"");
+         break;
+-      case IDBTransaction::VERSION_CHANGE:
++      case IDBTransaction::Mode::VersionChange:
+         AppendLiteral("\"versionchange\"");
+         break;
+       default:
+diff -ru a/dom/indexedDB/SerializationHelpers.h b/dom/indexedDB/SerializationHelpers.h
+--- a/dom/indexedDB/SerializationHelpers.h	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/indexedDB/SerializationHelpers.h	2021-10-29 20:47:35.988667432 +0300
+@@ -78,8 +78,8 @@
+ struct ParamTraits<mozilla::dom::IDBTransaction::Mode>
+     : public ContiguousEnumSerializer<
+           mozilla::dom::IDBTransaction::Mode,
+-          mozilla::dom::IDBTransaction::READ_ONLY,
+-          mozilla::dom::IDBTransaction::MODE_INVALID> {};
++          mozilla::dom::IDBTransaction::Mode::ReadOnly,
++          mozilla::dom::IDBTransaction::Mode::Invalid> {};
+ 
+ }  // namespace IPC
+ 
+--- a/dom/indexedDB/IDBTransaction.cpp	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/indexedDB/IDBTransaction.cpp	2021-10-29 22:25:49.153640138 +0300
+@@ -50,7 +50,7 @@
+       mPendingRequestCount(0),
+       mLineNo(0),
+       mColumn(0),
+-      mReadyState(IDBTransaction::INITIAL),
++      mReadyState(IDBTransaction::ReadyState::Initial),
+       mMode(aMode),
+       mCreating(false),
+       mRegistered(false),
+@@ -107,10 +107,10 @@
+   MOZ_ASSERT(!mNotedActiveTransaction);
+   MOZ_ASSERT(mSentCommitOrAbort);
+   MOZ_ASSERT_IF(
+-      mMode == VERSION_CHANGE && mBackgroundActor.mVersionChangeBackgroundActor,
++      mMode == Mode::VersionChange && mBackgroundActor.mVersionChangeBackgroundActor,
+       mFiredCompleteOrAbort);
+   MOZ_ASSERT_IF(
+-      mMode != VERSION_CHANGE && mBackgroundActor.mNormalBackgroundActor,
++      mMode != Mode::VersionChange && mBackgroundActor.mNormalBackgroundActor,
+       mFiredCompleteOrAbort);
+ 
+   if (mRegistered) {
+@@ -120,7 +120,7 @@
+ #endif
+   }
+ 
+-  if (mMode == VERSION_CHANGE) {
++  if (mMode == Mode::VersionChange) {
+     if (auto* actor = mBackgroundActor.mVersionChangeBackgroundActor) {
+       actor->SendDeleteMeInternal(/* aFailedConstructor */ false);
+ 
+@@ -153,7 +153,7 @@
+   nsTArray<nsString> emptyObjectStoreNames;
+ 
+   RefPtr<IDBTransaction> transaction =
+-      new IDBTransaction(aDatabase, emptyObjectStoreNames, VERSION_CHANGE);
++      new IDBTransaction(aDatabase, emptyObjectStoreNames, Mode::VersionChange);
+   aOpenRequest->GetCallerLocation(transaction->mFilename, &transaction->mLineNo,
+                                   &transaction->mColumn);
+ 
+@@ -176,8 +176,8 @@
+   MOZ_ASSERT(aDatabase);
+   aDatabase->AssertIsOnOwningThread();
+   MOZ_ASSERT(!aObjectStoreNames.IsEmpty());
+-  MOZ_ASSERT(aMode == READ_ONLY || aMode == READ_WRITE ||
+-             aMode == READ_WRITE_FLUSH || aMode == CLEANUP);
++  MOZ_ASSERT(aMode == Mode::ReadOnly || aMode == Mode::ReadWrite ||
++             aMode == Mode::ReadWriteFlush || aMode == Mode::Cleanup);
+ 
+   RefPtr<IDBTransaction> transaction =
+       new IDBTransaction(aDatabase, aObjectStoreNames, aMode);
+@@ -252,7 +252,7 @@
+   AssertIsOnOwningThread();
+   MOZ_ASSERT(aBackgroundActor);
+   MOZ_ASSERT(!mBackgroundActor.mNormalBackgroundActor);
+-  MOZ_ASSERT(mMode != VERSION_CHANGE);
++  MOZ_ASSERT(mMode != Mode::VersionChange);
+ 
+   NoteActiveTransaction();
+ 
+@@ -267,7 +267,7 @@
+ 
+   BackgroundRequestChild* actor = new BackgroundRequestChild(aRequest);
+ 
+-  if (mMode == VERSION_CHANGE) {
++  if (mMode == Mode::VersionChange) {
+     MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+ 
+     mBackgroundActor.mVersionChangeBackgroundActor
+@@ -294,7 +294,7 @@
+   MOZ_ASSERT(aBackgroundActor);
+   MOZ_ASSERT(aParams.type() != OpenCursorParams::T__None);
+ 
+-  if (mMode == VERSION_CHANGE) {
++  if (mMode == Mode::VersionChange) {
+     MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+ 
+     mBackgroundActor.mVersionChangeBackgroundActor
+@@ -331,8 +331,8 @@
+   AssertIsOnOwningThread();
+ 
+   if (!mPendingRequestCount) {
+-    MOZ_ASSERT(INITIAL == mReadyState);
+-    mReadyState = LOADING;
++    MOZ_ASSERT(ReadyState::Initial == mReadyState);
++    mReadyState = ReadyState::Loading;
+   }
+ 
+   ++mPendingRequestCount;
+@@ -345,7 +345,7 @@
+   --mPendingRequestCount;
+ 
+   if (!mPendingRequestCount) {
+-    mReadyState = COMMITTING;
++    mReadyState = ReadyState::Committing;
+ 
+     if (aActorDestroyedNormally) {
+       if (NS_SUCCEEDED(mAbortCode)) {
+@@ -386,7 +386,7 @@
+       "IndexedDB %s: C T[%lld] R[%llu]: IDBTransaction commit",
+       IDB_LOG_ID_STRING(), LoggingSerialNumber(), requestSerialNumber);
+ 
+-  if (mMode == VERSION_CHANGE) {
++  if (mMode == Mode::VersionChange) {
+     MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+     mBackgroundActor.mVersionChangeBackgroundActor->SendCommit();
+   } else {
+@@ -416,7 +416,7 @@
+       IDB_LOG_ID_STRING(), LoggingSerialNumber(), requestSerialNumber,
+       aResultCode);
+ 
+-  if (mMode == VERSION_CHANGE) {
++  if (mMode == Mode::VersionChange) {
+     MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+     mBackgroundActor.mVersionChangeBackgroundActor->SendAbort(aResultCode);
+   } else {
+@@ -450,7 +450,7 @@
+   AssertIsOnOwningThread();
+ 
+   // If we haven't started anything then we're open.
+-  if (mReadyState == IDBTransaction::INITIAL) {
++  if (mReadyState == IDBTransaction::ReadyState::Initial) {
+     return true;
+   }
+ 
+@@ -459,7 +459,7 @@
+   // from the time we were created) then we are open. Otherwise check the
+   // currently running transaction to see if it's the same. We only allow other
+   // requests to be made if this transaction is currently running.
+-  if (mReadyState == IDBTransaction::LOADING &&
++  if (mReadyState == IDBTransaction::ReadyState::Loading &&
+       (mCreating || GetCurrent() == this)) {
+     return true;
+   }
+@@ -482,7 +482,7 @@
+     const ObjectStoreSpec& aSpec) {
+   AssertIsOnOwningThread();
+   MOZ_ASSERT(aSpec.metadata().id());
+-  MOZ_ASSERT(VERSION_CHANGE == mMode);
++  MOZ_ASSERT(Mode::VersionChange == mMode);
+   MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+   MOZ_ASSERT(IsOpen());
+ 
+@@ -512,7 +512,7 @@
+ void IDBTransaction::DeleteObjectStore(int64_t aObjectStoreId) {
+   AssertIsOnOwningThread();
+   MOZ_ASSERT(aObjectStoreId);
+-  MOZ_ASSERT(VERSION_CHANGE == mMode);
++  MOZ_ASSERT(Mode::VersionChange == mMode);
+   MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+   MOZ_ASSERT(IsOpen());
+ 
+@@ -541,7 +541,7 @@
+                                        const nsAString& aName) {
+   AssertIsOnOwningThread();
+   MOZ_ASSERT(aObjectStoreId);
+-  MOZ_ASSERT(VERSION_CHANGE == mMode);
++  MOZ_ASSERT(Mode::VersionChange == mMode);
+   MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+   MOZ_ASSERT(IsOpen());
+ 
+@@ -555,7 +555,7 @@
+   AssertIsOnOwningThread();
+   MOZ_ASSERT(aObjectStore);
+   MOZ_ASSERT(aMetadata.id());
+-  MOZ_ASSERT(VERSION_CHANGE == mMode);
++  MOZ_ASSERT(Mode::VersionChange == mMode);
+   MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+   MOZ_ASSERT(IsOpen());
+ 
+@@ -569,7 +569,7 @@
+   AssertIsOnOwningThread();
+   MOZ_ASSERT(aObjectStore);
+   MOZ_ASSERT(aIndexId);
+-  MOZ_ASSERT(VERSION_CHANGE == mMode);
++  MOZ_ASSERT(Mode::VersionChange == mMode);
+   MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+   MOZ_ASSERT(IsOpen());
+ 
+@@ -583,7 +583,7 @@
+   AssertIsOnOwningThread();
+   MOZ_ASSERT(aObjectStore);
+   MOZ_ASSERT(aIndexId);
+-  MOZ_ASSERT(VERSION_CHANGE == mMode);
++  MOZ_ASSERT(Mode::VersionChange == mMode);
+   MOZ_ASSERT(mBackgroundActor.mVersionChangeBackgroundActor);
+   MOZ_ASSERT(IsOpen());
+ 
+@@ -600,12 +600,12 @@
+ 
+   RefPtr<DOMException> error = aError;
+ 
+-  const bool isVersionChange = mMode == VERSION_CHANGE;
++  const bool isVersionChange = mMode == Mode::VersionChange;
+   const bool isInvalidated = mDatabase->IsInvalidated();
+-  bool needToSendAbort = mReadyState == INITIAL;
++  bool needToSendAbort = mReadyState == ReadyState::Initial;
+ 
+   mAbortCode = aAbortCode;
+-  mReadyState = DONE;
++  mReadyState = ReadyState::Done;
+   mError = error.forget();
+ 
+   if (isVersionChange) {
+@@ -727,7 +727,7 @@
+   AssertIsOnOwningThread();
+   MOZ_ASSERT(!mFiredCompleteOrAbort);
+ 
+-  mReadyState = DONE;
++  mReadyState = ReadyState::Done;
+ 
+ #ifdef DEBUG
+   mFiredCompleteOrAbort = true;
+@@ -788,14 +788,14 @@
+ 
+ int64_t IDBTransaction::NextObjectStoreId() {
+   AssertIsOnOwningThread();
+-  MOZ_ASSERT(VERSION_CHANGE == mMode);
++  MOZ_ASSERT(Mode::VersionChange == mMode);
+ 
+   return mNextObjectStoreId++;
+ }
+ 
+ int64_t IDBTransaction::NextIndexId() {
+   AssertIsOnOwningThread();
+-  MOZ_ASSERT(VERSION_CHANGE == mMode);
++  MOZ_ASSERT(Mode::VersionChange == mMode);
+ 
+   return mNextIndexId++;
+ }
+@@ -810,22 +810,22 @@
+   AssertIsOnOwningThread();
+ 
+   switch (mMode) {
+-    case READ_ONLY:
++    case Mode::ReadOnly:
+       return IDBTransactionMode::Readonly;
+ 
+-    case READ_WRITE:
++    case Mode::ReadWrite:
+       return IDBTransactionMode::Readwrite;
+ 
+-    case READ_WRITE_FLUSH:
++    case Mode::ReadWriteFlush:
+       return IDBTransactionMode::Readwriteflush;
+ 
+-    case CLEANUP:
++    case Mode::Cleanup:
+       return IDBTransactionMode::Cleanup;
+ 
+-    case VERSION_CHANGE:
++    case Mode::VersionChange:
+       return IDBTransactionMode::Versionchange;
+ 
+-    case MODE_INVALID:
++    case Mode::Invalid:
+     default:
+       MOZ_CRASH("Bad mode!");
+   }
+@@ -840,7 +840,7 @@
+ already_AddRefed<DOMStringList> IDBTransaction::ObjectStoreNames() const {
+   AssertIsOnOwningThread();
+ 
+-  if (mMode == IDBTransaction::VERSION_CHANGE) {
++  if (mMode == IDBTransaction::Mode::VersionChange) {
+     return mDatabase->ObjectStoreNames();
+   }
+ 
+@@ -860,7 +860,7 @@
+ 
+   const ObjectStoreSpec* spec = nullptr;
+ 
+-  if (IDBTransaction::VERSION_CHANGE == mMode ||
++  if (IDBTransaction::Mode::VersionChange == mMode ||
+       mObjectStoreNames.Contains(aName)) {
+     const nsTArray<ObjectStoreSpec>& objectStores =
+         mDatabase->Spec()->objectStores();
+@@ -951,8 +951,8 @@
+   mCreating = false;
+ 
+   // Maybe commit if there were no requests generated.
+-  if (mReadyState == IDBTransaction::INITIAL) {
+-    mReadyState = DONE;
++  if (mReadyState == IDBTransaction::ReadyState::Initial) {
++    mReadyState = ReadyState::Done;
+ 
+     SendCommit();
+   }
+--- a/dom/canvas/test/webgl-conf/checkout/deqp/temp_externs/w3c_indexeddb.js.orig	2020-08-17 21:26:22.000000000 +0300
++++ b/dom/canvas/test/webgl-conf/checkout/deqp/temp_externs/w3c_indexeddb.js	2021-10-29 22:40:43.960833787 +0300
+@@ -172,13 +172,13 @@
+  * @const
+  * @type {number}
+  */
+-IDBDatabaseException.READ_ONLY_ERR;
++IDBDatabaseException.Mode.ReadOnly_ERR;
+ 
+ /**
+  * @const
+  * @type {number}
+  */
+-webkitIDBDatabaseException.READ_ONLY_ERR;
++webkitIDBDatabaseException.Mode.ReadOnly_ERR;
+ 
+ /**
+  * @const
+@@ -716,37 +716,37 @@
+  * @const
+  * @type {number}
+  */
+-IDBTransaction.READ_WRITE;
++IDBTransaction.Mode.ReadWrite;
+ 
+ /**
+  * @const
+  * @type {number}
+  */
+-webkitIDBTransaction.READ_WRITE;
++webkitIDBTransaction.Mode.ReadWrite;
+ 
+ /**
+  * @const
+  * @type {number}
+  */
+-IDBTransaction.READ_ONLY;
++IDBTransaction.Mode.ReadOnly;
+ 
+ /**
+  * @const
+  * @type {number}
+  */
+-webkitIDBTransaction.READ_ONLY;
++webkitIDBTransaction.Mode.ReadOnly;
+ 
+ /**
+  * @const
+  * @type {number}
+  */
+-IDBTransaction.VERSION_CHANGE;
++IDBTransaction.Mode.VersionChange;
+ 
+ /**
+  * @const
+  * @type {number}
+  */
+-webkitIDBTransaction.VERSION_CHANGE;
++webkitIDBTransaction.Mode.VersionChange;
+ 
+ /**
+  * @type {number|string}

@@ -1,0 +1,272 @@
+commit d529ca7cb957e5274e54cca3b74ff6b5fdc12ce2
+Author: Petr Zima <zima@matfyz.cz>
+Date:   Thu Apr 2 12:25:28 2020 +0200
+
+    selinux.patch
+
+diff --git a/gcl/clcs/makefile b/gcl/clcs/makefile
+index 9411ca391..dfbf85060 100644
+--- a/gcl/clcs/makefile
++++ b/gcl/clcs/makefile
+@@ -9,6 +9,7 @@ all: $(addsuffix .c,$(FILES)) $(addsuffix .o,$(FILES))
+ 
+ saved_clcs_gcl: ../unixport/saved_pcl_gcl$(EXE)
+ 	echo '(load "package.lisp")(load "myload.lisp")(si::save-system "$@")' | $< $(<D)/
++	chcon -t gcl_exec_t $@ || true
+ 
+ %.h %.data %.c : %.lisp saved_clcs_gcl
+ 	cp ../h/cmpinclude.h .
+@@ -31,6 +32,7 @@ compile: ${LISP}
+ 
+ saved_full_gcl: ${LISP}
+ 	echo '(load "package.lisp")(load "loading.lisp")(jamie-load-clcs :compiled)(system::save-system "saved_full_gcl")' | ${LISP}
++	chcon -t gcl_exec_t $@ || true
+ 
+ clean:
+ 	rm -f *.o *.fn saved_full_gcl$(EXE) saved_full_gcl cmpinclude.h *.c *.h *.data saved_clcs_gcl$(EXE)
+diff --git a/gcl/makefile b/gcl/makefile
+index c664dffb3..078b21296 100644
+--- a/gcl/makefile
++++ b/gcl/makefile
+@@ -198,6 +198,7 @@ install1:
+ 	if gcc --version | grep -i mingw >/dev/null 2>&1 ; then if grep -i oncrpc makedefs >/dev/null 2>&1 ; then cp /mingw/bin/oncrpc.dll $(DESTDIR)$(INSTALL_LIB_DIR)/$(PORTDIR); fi ; fi
+ 	cd $(DESTDIR)$(INSTALL_LIB_DIR)/$(PORTDIR) && \
+ 		mv $(FLISP)$(EXE) temp$(EXE) && \
++		( chcon -t gcl_exec_t temp$(EXE) || true ) && \
+ 		echo '(si::reset-sys-paths "$(INSTALL_LIB_DIR)/")(si::save-system "$(FLISP)$(EXE)")' | ./temp$(EXE) && \
+ 		rm -f temp$(EXE)
+ 	if [ -e "unixport/rsym$(EXE)" ] ; then cp unixport/rsym$(EXE) $(DESTDIR)$(INSTALL_LIB_DIR)/unixport/ ; fi
+diff --git a/gcl/selinux/gcl.fc b/gcl/selinux/gcl.fc
+new file mode 100644
+index 000000000..c64176be8
+--- /dev/null
++++ b/gcl/selinux/gcl.fc
+@@ -0,0 +1,5 @@
++/usr/lib64/gcl-[^/]+/unixport/saved_.*	--	gen_context(system_u:object_r:gcl_exec_t,s0)
++/usr/lib/gcl-[^/]+/unixport/saved_.*	--	gen_context(system_u:object_r:gcl_exec_t,s0)
++/usr/lib/maxima/[^/]+/binary-gcl/maxima --	gen_context(system_u:object_r:gcl_exec_t,s0)
++/usr/lib64/maxima/[^/]+/binary-gcl/maxima --	gen_context(system_u:object_r:gcl_exec_t,s0)
++
+diff --git a/gcl/selinux/gcl.if b/gcl/selinux/gcl.if
+new file mode 100644
+index 000000000..7b8985069
+--- /dev/null
++++ b/gcl/selinux/gcl.if
+@@ -0,0 +1,146 @@
++
++## <summary>policy for gcl</summary>
++
++########################################
++## <summary>
++##	Execute a domain transition to run gcl.
++## </summary>
++## <param name="domain">
++## <summary>
++##	Domain allowed to transition.
++## </summary>
++## </param>
++#
++interface(`gcl_domtrans',`
++	gen_require(`
++		type gcl_t;
++                type gcl_exec_t;
++	')
++
++	domtrans_pattern($1,gcl_exec_t,gcl_t)
++')
++
++
++########################################
++## <summary>
++##	Do not audit attempts to read, 
++##	gcl tmp files
++## </summary>
++## <param name="domain">
++##	<summary>
++##	Domain to not audit.
++##	</summary>
++## </param>
++#
++interface(`gcl_dontaudit_read_tmp_files',`
++	gen_require(`
++		type gcl_tmp_t;
++	')
++
++	dontaudit $1 gcl_tmp_t:file read_file_perms;
++')
++
++########################################
++## <summary>
++##	Allow domain to read, gcl tmp files
++## </summary>
++## <param name="domain">
++##	<summary>
++##	Domain to not audit.
++##	</summary>
++## </param>
++#
++interface(`gcl_read_tmp_files',`
++	gen_require(`
++		type gcl_tmp_t;
++	')
++
++	allow $1 gcl_tmp_t:file read_file_perms;
++')
++
++########################################
++## <summary>
++##	Allow domain to manage gcl tmp files
++## </summary>
++## <param name="domain">
++##	<summary>
++##	Domain to not audit.
++##	</summary>
++## </param>
++#
++interface(`gcl_manage_tmp',`
++	gen_require(`
++		type gcl_tmp_t;
++	')
++
++         manage_dirs_pattern($1,gcl_tmp_t,gcl_tmp_t)
++         manage_files_pattern($1,gcl_tmp_t,gcl_tmp_t)
++         manage_lnk_files_pattern($1,gcl_tmp_t,gcl_tmp_t)
++')
++
++########################################
++## <summary>
++##	Execute gcl in the gcl domain, and
++##	allow the specified role the gcl domain.
++## </summary>
++## <param name="domain">
++##	<summary>
++##	Domain allowed access
++##	</summary>
++## </param>
++## <param name="role">
++##	<summary>
++##	The role to be allowed the gcl domain.
++##	</summary>
++## </param>
++## <param name="terminal">
++##	<summary>
++##	The type of the role's terminal.
++##	</summary>
++## </param>
++#
++interface(`gcl_run',`
++	gen_require(`
++		type gcl_t;
++	')
++
++	gcl_domtrans($1)
++	role $2 types gcl_t;
++	dontaudit gcl_t $3:chr_file rw_term_perms;
++')
++
++
++########################################
++## <summary>
++##	All of the rules required to administrate 
++##	an gcl environment
++## </summary>
++## <param name="domain">
++##	<summary>
++##	Domain allowed access.
++##	</summary>
++## </param>
++## <param name="role">
++##	<summary>
++##	The role to be allowed to manage the gcl domain.
++##	</summary>
++## </param>
++## <param name="terminal">
++##	<summary>
++##	The type of the user terminal.
++##	</summary>
++## </param>
++## <rolecap/>
++#
++interface(`gcl_admin',`
++	gen_require(`
++		type gcl_t;
++	')
++
++	allow $1 gcl_t:process { ptrace signal_perms getattr };
++	read_files_pattern($1, gcl_t, gcl_t)
++	        
++
++	gcl_manage_tmp($1)
++
++')
+diff --git a/gcl/selinux/gcl.te b/gcl/selinux/gcl.te
+new file mode 100644
+index 000000000..457a70063
+--- /dev/null
++++ b/gcl/selinux/gcl.te
+@@ -0,0 +1,45 @@
++policy_module(gcl,1.0.1)
++
++########################################
++#
++# Declarations
++#
++
++type gcl_t;
++type gcl_exec_t;
++application_domain(gcl_t, gcl_exec_t)
++role system_r types gcl_t;
++
++########################################
++#
++# gcl local policy
++#
++
++## internal communication is often done using fifo and unix sockets.
++allow gcl_t self:fifo_file rw_file_perms;
++allow gcl_t self:unix_stream_socket create_stream_socket_perms;
++
++libs_use_ld_so(gcl_t)
++libs_use_shared_libs(gcl_t)
++
++miscfiles_read_localization(gcl_t)
++
++## The GCL memory management and executable dumping routines manipulate memory
++## in various (usually forbidden) ways.
++allow gcl_t self:process { execmem execheap };
++
++optional_policy(`
++	unconfined_domain(gcl_t)
++')
++
++optional_policy(`
++	gen_require(`
++		type unconfined_t;
++		type unconfined_devpts_t;
++		type unconfined_tty_device_t;
++		role unconfined_r;
++	')
++
++	gcl_run(unconfined_t, unconfined_r, { unconfined_tty_device_t unconfined_devpts_t })
++	allow gcl_t gcl_exec_t:file execmod;
++')
+diff --git a/gcl/unixport/makefile b/gcl/unixport/makefile
+index 8bf14bd61..e16feb5ea 100644
+--- a/gcl/unixport/makefile
++++ b/gcl/unixport/makefile
+@@ -95,6 +95,7 @@ saved_%:raw_% $(RSYM) sys_init.lsp raw_%_map msys \
+ 	echo "(unless si::*quit-tags* (in-package \"USER\")(system:save-system \"$@\"))" >>foo
+ 	j=$$(ar t lib$*.a |grep ^gcl_);[ "$$j" = "" ] || ar x lib$*.a $$j #accelerator
+ 	$(PORTDIR)/raw_$*$(EXE) $(PORTDIR)/ -libdir $(GCLDIR)/ < foo
++	chcon -t gcl_exec_t $@ || true
+ #       check that saved image can be prelinked
+ 	[ "$(PRELINK_CHECK)" = "" ] || \
+ 		! [ -x /usr/bin/objdump ] || \
+@@ -141,6 +142,7 @@ ifeq ($(GNU_LD),1)
+ else
+ 	$(CC) $(LD_FLAGS) -o raw_$*$(EXE) $(filter %.o,$^) -L. $(EXTRA_LD_LIBS) $(LD_LIBS_PRE) -l$* $(LD_LIBS_POST)
+ endif
++	chcon -t gcl_exec_t raw_$*$(EXE) || true
+ #	diff map_$* map_$*.old >/dev/null || (cp map_$* map_$*.old && rm -f $@ && $(MAKE) $@)
+ #	cp map_$*.old map_$*
+ 

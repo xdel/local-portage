@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Id$
 
-EAPI=4
+EAPI=6
 
 inherit eutils toolchain-funcs
 
@@ -35,6 +35,7 @@ src_prepare() {
 	epatch ${FILESDIR}/gnetman-0.0.1_pre20110124-tcl86.patch
 	sed -i -e 's/ddutil-dbg/ddutil/g' -e 's/-DDD_DEBUG//g' \
 		${WORKDIR}/${P}/src/batch/configure || die
+	default
 }
 
 src_install () {

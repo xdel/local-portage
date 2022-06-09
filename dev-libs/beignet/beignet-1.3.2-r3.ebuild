@@ -3,7 +3,7 @@
 
 EAPI=7
 
-PYTHON_COMPAT=( python3_6 )
+PYTHON_COMPAT=( python3_6 python3_7 python3_8 python3_9 )
 CMAKE_BUILD_TYPE="Release"
 
 inherit python-any-r1 cmake-multilib flag-o-matic llvm
@@ -21,7 +21,7 @@ BDEPEND="${PYTHON_DEPS}
 	virtual/pkgconfig"
 COMMON="virtual/opencl
 	media-libs/mesa[X(+),${MULTILIB_USEDEP}]
-	<sys-devel/clang-8.0.0:=[static-analyzer,${MULTILIB_USEDEP}]
+	<sys-devel/clang-10.0.0:=[static-analyzer,${MULTILIB_USEDEP}]
 	>=x11-libs/libdrm-2.4.70[video_cards_intel,${MULTILIB_USEDEP}]
 	x11-libs/libXext[${MULTILIB_USEDEP}]
 	x11-libs/libXfixes[${MULTILIB_USEDEP}]
@@ -29,7 +29,7 @@ COMMON="virtual/opencl
 RDEPEND="${COMMON}"
 DEPEND="${COMMON}"
 
-LLVM_MAX_SLOT=7
+LLVM_MAX_SLOT=9
 
 PATCHES=(
 	"${FILESDIR}"/no-debian-multiarch.patch
@@ -37,6 +37,8 @@ PATCHES=(
 	"${FILESDIR}"/${PN}-1.3.2_cmake-llvm-config-multilib.patch
 	"${FILESDIR}"/${PN}-1.3.2_llvm6.patch
 	"${FILESDIR}"/${PN}-1.3.2_llvm7.patch
+	"${FILESDIR}"/${PN}-1.3.2_llvm8.patch
+	"${FILESDIR}"/${PN}-1.3.2_llvm9.patch
 	"${FILESDIR}"/${PN}-1.3.1-oclicd_no_upstream_icdfile.patch
 	"${FILESDIR}"/${PN}-1.2.0_no-hardcoded-cflags.patch
 	"${FILESDIR}"/llvm-terminfo.patch

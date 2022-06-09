@@ -1,0 +1,28 @@
+--- a/lib/libxdp/libxdp.c
++++ b/lib/libxdp/libxdp.c
+@@ -228,8 +228,10 @@
+ {
+ 	struct btf *btf;
+ 	int err;
+-
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	err = btf__get_from_id(id, &btf);
++#pragma GCC diagnostic pop
+ 	if (err)
+ 		return NULL;
+ 	return btf;
+--- a/lib/libxdp/xsk.c
++++ b/lib/libxdp/xsk.c
+@@ -619,8 +619,10 @@
+ 		close(map_fd);
+ 		return detected;
+ 	}
+-
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	ret = bpf_prog_test_run(prog_fd, 0, &data_in, 1, &data_out, &size_out, &retval, &duration);
++#pragma GCC diagnostic pop
+ 	if (!ret && retval == XDP_PASS)
+ 		detected = true;
+ 	close(prog_fd);

@@ -17,7 +17,7 @@ src_configure() {
 	mkdir build
 	cd build
 	export ECONF_SOURCE=".."
-	export CHOST="riscv64-linux-gnu"
+	export CHOST="riscv64-unknown-elf"
 	export CFLAGS="-U_FORTIFY_SOURCE -fno-stack-protector"
 	econf
 }

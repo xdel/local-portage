@@ -1,0 +1,42 @@
+--- a/pdf-backend.cc
++++ b/pdf-backend.cc
+@@ -129,8 +129,27 @@
+  * ===================
+  */
+ 
++template <typename T>
++class unique_ptr_adapter
++{
++protected:
++  std::unique_ptr<T> uptr;
++public:
++  unique_ptr_adapter(T *ptr)
++  : uptr(ptr)
++  { }
++  operator std::unique_ptr<T> ()
++  {
++    return std::move(this->uptr);
++  }
++  operator T* ()
++  {
++    return this->uptr.release();
++  }
++};
++
+ pdf::Document::Document(const std::string &file_name)
+-: ::PDFDoc(new pdf::String(file_name.c_str()), nullptr, nullptr)
++: ::PDFDoc(unique_ptr_adapter<pdf::String>(new pdf::String(file_name.c_str())))
+ {
+   if (!this->isOk())
+     throw LoadError();
+--- a/pdf2djvu.cc
++++ b/pdf2djvu.cc
+@@ -89,7 +89,7 @@ static int get_page_for_goto_link(pdf::link::GoTo *goto_link, pdf::Catalog *cata
+ #endif
+   }
+   else
+-    dest.reset(orig_dest->copy());
++    dest.reset(new pdf::link::Destination(*orig_dest));
+   if (dest.get() != nullptr)
+   {
+     int page;

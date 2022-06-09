@@ -1,0 +1,193 @@
+--- a/devLib/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/devLib/Makefile	2022-05-07 17:57:05.923333341 -0000
+@@ -36,7 +36,7 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O2
+-CC	= gcc
++CC?	= gcc
+ INCLUDE	= -I.
+ DEFS	= -D_GNU_SOURCE
+ CFLAGS	= $(DEBUG) $(DEFS) -Wformat=2 -Wall -Winline $(INCLUDE) -pipe -fPIC
+@@ -91,9 +91,9 @@
+ 	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/include
+ 	$Q install -m 0644 $(HEADERS)					$(DESTDIR)$(PREFIX)/include
+ 	$Q echo "[Install Dynamic Lib]"
+-	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/lib
+-	$Q install -m 0755 libwiringPiDev.so.$(VERSION)			$(DESTDIR)$(PREFIX)/lib/libwiringPiDev.so.$(VERSION)
+-	$Q ln -sf $(DESTDIR)$(PREFIX)/lib/libwiringPiDev.so.$(VERSION)	$(DESTDIR)/lib/libwiringPiDev.so
++	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
++	$Q install -m 0755 libwiringPiDev.so.$(VERSION)			$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)/libwiringPiDev.so.$(VERSION)
++	$Q ln -sf libwiringPiDev.so.$(VERSION)	$(DESTDIR)/$(LIBSUBDIR)/libwiringPiDev.so
+ 	$Q $(LDCONFIG)
+ 
+ .PHONY:	install-static
+@@ -102,8 +102,8 @@
+ 	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/include
+ 	$Q install -m 0644 $(HEADERS)					$(DESTDIR)$(PREFIX)/include
+ 	$Q echo "[Install Static Lib]"
+-	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/lib
+-	$Q install -m 0755 libwiringPiDev.a				$(DESTDIR)$(PREFIX)/lib
++	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
++	$Q install -m 0755 libwiringPiDev.a				$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ 
+ .PHONY:	install-deb
+ install-deb:	$(DYNAMIC)
+--- a/examples/Gertboard/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/examples/Gertboard/Makefile	2022-05-07 17:56:00.790000008 -0000
+@@ -11,11 +11,11 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O3
+-CC	= gcc
+-INCLUDE	= -I/usr/local/include
++CC?	= gcc
++INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L/usr/local/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LDLIBS    = -lwiringPi -lwiringPiDev -lpthread -lm
+ 
+ # Should not alter anything below this line
+--- a/examples/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/examples/Makefile	2022-05-07 17:55:22.583333341 -0000
+@@ -28,11 +28,11 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O3
+-CC	= gcc
+-INCLUDE	= -I/usr/local/include
++CC?	= gcc
++INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L/usr/local/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LDLIBS    = -lwiringPi -lwiringPiDev -lpthread -lm -lcrypt -lrt
+ 
+ # Should not alter anything below this line
+--- a/examples/PiFace/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/examples/PiFace/Makefile	2022-05-07 17:55:02.743333340 -0000
+@@ -28,11 +28,11 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O3
+-CC	= gcc
+-INCLUDE	= -I/usr/local/include
++CC?	= gcc
++INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L/usr/local/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LDLIBS    = -lwiringPi -lwiringPiDev -lpthread -lm
+ 
+ # Should not alter anything below this line
+--- a/examples/PiGlow/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/examples/PiGlow/Makefile	2022-05-07 17:54:09.050000008 -0000
+@@ -28,11 +28,11 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O3
+-CC	= gcc
+-INCLUDE	= -I/usr/local/include
++CC?	= gcc
++INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L/usr/local/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LDLIBS    = -lwiringPi -lwiringPiDev -lpthread -lm
+ 
+ # Should not alter anything below this line
+--- a/examples/q2w/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/examples/q2w/Makefile	2022-05-07 17:54:40.860000007 -0000
+@@ -28,11 +28,11 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O3
+-CC	= gcc
+-INCLUDE	= -I/usr/local/include
++CC?	= gcc
++INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L/usr/local/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LDLIBS    = -lwiringPi -lwiringPiDev -lpthread -lm
+ 
+ ###############################################################################
+--- a/examples/scrollPhat/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/examples/scrollPhat/Makefile	2022-05-07 17:55:42.143333341 -0000
+@@ -28,11 +28,11 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O3
+-CC	= gcc
+-INCLUDE	= -I/usr/local/include
++CC?	= gcc
++INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L/usr/local/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LDLIBS    = -lwiringPi -lwiringPiDev -lpthread -lm
+ 
+ # Should not alter anything below this line
+--- a/gpio/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/gpio/Makefile	2022-05-07 17:53:27.156666672 -0000
+@@ -32,11 +32,11 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O2
+-CC	= gcc
++CC?	= gcc
+ INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall -Wextra $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L$(DESTDIR)$(PREFIX)/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LIBS    = -lwiringPi -lwiringPiDev -lpthread -lrt -lm -lcrypt
+ 
+ # May not need to  alter anything below this line
+--- a/wiringPi/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/wiringPi/Makefile	2022-05-07 17:56:41.253333341 -0000
+@@ -36,7 +36,7 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O2
+-CC	= gcc
++CC?	= gcc
+ INCLUDE	= -I.
+ DEFS	= -D_GNU_SOURCE
+ CFLAGS	= $(DEBUG) $(DEFS) -Wformat=2 -Wall -Wextra -Winline $(INCLUDE) -pipe -fPIC
+@@ -99,9 +99,9 @@
+ 	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/include
+ 	$Q install -m 0644 $(HEADERS)					$(DESTDIR)$(PREFIX)/include
+ 	$Q echo "[Install Dynamic Lib]"
+-	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/lib
+-	$Q install -m 0755 libwiringPi.so.$(VERSION)			$(DESTDIR)$(PREFIX)/lib/libwiringPi.so.$(VERSION)
+-	$Q ln -sf $(DESTDIR)$(PREFIX)/lib/libwiringPi.so.$(VERSION)	$(DESTDIR)/lib/libwiringPi.so
++	$Q install -m 0755 -d						$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
++	$Q install -m 0755 libwiringPi.so.$(VERSION)			$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)/libwiringPi.so.$(VERSION)
++	$Q ln -sf libwiringPi.so.$(VERSION)	$(DESTDIR)/$(LIBSUBDIR)/libwiringPi.so
+ 	$Q $(LDCONFIG)
+ 
+ .PHONY:	install-deb
+--- a/wiringPiD/Makefile	2019-12-30 02:12:14.000000000 -0000
++++ b/wiringPiD/Makefile	2022-05-07 17:57:24.846666675 -0000
+@@ -31,11 +31,11 @@
+ 
+ #DEBUG	= -g -O0
+ DEBUG	= -O2
+-CC	= gcc
++CC?	= gcc
+ INCLUDE	= -I$(DESTDIR)$(PREFIX)/include
+ CFLAGS	= $(DEBUG) -Wall -Wextra $(INCLUDE) -Winline -pipe
+ 
+-LDFLAGS	= -L$(DESTDIR)$(PREFIX)/lib
++LDFLAGS	= -L$(DESTDIR)$(PREFIX)/$(LIBSUBDIR)
+ LIBS    = -lwiringPi -lwiringPiDev -lpthread -lrt -lm -lcrypt
+ 
+ # May not need to  alter anything below this line

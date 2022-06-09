@@ -1,7 +1,7 @@
 # Copyright 1999-2015 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI="5"
+EAPI="7"
 
 WX_GTK_VER="3.0"
 inherit eutils flag-o-matic toolchain-funcs wxwidgets
@@ -28,7 +28,7 @@ S="${WORKDIR}/${MY_P}"
 
 src_prepare() {
 	# Use Gentoo LDFLAGS and CXXFLAGS
-	epatch "${FILESDIR}/${P}-flags.patch"
+	eapply "${FILESDIR}/${P}-flags.patch"
 
 	# Adjusting the doc path at src/main/HelpTasks.cpp
 	sed -i -e \
@@ -40,6 +40,7 @@ src_prepare() {
 
 	# bug 553968
 	replace-flags -O? -O1
+	default
 }
 
 src_compile() {
@@ -52,7 +53,7 @@ src_install() {
 	doman gspiceui.1
 	newicon src/icons/gspiceui-48x48.xpm gspiceui.xpm
 
-	dohtml html/*.html html/*.jpg html/*.png
+	dodoc html/*.html html/*.jpg html/*.png
 
 	# installing examples and according model and symbol files
 	if use examples ; then

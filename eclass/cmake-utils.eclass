@@ -1,4 +1,4 @@
-# Copyright 1999-2019 Gentoo Authors
+# Copyright 1999-2021 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: cmake-utils.eclass
@@ -10,7 +10,9 @@
 # (undisclosed contributors)
 # Original author: Zephyrus (zephyrus@mirach.it)
 # @SUPPORTED_EAPIS: 5 6 7
+# @PROVIDES: ninja-utils
 # @BLURB: common ebuild functions for cmake-based packages
+# @DEPRECATED: cmake.eclass
 # @DESCRIPTION:
 # DEPRECATED: This no longer receives any changes. Everyone must port to cmake.eclass.
 # The cmake-utils eclass makes creating ebuilds for cmake-based packages much easier.
@@ -93,6 +95,7 @@ _CMAKE_UTILS_ECLASS=1
 # "no" to disable (default) or anything else to enable.
 
 # @ECLASS-VARIABLE: CMAKE_EXTRA_CACHE_FILE
+# @USER_VARIABLE
 # @DEFAULT_UNSET
 # @DESCRIPTION:
 # Specifies an extra cache file to pass to cmake. This is the analog of EXTRA_ECONF
@@ -100,6 +103,7 @@ _CMAKE_UTILS_ECLASS=1
 # Should be set by user in a per-package basis in /etc/portage/package.env.
 
 # @ECLASS-VARIABLE: CMAKE_UTILS_QA_SRC_DIR_READONLY
+# @USER_VARIABLE
 # @DEFAULT_UNSET
 # @DESCRIPTION:
 # After running cmake-utils_src_prepare, sets ${S} to read-only. This is
@@ -657,6 +661,12 @@ cmake-utils_src_configure() {
 		SET (CMAKE_INSTALL_MANDIR "${EPREFIX}/usr/share/man" CACHE PATH "")
 		SET (CMAKE_USER_MAKE_RULES_OVERRIDE "${build_rules}" CACHE FILEPATH "Gentoo override rules")
 	_EOF_
+
+	# See bug 689410
+	if [[ "${ARCH}" == riscv ]]; then
+		echo 'SET (CMAKE_FIND_LIBRARY_CUSTOM_LIB_SUFFIX '"${libdir#lib}"' CACHE STRING "library search suffix" FORCE)' >> "${common_config}" || die
+	fi
+
 	[[ "${NOCOLOR}" = true || "${NOCOLOR}" = yes ]] && echo 'SET (CMAKE_COLOR_MAKEFILE OFF CACHE BOOL "pretty colors during make" FORCE)' >> "${common_config}"
 
 	if [[ ${EAPI} != [56] ]]; then

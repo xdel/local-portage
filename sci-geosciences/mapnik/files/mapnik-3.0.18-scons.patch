@@ -9,15 +9,14 @@
      ('LIBDIR_SCHEMA', 'The library sub-directory appended to the "prefix", sometimes lib64 on 64bit linux systems', LIBDIR_SCHEMA_DEFAULT),
      ('DESTDIR', 'The root directory to install into. Useful mainly for binary package building', '/'),
      ('PATH', 'A custom path (or multiple paths divided by ":") to append to the $PATH env to prioritize usage of command line programs (if multiple are present on the system)', ''),
-@@ -1222,6 +1222,8 @@
+@@ -1222,6 +1222,7 @@
  
+ if not preconfigured: 
      color_print(4,'Configuring build environment...')
- 
 +    OPTIONAL_LIBSHEADERS = []
-+
-     if not env['FAST']:
-         SetCacheMode('force')
- 
+     if env['USE_CONFIG']:
+         if not env['CONFIG'].endswith('.py'):
+             color_print(1,'SCons CONFIG file specified is not a python file, will not be read...'
 @@ -1410,7 +1412,8 @@
      # https://github.com/mapnik/mapnik/issues/913
      if env.get('XMLPARSER') and env['XMLPARSER'] == 'libxml2':

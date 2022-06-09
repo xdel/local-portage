@@ -1,4 +1,4 @@
-# Copyright 1999-2019 Gentoo Authors
+# Copyright 1999-2021 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: php-ext-source-r3.eclass
@@ -12,8 +12,6 @@
 
 inherit autotools
 
-EXPORT_FUNCTIONS src_prepare src_configure src_compile src_install src_test
-
 case ${EAPI:-0} in
 	6) inherit eapi7-ver ;;
 	7) ;;
@@ -22,6 +20,7 @@ case ${EAPI:-0} in
 esac
 
 # @ECLASS-VARIABLE: PHP_EXT_NAME
+# @PRE_INHERIT
 # @REQUIRED
 # @DESCRIPTION:
 # The extension name. This must be set, otherwise the eclass dies.
@@ -87,6 +86,7 @@ esac
 : ${PHP_INI_NAME:=${PHP_EXT_NAME}}
 
 # @ECLASS-VARIABLE: PHP_EXT_NEEDED_USE
+# @PRE_INHERIT
 # @DEFAULT_UNSET
 # @DESCRIPTION:
 # A list of USE flags to append to each PHP target selected
@@ -459,3 +459,5 @@ php-ext-source-r3_addtoinifiles() {
 		done
 	done
 }
+
+EXPORT_FUNCTIONS src_prepare src_configure src_compile src_install src_test

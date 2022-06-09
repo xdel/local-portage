@@ -2,9 +2,9 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI="5"
+EAPI="6"
 
-inherit flag-o-matic toolchain-funcs pax-utils git-r3
+inherit flag-o-matic toolchain-funcs pax-utils git-r3 epatch
 
 EGIT_BRANCH="bleeding-jumbo"
 EGIT_REPO_URI="https://github.com/magnumripper/JohnTheRipper.git"
@@ -25,6 +25,7 @@ REQUIRED_USE="openmp? ( !minimal )
 
 DEPEND="!minimal? ( >=dev-libs/openssl-1.0.1:0 )
 	mpi? ( virtual/mpi )
+	virtual/libcrypt
 	opencl? ( virtual/opencl )
 	mozilla? ( dev-libs/nss dev-libs/nspr )
 	kerberos? ( virtual/krb5 )
@@ -41,6 +42,7 @@ pkg_setup() {
 }
 
 src_prepare() {
+	eapply_user
 	cd src || die
 }
 

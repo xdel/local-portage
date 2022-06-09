@@ -1,0 +1,35 @@
+commit 8b43d853bbb8daab6bf6715bc440667f9deef132
+Author: Petr Zima <zima@matfyz.cz>
+Date:   Thu Apr 2 12:28:46 2020 +0200
+
+    arm.patch
+
+diff --git a/gcl/o/sfasli.c b/gcl/o/sfasli.c
+index c7b23bc0b..7db81cd20 100755
+--- a/gcl/o/sfasli.c
++++ b/gcl/o/sfasli.c
+@@ -112,6 +112,11 @@ LFD(build_symbol_table)(void) {
+ }
+ 
+ #ifndef _WIN32
++#if defined(__arm__) && !defined(__aarch64__)
++extern void __aeabi_unwind_cpp_pr0(void);
++extern void __aeabi_unwind_cpp_pr1(void);
++#endif
++
+ int
+ use_symbols(double d,...) {
+ 
+@@ -127,7 +132,11 @@ use_symbols(double d,...) {
+   d2=sin(d)+cos(d);
+ 
+ #endif
+-
++#if defined(__arm__) && !defined(__aarch64__)
++  __aeabi_unwind_cpp_pr0();
++  __aeabi_unwind_cpp_pr1();
++#endif
++  
+   return (int)(d+d2);
+ 
+ }

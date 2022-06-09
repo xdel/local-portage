@@ -2,9 +2,9 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=4
+EAPI=6
 
-inherit git-r3
+inherit git-r3 autotools
 
 DESCRIPTION="The Common Desktop Environment, the classic UNIX desktop"
 HOMEPAGE="http://cdesktopenv.sourceforge.net/"
@@ -45,6 +45,8 @@ DEPEND="x11-libs/libXp
 RDEPEND="${DEPEND}"
 
 src_prepare() {
+	default
+	eautoreconf
 	mkdir -p imports/x11/include
 	cd imports/x11/include
 	ln -s /usr/include/X11 .
@@ -61,7 +63,7 @@ src_compile() {
 	# (2) Build process shouldn't die, as this is alpha code and some
 	#     things are expected not to compile.  So we use make instead
 	#     emake, which dies on non-zero return value from build.
-	MAKEOPTS="${MAKEOPTS} -j1" make World || true
+	MAKEOPTS="${MAKEOPTS} -j1" make || true
 }
 
 src_install() {

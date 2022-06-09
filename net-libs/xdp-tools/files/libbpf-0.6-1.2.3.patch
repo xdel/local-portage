@@ -1,0 +1,104 @@
+--- a/configure	2022-02-17 15:05:44.000000000 -0000
++++ b/configure	2022-05-24 17:26:15.070000006 -0000
+@@ -249,7 +249,10 @@
+     (void) bpf_object__open_file("file", &opts);
+     (void) bpf_program__name(ptr);
+     (void) bpf_map__set_initial_value(ptr, ptr, 0);
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+     (void) bpf_set_link_xdp_fd_opts(0, 0, 0, &xlopts);
++#pragma GCC diagnostic pop
+     return 0;
+ }
+ EOF
+--- a/lib/libxdp/libxdp.c	2022-02-17 15:05:44.000000000 -0000
++++ b/lib/libxdp/libxdp.c	2022-05-24 17:25:09.286666675 -0000
+@@ -438,7 +438,10 @@
+ 		break;
+ 	}
+ again:
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	err = bpf_set_link_xdp_fd_opts(ifindex, prog_fd, xdp_flags, setopts);
++#pragma GCC diagnostic pop
+ 	if (err < 0) {
+ 		if (err == -EINVAL && setopts) {
+ 			pr_debug("Got 'invalid argument', trying again without old_fd\n");
+@@ -2005,8 +2005,10 @@
+ 	__u32 hw_prog_id = 0;
+ 	__u32 prog_id = 0;
+ 	int err;
+-
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	err = bpf_get_link_xdp_info(ifindex, &xinfo, sizeof(xinfo), 0);
++#pragma GCC diagnostic pop
+ 	if (err)
+ 		return ERR_PTR(err);
+ 
+@@ -2736,8 +2738,10 @@
+ {
+ 	struct xdp_link_info xinfo = {};
+ 	__u32 prog_id = 0;
+-
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	if (!bpf_get_link_xdp_info(ifindex, &xinfo, sizeof(xinfo), 0)) {
++#pragma GCC diagnostic pop
+ 		switch (xinfo.attach_mode) {
+ 		case XDP_ATTACHED_SKB:
+ 			prog_id = xinfo.skb_prog_id;
+--- a/lib/testing/test-tool.c	2022-02-17 15:05:44.000000000 -0000
++++ b/lib/testing/test-tool.c	2022-05-24 17:25:41.623333341 -0000
+@@ -138,8 +138,11 @@
+   	case XDP_MODE_UNSPEC:
+   		break;
+   	}
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	err = bpf_set_link_xdp_fd_opts(opt->iface.ifindex, prog_fd, xdp_flags,
+ 				       NULL);
++#pragma GCC diagnostic pop
+ 	if (err < 0) {
+  		pr_info("ERROR: Failed attaching XDP program to ifindex %d: %s\n",
+ 			opt->iface.ifindex, strerror(-err));
+--- a/lib/libxdp/xsk.c	2022-02-17 15:05:44.000000000 -0000
++++ b/lib/libxdp/xsk.c	2022-05-24 17:30:56.450000008 -0000
+@@ -482,8 +482,10 @@
+ 	map = bpf_object__find_map_by_name(bpf_obj, "xsks_map");
+ 	if (!map)
+ 		return -ENOENT;
+-
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	err = bpf_map__resize(map, max_queues);
++#pragma GCC diagnostic pop
+ 	if (err)
+ 		return err;
+ 
+--- a/xdp-dump/xdpdump.c	2022-02-17 15:05:44.000000000 -0000
++++ b/xdp-dump/xdpdump.c	2022-05-24 17:36:26.233333340 -0000
+@@ -1331,8 +1331,10 @@
+ 			"program!\n");
+ 		goto error_exit;
+ 	}
+-
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	data_map_def = bpf_map__def(data_map);
++#pragma GCC diagnostic pop
+ 	if (!data_map_def ||
+ 	    data_map_def->value_size != sizeof(trace_cfg)) {
+ 		pr_warn("ERROR: Can't find the correct sized .data MAP in the "
+@@ -1537,8 +1539,10 @@
+ 		pr_warn("ERROR: Can't find the .data MAP in the xdp program!\n");
+ 		goto error_exit;
+ 	}
+-
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 	data_map_def = bpf_map__def(data_map);
++#pragma GCC diagnostic pop
+ 	if (!data_map_def ||
+ 	    data_map_def->value_size != sizeof(trace_cfg)) {
+ 		pr_warn("ERROR: Can't find the correct sized .data MAP in the xdp program!\n");

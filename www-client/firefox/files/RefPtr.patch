@@ -1,0 +1,103 @@
+
+# HG changeset patch
+# User Simon Giesecke <sgiesecke@mozilla.com>
+# Date 1576059105 0
+# Node ID 41f4ca1d2e222837038671feb2dd2deeb2074838
+# Parent  bd27dfd96896dde5f30d6d3942072cf35fba7827
+Bug 1600096 - Disable RefPtr conversion constructors when underlying pointer types are not convertible. r=froydnj
+
+Differential Revision: https://phabricator.services.mozilla.com/D55141
+
+diff --git a/mfbt/RefPtr.h b/mfbt/RefPtr.h
+--- a/mfbt/RefPtr.h
++++ b/mfbt/RefPtr.h
+@@ -7,16 +7,18 @@
+ #ifndef mozilla_RefPtr_h
+ #define mozilla_RefPtr_h
+ 
+ #include "mozilla/AlreadyAddRefed.h"
+ #include "mozilla/Assertions.h"
+ #include "mozilla/Attributes.h"
+ #include "mozilla/DbgMacro.h"
+ 
++#include <type_traits>
++
+ /*****************************************************************************/
+ 
+ // template <class T> class RefPtrGetterAddRefs;
+ 
+ class nsQueryReferent;
+ class nsCOMPtr_helper;
+ class nsISupports;
+ 
+@@ -105,39 +107,43 @@ class MOZ_IS_REFPTR RefPtr {
+   MOZ_IMPLICIT RefPtr(T* aRawPtr) : mRawPtr(aRawPtr) {
+     if (mRawPtr) {
+       ConstRemovingRefPtrTraits<T>::AddRef(mRawPtr);
+     }
+   }
+ 
+   MOZ_IMPLICIT RefPtr(decltype(nullptr)) : mRawPtr(nullptr) {}
+ 
+-  template <typename I>
++  template <typename I,
++            typename = std::enable_if_t<std::is_convertible_v<I*, T*>>>
+   MOZ_IMPLICIT RefPtr(already_AddRefed<I>& aSmartPtr)
+       : mRawPtr(aSmartPtr.take())
+   // construct from |already_AddRefed|
+   {}
+ 
+-  template <typename I>
++  template <typename I,
++            typename = std::enable_if_t<std::is_convertible_v<I*, T*>>>
+   MOZ_IMPLICIT RefPtr(already_AddRefed<I>&& aSmartPtr)
+       : mRawPtr(aSmartPtr.take())
+   // construct from |otherRefPtr.forget()|
+   {}
+ 
+-  template <typename I>
++  template <typename I,
++            typename = std::enable_if_t<std::is_convertible_v<I*, T*>>>
+   MOZ_IMPLICIT RefPtr(const RefPtr<I>& aSmartPtr)
+       : mRawPtr(aSmartPtr.get())
+   // copy-construct from a smart pointer with a related pointer type
+   {
+     if (mRawPtr) {
+       ConstRemovingRefPtrTraits<T>::AddRef(mRawPtr);
+     }
+   }
+ 
+-  template <typename I>
++  template <typename I,
++            typename = std::enable_if_t<std::is_convertible_v<I*, T*>>>
+   MOZ_IMPLICIT RefPtr(RefPtr<I>&& aSmartPtr)
+       : mRawPtr(aSmartPtr.forget().take())
+   // construct from |Move(RefPtr<SomeSubclassOfT>)|.
+   {}
+ 
+   MOZ_IMPLICIT RefPtr(const nsQueryReferent& aHelper);
+   MOZ_IMPLICIT RefPtr(const nsCOMPtr_helper& aHelper);
+ #if defined(XP_WIN)
+diff --git a/mfbt/tests/TestRefPtr.cpp b/mfbt/tests/TestRefPtr.cpp
+--- a/mfbt/tests/TestRefPtr.cpp
++++ b/mfbt/tests/TestRefPtr.cpp
+@@ -109,10 +109,18 @@ int main() {
+   MOZ_RELEASE_ASSERT(11 == Foo::sNumDestroyed);
+ 
+   {
+     RefPtr<Foo> f = GetNullFoo();
+     MOZ_RELEASE_ASSERT(11 == Foo::sNumDestroyed);
+   }
+   MOZ_RELEASE_ASSERT(11 == Foo::sNumDestroyed);
+ 
++  {
++    bool condition = true;
++    const auto f =
++        condition ? mozilla::MakeRefPtr<Bar>() : mozilla::MakeRefPtr<Foo>();
++
++    MOZ_RELEASE_ASSERT(f);
++  }
++
+   return 0;
+ }
+

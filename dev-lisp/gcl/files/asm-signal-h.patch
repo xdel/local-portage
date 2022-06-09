@@ -1,0 +1,49 @@
+commit dd318071caffd3641cce348defb018f02ae0f001
+Author: Petr Zima <zima@matfyz.cz>
+Date:   Thu Apr 2 12:28:10 2020 +0200
+
+    asm-signal-h.patch
+
+diff --git a/gcl/configure b/gcl/configure
+index 272ee1f26..f45db39ed 100755
+--- a/gcl/configure
++++ b/gcl/configure
+@@ -9192,7 +9192,8 @@ done
+ 
+ for ac_header in asm/signal.h
+ do :
+-  ac_fn_c_check_header_mongrel "$LINENO" "asm/signal.h" "ac_cv_header_asm_signal_h" "$ac_includes_default"
++  ac_fn_c_check_header_compile "$LINENO" "asm/signal.h" "ac_cv_header_asm_signal_h" "#define __ASSEMBLY__
++"
+ if test "x$ac_cv_header_asm_signal_h" = xyes; then :
+   cat >>confdefs.h <<_ACEOF
+ #define HAVE_ASM_SIGNAL_H 1
+@@ -9238,6 +9239,7 @@ $as_echo_n "checking for sigcontext... " >&6; }
+ 		     #include <asm/sigcontext.h>
+ 		     #endif
+ 		     #ifdef HAVE_ASM_SIGNAL_H
++             #define __ASSEMBLY__
+ 		     #include <asm/signal.h>
+ 		     #endif
+ 
+diff --git a/gcl/configure.in b/gcl/configure.in
+index a0a68ab5e..d65aa8268 100644
+--- a/gcl/configure.in
++++ b/gcl/configure.in
+@@ -1852,7 +1852,7 @@ AC_CHECK_HEADERS(dis-asm.h,
+ 
+ #if test $use = "386-linux" ; then
+ AC_CHECK_HEADERS(asm/sigcontext.h)
+-AC_CHECK_HEADERS(asm/signal.h)
++AC_CHECK_HEADERS(asm/signal.h, [], [], [#define __ASSEMBLY__])
+ AC_MSG_CHECKING([for sigcontext])
+ AC_COMPILE_IFELSE(
+     [AC_LANG_PROGRAM(
+@@ -1874,6 +1874,7 @@ AC_COMPILE_IFELSE(
+ 		     #include <asm/sigcontext.h>
+ 		     #endif
+ 		     #ifdef HAVE_ASM_SIGNAL_H          
++             #define __ASSEMBLY__
+ 		     #include <asm/signal.h>
+ 		     #endif
+ 		 ]],

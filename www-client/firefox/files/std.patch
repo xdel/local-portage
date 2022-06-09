@@ -1,0 +1,11 @@
+--- a/toolkit/components/telemetry/other/ProcessedStack.h	2020-08-17 21:26:34.000000000 +0300
++++ b/toolkit/components/telemetry/other/ProcessedStack.h	2021-10-29 19:52:24.664162473 +0300
+@@ -8,6 +8,8 @@
+ 
+ #include <string>
+ #include <vector>
++#include <stdexcept>
++#include <limits>
+ #include "nsString.h"
+ #if defined(MOZ_GECKO_PROFILER)
+ #  include "shared-libraries.h"

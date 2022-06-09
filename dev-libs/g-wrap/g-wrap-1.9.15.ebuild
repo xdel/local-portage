@@ -1,9 +1,9 @@
 # Copyright 1999-2012 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=4
+EAPI=6
 
-inherit autotools-utils
+inherit autotools
 
 DESCRIPTION="A tool for exporting C libraries into Scheme"
 HOMEPAGE="http://www.nongnu.org/g-wrap/"
@@ -28,5 +28,5 @@ MAKEOPTS+=" -j1"
 
 src_configure() {
 	local myeconfargs=( --disable-Werror --with-glib )
-	autotools-utils_src_configure
+	default
 }

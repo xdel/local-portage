@@ -1,0 +1,14 @@
+Description: This symbol is missing after the upgrade to wayland 1.20. These
+are stubs which are replaced at run-time with real symbols from libwayland and
+need to be kept in sync.
+Upstream: https://bugzilla.mozilla.org/show_bug.cgi?id=1745560
+--- a/widget/gtk/mozwayland/mozwayland.c
++++ b/widget/gtk/mozwayland/mozwayland.c
+@@ -185,3 +185,7 @@
+ 
+ MOZ_EXPORT void wl_egl_window_resize(struct wl_egl_window* egl_window,
+                                      int width, int height, int dx, int dy) {}
++MOZ_EXPORT struct wl_proxy *
++wl_proxy_marshal_flags(struct wl_proxy *proxy, uint32_t opcode,
++				     const struct wl_interface *interface, uint32_t version,
++				     uint32_t flags, ...) { return NULL; }

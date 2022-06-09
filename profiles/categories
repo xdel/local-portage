@@ -166,5 +166,4 @@ x11-themes
 x11-wm
 xfce-base
 xfce-extra
-cross-riscv32-linux-gnu
-cross-riscv64-linux-gnu
+cross-hppa-linux-gnu

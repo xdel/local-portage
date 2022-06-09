@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI="2"
+EAPI="6"
 inherit eutils
 
 DESCRIPTION="A high-quality scanning and digital camera raw image processing software."

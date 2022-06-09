@@ -1,11 +1,11 @@
 # Copyright 1999-2012 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=4
+EAPI=6
 
 AUTOTOOLS_AUTORECONF=true
 
-inherit autotools-utils multilib
+inherit autotools multilib
 
 DESCRIPTION="Guile Scheme code that wraps the GNOME developer platform"
 HOMEPAGE="https://www.gnu.org/software/guile-gnome/"
@@ -41,17 +41,17 @@ RESTRICT=test
 MAKEOPTS+=" -j1"
 
 src_prepare() {
-	autotools-utils_src_prepare
+	src_prepare
 }
 
 src_compile() {
-	autotools-utils_src_compile \
+	src_compile \
 		guilegnomedir=/usr/share/guile/site \
 		guilegnomelibdir=/usr/$(get_libdir)
 }
 
 src_install() {
-	autotools-utils_src_install \
+	src_install \
 		guilegnomedir=/usr/share/guile/site \
 		guilegnomelibdir=/usr/$(get_libdir)
 }
