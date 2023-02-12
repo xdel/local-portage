@@ -1,10 +1,10 @@
 # Copyright 1999-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=6
+EAPI=7
 
-PYTHON_COMPAT=( python3_7 python3_8 )
-USE_RUBY="ruby24 ruby25 ruby26"
+PYTHON_COMPAT=( python3_9 python3_10 )
+USE_RUBY="ruby27"
 
 inherit cmake-utils python-single-r1 ruby-single
 

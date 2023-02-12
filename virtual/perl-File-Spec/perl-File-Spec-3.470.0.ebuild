@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/virtual/perl-File-Spec/perl-File-Spec-3.480.0.ebuild,v 1.1 2014/09/16 08:20:08 dilfridge Exp $
 
-EAPI=5
+EAPI=6
 
 DESCRIPTION="Virtual for ${PN#perl-}"
 HOMEPAGE=""

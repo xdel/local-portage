@@ -1,7 +1,7 @@
 # Copyright 1999-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI="5"
+EAPI="6"
 
 EGIT_REPO_URI="https://github.com/syntacore/libjaylink.git"
 
@@ -19,6 +19,7 @@ DEPEND="virtual/libusb:1"
 RDEPEND="${DEPEND}"
 
 src_prepare() {
+	eapply_user
 	eautoreconf || die
 }
 

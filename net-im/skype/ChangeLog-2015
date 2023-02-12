@@ -103,7 +103,7 @@
   18 Jun 2014; Michał Górny <mgorny@gentoo.org> skype-2.2.0.35-r99.ebuild,
   skype-4.0.0.8-r1.ebuild, skype-4.1.0.20.ebuild, skype-4.2.0.11-r1.ebuild,
   skype-4.2.0.11.ebuild, skype-4.2.0.13.ebuild:
-  Update dependencies to require guaranteed EAPI=5 or multilib ebuilds, bug
+  Update dependencies to require guaranteed EAPI=6 or multilib ebuilds, bug
   #513718.
 
 *skype-4.2.0.13 (29 Jan 2014)

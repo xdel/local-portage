@@ -1,0 +1,25 @@
+--- a/dom/media/platforms/agnostic/DAV1DDecoder.cpp
++++ b/dom/media/platforms/agnostic/DAV1DDecoder.cpp
+@@ -29,13 +29,22 @@
+   } else if (mInfo.mDisplay.width >= 1024) {
+     decoder_threads = 4;
+   }
++#if DAV1D_API_VERSION_MAJOR > 5
++  settings.n_threads =
++      static_cast<int>(std::min(decoder_threads, GetNumberOfProcessors()));
++#else
+   settings.n_frame_threads =
+       static_cast<int>(std::min(decoder_threads, GetNumberOfProcessors()));
++#endif
+   // There is not much improvement with more than 2 tile threads at least with
+   // the content being currently served. The ideal number of tile thread would
+   // much the tile count of the content. Maybe dav1d can help to do that in the
+   // future.
++#if DAV1D_API_VERSION_MAJOR > 5
++  settings.n_threads = 2;
++#else
+   settings.n_tile_threads = 2;
++#endif
+ 
+   int res = dav1d_open(&mContext, &settings);
+   if (res < 0) {

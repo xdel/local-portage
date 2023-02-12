@@ -7,7 +7,7 @@
 # @AUTHOR:
 # Author: Tomáš Chvátal <scarabeus@gentoo.org>
 # Author: Donnie Berkholz <dberkholz@gentoo.org>
-# @SUPPORTED_EAPIS: 4 5
+# @SUPPORTED_EAPIS: 4 5 6
 # @BLURB: Reduces code duplication in the modularized X11 ebuilds.
 # @DESCRIPTION:
 # This eclass makes trivial X ebuilds possible for apps, fonts, drivers,
@@ -47,16 +47,12 @@ fi
 : ${XORG_MULTILIB:="no"}
 
 # we need to inherit autotools first to get the deps
-inherit autotools autotools-utils eutils libtool multilib toolchain-funcs \
+inherit autotools libtool multilib toolchain-funcs \
 	flag-o-matic ${FONT_ECLASS} ${GIT_ECLASS}
-
-if [[ ${XORG_MULTILIB} == yes ]]; then
-	inherit autotools-multilib
-fi
 
 EXPORTED_FUNCTIONS="src_unpack src_compile src_install pkg_postinst pkg_postrm"
 case "${EAPI:-0}" in
-	4|5) EXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS} src_prepare src_configure" ;;
+	4|5|6) EXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS} src_prepare src_configure" ;;
 	*) die "EAPI=${EAPI} is not supported" ;;
 esac
 
@@ -447,11 +443,7 @@ xorg-2_src_configure() {
 		"${xorgconfadd[@]}"
 	)
 
-	if [[ ${XORG_MULTILIB} == yes ]]; then
-		autotools-multilib_src_configure "$@"
-	else
-		autotools-utils_src_configure "$@"
-	fi
+	autotools-utils_src_configure "$@"
 }
 
 # @FUNCTION: xorg-2_src_compile
@@ -460,11 +452,7 @@ xorg-2_src_configure() {
 xorg-2_src_compile() {
 	debug-print-function ${FUNCNAME} "$@"
 
-	if [[ ${XORG_MULTILIB} == yes ]]; then
-		autotools-multilib_src_compile "$@"
-	else
-		autotools-utils_src_compile "$@"
-	fi
+	autotools-utils_src_compile "$@"
 }
 
 # @FUNCTION: xorg-2_src_install
@@ -476,11 +464,7 @@ xorg-2_src_install() {
 
 	local install_args=( docdir="${EPREFIX}/usr/share/doc/${PF}" )
 
-	if [[ ${XORG_MULTILIB} == yes ]]; then
-		autotools-multilib_src_install "${install_args[@]}"
-	else
-		autotools-utils_src_install "${install_args[@]}"
-	fi
+	autotools-utils_src_install "${install_args[@]}"
 
 	if [[ -n ${GIT_ECLASS} ]]; then
 		pushd "${EGIT_STORE_DIR}/${EGIT_CLONE_DIR}" > /dev/null || die

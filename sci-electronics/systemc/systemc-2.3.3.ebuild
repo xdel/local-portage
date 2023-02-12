@@ -2,9 +2,9 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Id$
 
-EAPI=5
+EAPI=6
 
-inherit eutils toolchain-funcs autotools-utils
+inherit eutils toolchain-funcs autotools
 
 DESCRIPTION="A C++ based modeling platform for VLSI and system-level co-design"
 HOMEPAGE="http://www.systemc.org/"

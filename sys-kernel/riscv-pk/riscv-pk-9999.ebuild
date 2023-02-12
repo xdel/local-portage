@@ -1,4 +1,4 @@
-EAPI="5"
+EAPI="6"
 inherit eutils autotools git-r3
 
 DESCRIPTION="RISC-V proxy kernel"

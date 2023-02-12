@@ -2,13 +2,13 @@
 # Copyright 1999-2019 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=6
 
 # apply exlass globals to test version parsing
 TOOLCHAIN_GCC_PV=7.3.0
 PR=r0
 
-source tests-common.sh
+source tests-common.sh || exit
 
 inherit toolchain
 

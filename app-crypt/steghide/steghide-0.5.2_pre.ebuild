@@ -1,7 +1,7 @@
 # Copyright 2012 Funtoo Technologies
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI="5"
+EAPI="6"
 inherit autotools eutils
 
 DESCRIPTION="A steganography program which hides data in various media files"
@@ -24,6 +24,7 @@ src_prepare(){
 	epatch "${FILESDIR}"/${P}-gcc34.patch \
 		"${FILESDIR}"/${P}-gcc4.patch \
 		"${FILESDIR}"/${P}-gcc43.patch
+	eapply_user
 }
 
 src_configure() {

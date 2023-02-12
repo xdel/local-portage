@@ -2,8 +2,8 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=5
-inherit base eutils git-r3
+EAPI=6
+inherit eutils git-r3
 
 MY_PV=${PV:0:3}-${PV:4:2}
 DESCRIPTION="Provide Pascal interface for standard astronomy libraries"

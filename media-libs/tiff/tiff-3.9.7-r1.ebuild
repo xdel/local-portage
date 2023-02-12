@@ -1,7 +1,7 @@
 # Copyright 1999-2018 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=6
 
 # this ebuild is only for the libtiff.so.3 (+ 4) and libtiffxx.so.3 (+ 4) SONAME for ABI compat
 
@@ -30,6 +30,7 @@ src_prepare() {
 		"${FILESDIR}"/${P}-printdir-width.patch
 
 	elibtoolize
+	eapply_user
 }
 
 multilib_src_configure() {

@@ -1,4 +1,4 @@
-EAPI="5"
+EAPI="6"
 inherit eutils autotools git-r3
 
 DESCRIPTION="RISC-V ISA golden model"
@@ -14,4 +14,5 @@ IUSE=""
 src_prepare() {
 	sed -i "s/^install_libs_dir\ :=.*/install_libs_dir\ :=\ \$\(INSTALLDIR\)\/$(get_libdir)/g" \
 	${S}/Makefile.in || die "Failed to fix Makefile"
+	eapply_user
 }

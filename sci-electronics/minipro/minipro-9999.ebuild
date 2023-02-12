@@ -18,7 +18,7 @@ RDEPEND="virtual/libusb:1"
 DEPEND="${RDEPEND}"
 
 src_install() {
-	dobin ${PN}{,hex}
+	dobin ${PN}
 	udev_dorules udev/{60-minipro,61-minipro-plugdev,61-minipro-uaccess}.rules
 	doman man/${PN}.1
 	dobashcomp bash_completion.d/${PN}

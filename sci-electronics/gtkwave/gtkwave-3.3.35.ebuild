@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/sci-electronics/gtkwave/gtkwave-3.3.31.ebuild,v 1.1 2012/02/12 08:53:24 tomjbe Exp $
 
-EAPI="4"
+EAPI="6"
 
 inherit fdo-mime
 

@@ -1,7 +1,7 @@
 # Copyright 1999-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=6
 
 inherit eutils flag-o-matic toolchain-funcs udev
 
@@ -63,6 +63,7 @@ src_prepare() {
 
 	# disable write_pid(), because we don't need it
 	sed -i -e "s:\(write_pid();\):/* \1 */:g" irattach/util.c || die
+	eapply_user
 }
 
 src_compile() {

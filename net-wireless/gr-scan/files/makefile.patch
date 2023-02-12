@@ -1,0 +1,24 @@
+--- a/Makefile	2023-02-12 21:15:02.876666667 -0000
++++ b/Makefile	2023-02-12 21:17:38.159999988 -0000
+@@ -16,9 +16,13 @@
+ #	along with this program.  If not, see <http://www.gnu.org/licenses/>. 
+ #
+ 
++PREFIX ?= /usr
++DESTDIR ?=
++BINDIR ?= $(PREFIX)/bin
++
+ VERSION=2022092201
+ CXXFLAGS=-DVERSION="\"gr-scan $(VERSION)\"" -I/usr/include  -Wall -g -std=c++11 -Wno-unused-function
+-LDFLAGS=$(CXXFLAGS) -lstdc++ -llog4cpp -lboost_system -lgnuradio-blocks -lgnuradio-pmt -lgnuradio-fft -lgnuradio-filter -lgnuradio-osmosdr -lgnuradio-runtime -lpython3.8 -L/usr/lib/x86_64-linux-gnu
++LDFLAGS=$(CXXFLAGS) -lstdc++ -lboost_system -lgnuradio-blocks -lgnuradio-pmt -lgnuradio-fft -lgnuradio-filter -lgnuradio-osmosdr $(shell pkg-config --libs librtlsdr libhackrf gnuradio-runtime log4cpp fmt)
+ 
+ gr-scan: main.o scanner_sink.o topblock.o
+ 	g++ -o gr-scan main.o scanner_sink.o topblock.o $(LDFLAGS)
+@@ -40,3 +44,6 @@
+ 	cp *.cpp *.hpp Makefile COPYING gr-scan-$(VERSION)
+ 	tar -cf - gr-scan-$(VERSION) | gzip -9 -c - > gr-scan-$(VERSION).tar.gz
+ 	rm -r gr-scan-$(VERSION)
++
++install: gr-scan
++	@install -v -d "$(DESTDIR)$(BINDIR)" && install -m 0755 -v gr-scan "$(DESTDIR)$(BINDIR)/gr-scan"

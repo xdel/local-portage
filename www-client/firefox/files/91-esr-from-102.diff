@@ -1,0 +1,1875 @@
+diff --git a/docshell/base/nsDocShell.cpp b/docshell/base/nsDocShell.cpp
+index 8f1cf78208db84fc44100c14e32905fdb30fe767..c4ff8414b770d3ab677e38f90999db302239b8df 100644
+--- a/docshell/base/nsDocShell.cpp
++++ b/docshell/base/nsDocShell.cpp
+@@ -9097,7 +9097,9 @@ static bool NavigationShouldTakeFocus(nsDocShell* aDocShell,
+   if (!aLoadState->AllowFocusMove()) {
+     return false;
+   }
+-
++  if (!aLoadState->HasValidUserGestureActivation()) {
++    return false;
++  }
+   const auto& sourceBC = aLoadState->SourceBrowsingContext();
+   if (!sourceBC || !sourceBC->IsActive()) {
+     // If the navigation didn't come from a foreground tab, then we don't steal
+diff --git a/dom/base/nsContentUtils.cpp b/dom/base/nsContentUtils.cpp
+index 6dd69d1d81a8a94598fcd35090940a87915cd983..1605b06d6379a7a7760c4d2f900889ed02e815b3 100644
+--- a/dom/base/nsContentUtils.cpp
++++ b/dom/base/nsContentUtils.cpp
+@@ -7166,15 +7166,25 @@ bool nsContentUtils::IsNodeInEditableRegion(nsINode* aNode) {
+ }
+ 
+ // static
+-bool nsContentUtils::IsForbiddenRequestHeader(const nsACString& aHeader) {
++bool nsContentUtils::IsForbiddenRequestHeader(const nsACString& aHeader,
++                                              const nsACString& aValue) {
+   if (IsForbiddenSystemRequestHeader(aHeader)) {
+     return true;
+   }
+ 
+-  return StringBeginsWith(aHeader, "proxy-"_ns,
+-                          nsCaseInsensitiveCStringComparator) ||
+-         StringBeginsWith(aHeader, "sec-"_ns,
+-                          nsCaseInsensitiveCStringComparator);
++  if ((nsContentUtils::IsOverrideMethodHeader(aHeader) &&
++       nsContentUtils::ContainsForbiddenMethod(aValue))) {
++    return true;
++  }
++
++  if (StringBeginsWith(aHeader, "proxy-"_ns,
++                       nsCaseInsensitiveCStringComparator) ||
++      StringBeginsWith(aHeader, "sec-"_ns,
++                       nsCaseInsensitiveCStringComparator)) {
++    return true;
++  }
++
++  return false;
+ }
+ 
+ // static
+@@ -7213,6 +7223,31 @@ bool nsContentUtils::IsForbiddenResponseHeader(const nsACString& aHeader) {
+           aHeader.LowerCaseEqualsASCII("set-cookie2"));
+ }
+ 
++// static
++bool nsContentUtils::IsOverrideMethodHeader(const nsACString& headerName) {
++  return headerName.EqualsIgnoreCase("x-http-method-override") ||
++         headerName.EqualsIgnoreCase("x-http-method") ||
++         headerName.EqualsIgnoreCase("x-method-override");
++}
++
++// static
++bool nsContentUtils::ContainsForbiddenMethod(const nsACString& headerValue) {
++  bool hasInsecureMethod = false;
++  nsCCharSeparatedTokenizer tokenizer(headerValue, ',');
++
++  while (tokenizer.hasMoreTokens()) {
++    const nsDependentCSubstring& value = tokenizer.nextToken();
++
++    if (value.EqualsIgnoreCase("connect") || value.EqualsIgnoreCase("trace") ||
++        value.EqualsIgnoreCase("track")) {
++      hasInsecureMethod = true;
++      break;
++    }
++  }
++
++  return hasInsecureMethod;
++}
++
+ // static
+ bool nsContentUtils::IsCorsUnsafeRequestHeaderValue(
+     const nsACString& aHeaderValue) {
+diff --git a/dom/base/nsContentUtils.h b/dom/base/nsContentUtils.h
+index bb5c84886af9a00bc10f332cabfc99a7cbb2adc8..03c6d6822d2f63092e6d5c46d31331a84fd3d74c 100644
+--- a/dom/base/nsContentUtils.h
++++ b/dom/base/nsContentUtils.h
+@@ -2749,7 +2749,8 @@ class nsContentUtils {
+    * Returns whether a given header is forbidden for an XHR or fetch
+    * request.
+    */
+-  static bool IsForbiddenRequestHeader(const nsACString& aHeader);
++  static bool IsForbiddenRequestHeader(const nsACString& aHeader,
++                                       const nsACString& aValue);
+ 
+   /**
+    * Returns whether a given header is forbidden for a system XHR
+@@ -2757,6 +2758,14 @@ class nsContentUtils {
+    */
+   static bool IsForbiddenSystemRequestHeader(const nsACString& aHeader);
+ 
++  /**
++   * Checks whether the header overrides any http methods
++   */
++  static bool IsOverrideMethodHeader(const nsACString& headerName);
++  /**
++   * Checks whether the  header value contains any forbidden method
++   */
++  static bool ContainsForbiddenMethod(const nsACString& headerValue);
+   /**
+    * Returns whether a given header has characters that aren't permitted
+    */
+diff --git a/dom/fetch/Fetch.cpp b/dom/fetch/Fetch.cpp
+index b22bd8f6630037d497d84843938253111669ef30..2cff924eb59fc42646419dac8199128784c42e87 100644
+--- a/dom/fetch/Fetch.cpp
++++ b/dom/fetch/Fetch.cpp
+@@ -510,6 +510,27 @@ already_AddRefed<Promise> FetchRequest(nsIGlobalObject* aGlobal,
+   }
+ 
+   SafeRefPtr<InternalRequest> r = request->GetInternalRequest();
++
++  // Restore information of InterceptedHttpChannel if they are passed with the
++  // Request. Since Request::Constructor would not copy these members.
++  if (aInput.IsRequest()) {
++    RefPtr<Request> inputReq = &aInput.GetAsRequest();
++    SafeRefPtr<InternalRequest> inputInReq = inputReq->GetInternalRequest();
++    if (inputInReq->GetInterceptionTriggeringPrincipalInfo()) {
++      r->SetInterceptionContentPolicyType(
++          inputInReq->InterceptionContentPolicyType());
++      r->SetInterceptionTriggeringPrincipalInfo(
++          MakeUnique<mozilla::ipc::PrincipalInfo>(
++              *(inputInReq->GetInterceptionTriggeringPrincipalInfo().get())));
++      if (!inputInReq->InterceptionRedirectChain().IsEmpty()) {
++        r->SetInterceptionRedirectChain(
++            inputInReq->InterceptionRedirectChain());
++      }
++      r->SetInterceptionFromThirdParty(
++          inputInReq->InterceptionFromThirdParty());
++    }
++  }
++
+   RefPtr<AbortSignalImpl> signalImpl = request->GetSignalImpl();
+ 
+   if (signalImpl && signalImpl->Aborted()) {
+diff --git a/dom/fetch/FetchDriver.cpp b/dom/fetch/FetchDriver.cpp
+index 4da3e0faa2f0b73986c73b98e313b985443eed73..ca3f75b14f8744dc9b9b5272be8fd4d54c53002b 100644
+--- a/dom/fetch/FetchDriver.cpp
++++ b/dom/fetch/FetchDriver.cpp
+@@ -12,6 +12,7 @@
+ #include "nsICookieJarSettings.h"
+ #include "nsIFile.h"
+ #include "nsIInputStream.h"
++#include "nsIInterceptionInfo.h"
+ #include "nsIOutputStream.h"
+ #include "nsIFileChannel.h"
+ #include "nsIHttpChannel.h"
+@@ -21,6 +22,7 @@
+ #include "nsIUploadChannel2.h"
+ #include "nsIInterfaceRequestorUtils.h"
+ #include "nsIPipe.h"
++#include "nsIRedirectHistoryEntry.h"
+ 
+ #include "nsContentPolicyUtils.h"
+ #include "nsDataHandler.h"
+@@ -37,6 +39,7 @@
+ #include "mozilla/dom/UserActivation.h"
+ #include "mozilla/dom/WorkerCommon.h"
+ #include "mozilla/PreloaderBase.h"
++#include "mozilla/net/InterceptionInfo.h"
+ #include "mozilla/net/NeckoChannelParams.h"
+ #include "mozilla/ipc/PBackgroundSharedTypes.h"
+ #include "mozilla/StaticPrefs_browser.h"
+@@ -647,6 +650,33 @@ nsresult FetchDriver::HttpFetch(
+     NS_ENSURE_SUCCESS(rv, rv);
+   }
+ 
++  // If the fetch is created by FetchEvent.request or NavigationPreload request,
++  // corresponding InterceptedHttpChannel information need to propagte to the
++  // channel of the fetch.
++  if (mRequest->GetInterceptionTriggeringPrincipalInfo()) {
++    auto principalOrErr = mozilla::ipc::PrincipalInfoToPrincipal(
++        *(mRequest->GetInterceptionTriggeringPrincipalInfo().get()));
++    if (!principalOrErr.isErr()) {
++      nsCOMPtr<nsIPrincipal> principal = principalOrErr.unwrap();
++
++      nsTArray<nsCOMPtr<nsIRedirectHistoryEntry>> redirectChain;
++      if (!mRequest->InterceptionRedirectChain().IsEmpty()) {
++        for (const RedirectHistoryEntryInfo& entryInfo :
++             mRequest->InterceptionRedirectChain()) {
++          nsCOMPtr<nsIRedirectHistoryEntry> entry =
++              mozilla::ipc::RHEntryInfoToRHEntry(entryInfo);
++          redirectChain.AppendElement(entry);
++        }
++      }
++
++      nsCOMPtr<nsILoadInfo> loadInfo = chan->LoadInfo();
++      MOZ_ASSERT(loadInfo);
++      loadInfo->SetInterceptionInfo(new mozilla::net::InterceptionInfo(
++          principal, mRequest->InterceptionContentPolicyType(), redirectChain,
++          mRequest->InterceptionFromThirdParty()));
++    }
++  }
++
+   if (mDocument && mDocument->GetEmbedderElement() &&
+       mDocument->GetEmbedderElement()->IsAnyOfHTMLElements(nsGkAtoms::object,
+                                                            nsGkAtoms::embed)) {
+diff --git a/dom/fetch/FetchTypes.ipdlh b/dom/fetch/FetchTypes.ipdlh
+index a01c5154e5b9c2e8ce7c3dfb9345aec51c6af400..cb9449331baf8a0802bc9bb1e8347613ef6c3c63 100644
+--- a/dom/fetch/FetchTypes.ipdlh
++++ b/dom/fetch/FetchTypes.ipdlh
+@@ -7,6 +7,7 @@ include ChannelInfo;
+ include PBackgroundSharedTypes;
+ 
+ include protocol PRemoteLazyInputStream;
++include NeckoChannelParams;
+ 
+ include "mozilla/dom/FetchIPCTypes.h";
+ 
+@@ -64,6 +65,10 @@ struct IPCInternalRequest {
+   nsString integrity;
+   nsCString fragment;
+   PrincipalInfo? principalInfo;
++  PrincipalInfo? interceptionTriggeringPrincipalInfo;
++  uint32_t interceptionContentPolicyType;
++  RedirectHistoryEntryInfo[] interceptionRedirectChain;
++  bool interceptionFromThirdParty;
+ };
+ 
+ struct IPCInternalResponse {
+diff --git a/dom/fetch/FetchUtil.h b/dom/fetch/FetchUtil.h
+index 5907e209a4f77724605486d5956f231c25dbaef5..f2508d5cd24c3b7dc7fdf6085559ffd552226c9a 100644
+--- a/dom/fetch/FetchUtil.h
++++ b/dom/fetch/FetchUtil.h
+@@ -39,7 +39,6 @@ class FetchUtil final {
+    */
+   static nsresult GetValidRequestMethod(const nsACString& aMethod,
+                                         nsCString& outMethod);
+-
+   /**
+    * Extracts an HTTP header from a substring range.
+    */
+diff --git a/dom/fetch/InternalHeaders.cpp b/dom/fetch/InternalHeaders.cpp
+index 37a5e0fadcaaae418bc72ab46ae98c6129642a57..45cb2aa5c4dc83b27becf9dc1a226c2922d66766 100644
+--- a/dom/fetch/InternalHeaders.cpp
++++ b/dom/fetch/InternalHeaders.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "mozilla/dom/InternalHeaders.h"
+ 
++#include "FetchUtil.h"
+ #include "mozilla/dom/FetchTypes.h"
+ #include "mozilla/ErrorResult.h"
+ 
+@@ -56,11 +57,11 @@ bool InternalHeaders::IsValidHeaderValue(const nsCString& aLowerName,
+   }
+ 
+   // Step 4
+-  if (mGuard == HeadersGuardEnum::Request &&
+-      IsForbiddenRequestHeader(aLowerName)) {
+-    return false;
++  if (mGuard == HeadersGuardEnum::Request) {
++    if (IsForbiddenRequestHeader(aLowerName, aNormalizedValue)) {
++      return false;
++    }
+   }
+-
+   // Step 5
+   if (mGuard == HeadersGuardEnum::Request_no_cors) {
+     nsAutoCString tempValue;
+@@ -161,7 +162,9 @@ void InternalHeaders::Delete(const nsACString& aName, ErrorResult& aRv) {
+   }
+ 
+   // Step 3
+-  if (IsForbiddenRequestHeader(lowerName)) {
++  nsAutoCString value;
++  GetInternal(lowerName, value, aRv);
++  if (IsForbiddenRequestHeader(lowerName, value)) {
+     return;
+   }
+ 
+@@ -381,9 +384,10 @@ bool InternalHeaders::IsImmutable(ErrorResult& aRv) const {
+   return false;
+ }
+ 
+-bool InternalHeaders::IsForbiddenRequestHeader(const nsCString& aName) const {
++bool InternalHeaders::IsForbiddenRequestHeader(const nsCString& aName,
++                                               const nsACString& aValue) const {
+   return mGuard == HeadersGuardEnum::Request &&
+-         nsContentUtils::IsForbiddenRequestHeader(aName);
++         nsContentUtils::IsForbiddenRequestHeader(aName, aValue);
+ }
+ 
+ bool InternalHeaders::IsForbiddenRequestNoCorsHeader(
+diff --git a/dom/fetch/InternalHeaders.h b/dom/fetch/InternalHeaders.h
+index 2fac237733d74e6170ae4afc38b068e12d47c6f5..2841844ef6da4d8e1db720927ff34c24ea1e5e86 100644
+--- a/dom/fetch/InternalHeaders.h
++++ b/dom/fetch/InternalHeaders.h
+@@ -131,7 +131,8 @@ class InternalHeaders final {
+   bool IsValidHeaderValue(const nsCString& aLowerName,
+                           const nsCString& aNormalizedValue, ErrorResult& aRv);
+   bool IsImmutable(ErrorResult& aRv) const;
+-  bool IsForbiddenRequestHeader(const nsCString& aName) const;
++  bool IsForbiddenRequestHeader(const nsCString& aName,
++                                const nsACString& aValue) const;
+   bool IsForbiddenRequestNoCorsHeader(const nsCString& aName) const;
+   bool IsForbiddenRequestNoCorsHeader(const nsCString& aName,
+                                       const nsACString& aValue) const;
+@@ -144,7 +145,7 @@ class InternalHeaders final {
+   bool IsInvalidMutableHeader(const nsCString& aName, const nsACString& aValue,
+                               ErrorResult& aRv) const {
+     return IsInvalidName(aName, aRv) || IsInvalidValue(aValue, aRv) ||
+-           IsImmutable(aRv) || IsForbiddenRequestHeader(aName) ||
++           IsImmutable(aRv) || IsForbiddenRequestHeader(aName, aValue) ||
+            IsForbiddenRequestNoCorsHeader(aName, aValue) ||
+            IsForbiddenResponseHeader(aName);
+   }
+diff --git a/dom/fetch/InternalRequest.cpp b/dom/fetch/InternalRequest.cpp
+index 089465a53320507630eeb1eb631d2cda6504d36f..c7bf24665b921f2403b98057d3272645953df2ad 100644
+--- a/dom/fetch/InternalRequest.cpp
++++ b/dom/fetch/InternalRequest.cpp
+@@ -137,8 +137,17 @@ InternalRequest::InternalRequest(const InternalRequest& aOther,
+       mSynchronous(aOther.mSynchronous),
+       mUnsafeRequest(aOther.mUnsafeRequest),
+       mUseURLCredentials(aOther.mUseURLCredentials),
+-      mContentPolicyTypeOverridden(aOther.mContentPolicyTypeOverridden) {
++      mContentPolicyTypeOverridden(aOther.mContentPolicyTypeOverridden),
++      mInterceptionContentPolicyType(aOther.mInterceptionContentPolicyType),
++      mInterceptionRedirectChain(aOther.mInterceptionRedirectChain),
++      mInterceptionFromThirdParty(aOther.mInterceptionFromThirdParty) {
+   // NOTE: does not copy body stream... use the fallible Clone() for that
++
++  if (aOther.GetInterceptionTriggeringPrincipalInfo()) {
++    mInterceptionTriggeringPrincipalInfo =
++        MakeUnique<mozilla::ipc::PrincipalInfo>(
++            *(aOther.GetInterceptionTriggeringPrincipalInfo().get()));
++  }
+ }
+ 
+ InternalRequest::InternalRequest(const IPCInternalRequest& aIPCRequest)
+@@ -157,12 +166,22 @@ InternalRequest::InternalRequest(const IPCInternalRequest& aIPCRequest)
+       mCacheMode(aIPCRequest.cacheMode()),
+       mRedirectMode(aIPCRequest.requestRedirect()),
+       mIntegrity(aIPCRequest.integrity()),
+-      mFragment(aIPCRequest.fragment()) {
++      mFragment(aIPCRequest.fragment()),
++      mInterceptionContentPolicyType(static_cast<nsContentPolicyType>(
++          aIPCRequest.interceptionContentPolicyType())),
++      mInterceptionRedirectChain(aIPCRequest.interceptionRedirectChain()),
++      mInterceptionFromThirdParty(aIPCRequest.interceptionFromThirdParty()) {
+   if (aIPCRequest.principalInfo()) {
+     mPrincipalInfo = MakeUnique<mozilla::ipc::PrincipalInfo>(
+         aIPCRequest.principalInfo().ref());
+   }
+ 
++  if (aIPCRequest.interceptionTriggeringPrincipalInfo()) {
++    mInterceptionTriggeringPrincipalInfo =
++        MakeUnique<mozilla::ipc::PrincipalInfo>(
++            aIPCRequest.interceptionTriggeringPrincipalInfo().ref());
++  }
++
+   const Maybe<BodyStreamVariant>& body = aIPCRequest.body();
+ 
+   // This constructor is (currently) only used for parent -> child communication
+@@ -188,6 +207,11 @@ void InternalRequest::OverrideContentPolicyType(
+   mContentPolicyTypeOverridden = true;
+ }
+ 
++void InternalRequest::SetInterceptionContentPolicyType(
++    nsContentPolicyType aContentPolicyType) {
++  mInterceptionContentPolicyType = aContentPolicyType;
++}
++
+ /* static */
+ RequestDestination InternalRequest::MapContentPolicyTypeToRequestDestination(
+     nsContentPolicyType aContentPolicyType) {
+@@ -397,4 +421,8 @@ void InternalRequest::SetPrincipalInfo(
+   mPrincipalInfo = std::move(aPrincipalInfo);
+ }
+ 
++void InternalRequest::SetInterceptionTriggeringPrincipalInfo(
++    UniquePtr<mozilla::ipc::PrincipalInfo> aPrincipalInfo) {
++  mInterceptionTriggeringPrincipalInfo = std::move(aPrincipalInfo);
++}
+ }  // namespace mozilla::dom
+diff --git a/dom/fetch/InternalRequest.h b/dom/fetch/InternalRequest.h
+index a526089fe2e7a544dd3eecea9d3b6d4026fc7ccf..eed09227c6e0f54affb13d62afb132990c6b7fe2 100644
+--- a/dom/fetch/InternalRequest.h
++++ b/dom/fetch/InternalRequest.h
+@@ -17,12 +17,15 @@
+ #include "nsIChannelEventSink.h"
+ #include "nsIInputStream.h"
+ #include "nsISupportsImpl.h"
++#include "mozilla/net/NeckoChannelParams.h"
+ #ifdef DEBUG
+ #  include "nsIURLParser.h"
+ #  include "nsNetCID.h"
+ #  include "nsServiceManagerUtils.h"
+ #endif
+ 
++using mozilla::net::RedirectHistoryEntryInfo;
++
+ namespace mozilla {
+ 
+ namespace ipc {
+@@ -322,7 +325,6 @@ class InternalRequest final : public AtomicSafeRefCounted<InternalRequest> {
+ 
+   // Takes ownership of the principal info.
+   void SetPrincipalInfo(UniquePtr<mozilla::ipc::PrincipalInfo> aPrincipalInfo);
+-
+   const UniquePtr<mozilla::ipc::PrincipalInfo>& GetPrincipalInfo() const {
+     return mPrincipalInfo;
+   }
+@@ -347,6 +349,36 @@ class InternalRequest final : public AtomicSafeRefCounted<InternalRequest> {
+     return mEmbedderPolicy;
+   }
+ 
++  void SetInterceptionTriggeringPrincipalInfo(
++      UniquePtr<mozilla::ipc::PrincipalInfo> aPrincipalInfo);
++
++  const UniquePtr<mozilla::ipc::PrincipalInfo>&
++  GetInterceptionTriggeringPrincipalInfo() const {
++    return mInterceptionTriggeringPrincipalInfo;
++  }
++
++  nsContentPolicyType InterceptionContentPolicyType() const {
++    return mInterceptionContentPolicyType;
++  }
++  void SetInterceptionContentPolicyType(nsContentPolicyType aContentPolicyType);
++
++  const nsTArray<RedirectHistoryEntryInfo>& InterceptionRedirectChain() const {
++    return mInterceptionRedirectChain;
++  }
++
++  void SetInterceptionRedirectChain(
++      const nsTArray<RedirectHistoryEntryInfo>& aRedirectChain) {
++    mInterceptionRedirectChain = aRedirectChain;
++  }
++
++  const bool& InterceptionFromThirdParty() const {
++    return mInterceptionFromThirdParty;
++  }
++
++  void SetInterceptionFromThirdParty(bool aFromThirdParty) {
++    mInterceptionFromThirdParty = aFromThirdParty;
++  }
++
+  private:
+   struct ConstructorGuard {};
+ 
+@@ -420,6 +452,26 @@ class InternalRequest final : public AtomicSafeRefCounted<InternalRequest> {
+       nsILoadInfo::EMBEDDER_POLICY_NULL;
+ 
+   UniquePtr<mozilla::ipc::PrincipalInfo> mPrincipalInfo;
++
++  // Following members are specific for the FetchEvent.request or
++  // NavigationPreload request which is extracted from the
++  // InterceptedHttpChannel.
++  // Notice that these members would not be copied when calling
++  // InternalRequest::GetRequestConstructorCopy() since these information should
++  // not be propagated when copying the Request in ServiceWorker script.
++
++  // This is the trigging principalInfo of the InterceptedHttpChannel.
++  UniquePtr<mozilla::ipc::PrincipalInfo> mInterceptionTriggeringPrincipalInfo;
++
++  // This is the contentPolicyType of the InterceptedHttpChannel.
++  nsContentPolicyType mInterceptionContentPolicyType{
++      nsIContentPolicy::TYPE_INVALID};
++
++  // This is the redirect history of the InterceptedHttpChannel.
++  CopyableTArray<RedirectHistoryEntryInfo> mInterceptionRedirectChain;
++
++  // This indicates that the InterceptedHttpChannel is a third party channel.
++  bool mInterceptionFromThirdParty{false};
+ };
+ 
+ }  // namespace dom
+diff --git a/dom/serviceworkers/ServiceWorkerInterceptController.cpp b/dom/serviceworkers/ServiceWorkerInterceptController.cpp
+index 3869d6bbe5ded6c9829d0c078adca17db03c8ac5..4dfcaedfcf738746d13eea956eeaf26bbc456a11 100644
+--- a/dom/serviceworkers/ServiceWorkerInterceptController.cpp
++++ b/dom/serviceworkers/ServiceWorkerInterceptController.cpp
+@@ -9,11 +9,14 @@
+ #include "mozilla/BasePrincipal.h"
+ #include "mozilla/StaticPrefs_dom.h"
+ #include "mozilla/StorageAccess.h"
++#include "mozilla/dom/InternalRequest.h"
++#include "mozilla/net/HttpBaseChannel.h"
+ #include "nsCOMPtr.h"
+ #include "nsContentUtils.h"
+ #include "nsIChannel.h"
+ #include "ServiceWorkerManager.h"
+ #include "nsIPrincipal.h"
++#include "nsQueryObject.h"
+ 
+ namespace mozilla {
+ namespace dom {
+@@ -37,29 +40,45 @@ ServiceWorkerInterceptController::ShouldPrepareForIntercept(
+   if (!nsContentUtils::IsNonSubresourceRequest(aChannel)) {
+     const Maybe<ServiceWorkerDescriptor>& controller =
+         loadInfo->GetController();
++
+     // If the controller doesn't handle fetch events, return false
+-    if (controller.isSome()) {
+-      *aShouldIntercept = controller.ref().HandlesFetch();
+-
+-      // The service worker has no fetch event handler, try to schedule a
+-      // soft-update through ServiceWorkerRegistrationInfo.
+-      // Get ServiceWorkerRegistrationInfo by the ServiceWorkerInfo's principal
+-      // and scope
+-      if (!*aShouldIntercept && swm) {
+-        nsCOMPtr<nsIPrincipal> principal =
+-            controller.ref().GetPrincipal().unwrap();
+-        RefPtr<ServiceWorkerRegistrationInfo> registration =
+-            swm->GetRegistration(principal, controller.ref().Scope());
+-        // Could not get ServiceWorkerRegistration here if unregister is
+-        // executed before getting here.
+-        if (NS_WARN_IF(!registration)) {
+-          return NS_OK;
+-        }
+-        registration->MaybeScheduleTimeCheckAndUpdate();
++    if (!controller.isSome()) {
++      return NS_OK;
++    }
++
++    *aShouldIntercept = controller.ref().HandlesFetch();
++
++    // The service worker has no fetch event handler, try to schedule a
++    // soft-update through ServiceWorkerRegistrationInfo.
++    // Get ServiceWorkerRegistrationInfo by the ServiceWorkerInfo's principal
++    // and scope
++    if (!*aShouldIntercept && swm) {
++      nsCOMPtr<nsIPrincipal> principal =
++          controller.ref().GetPrincipal().unwrap();
++      RefPtr<ServiceWorkerRegistrationInfo> registration =
++          swm->GetRegistration(principal, controller.ref().Scope());
++      // Could not get ServiceWorkerRegistration here if unregister is
++      // executed before getting here.
++      if (NS_WARN_IF(!registration)) {
++        return NS_OK;
+       }
+-    } else {
+-      *aShouldIntercept = false;
++      registration->MaybeScheduleTimeCheckAndUpdate();
+     }
++
++    RefPtr<net::HttpBaseChannel> httpChannel = do_QueryObject(aChannel);
++
++    if (httpChannel &&
++        httpChannel->GetRequestHead()->HasHeader(net::nsHttp::Range)) {
++      RequestMode requestMode =
++          InternalRequest::MapChannelToRequestMode(aChannel);
++      bool mayLoad = nsContentUtils::CheckMayLoad(
++          loadInfo->GetLoadingPrincipal(), aChannel,
++          /*allowIfInheritsPrincipal*/ false);
++      if (requestMode == RequestMode::No_cors && !mayLoad) {
++        *aShouldIntercept = false;
++      }
++    }
++
+     return NS_OK;
+   }
+ 
+diff --git a/dom/serviceworkers/ServiceWorkerPrivateImpl.cpp b/dom/serviceworkers/ServiceWorkerPrivateImpl.cpp
+index 17bf3fcb2a1a61ce28c0c2a584c61b9a7d3bd082..8894a33ccd49f39e8caafacf08f5e4fd403cf44c 100644
+--- a/dom/serviceworkers/ServiceWorkerPrivateImpl.cpp
++++ b/dom/serviceworkers/ServiceWorkerPrivateImpl.cpp
+@@ -19,6 +19,7 @@
+ #include "nsIHttpHeaderVisitor.h"
+ #include "nsINetworkInterceptController.h"
+ #include "nsIObserverService.h"
++#include "nsIRedirectHistoryEntry.h"
+ #include "nsIScriptError.h"
+ #include "nsIURI.h"
+ #include "nsIUploadChannel2.h"
+@@ -29,6 +30,7 @@
+ #include "ServiceWorkerCloneData.h"
+ #include "ServiceWorkerManager.h"
+ #include "ServiceWorkerRegistrationInfo.h"
++#include "mozIThirdPartyUtil.h"
+ #include "mozilla/Assertions.h"
+ #include "mozilla/ErrorResult.h"
+ #include "mozilla/ipc/PBackgroundChild.h"
+@@ -748,11 +750,33 @@ Result<IPCInternalRequest, nsresult> GetIPCInternalRequest(
+   }
+ 
+   Maybe<PrincipalInfo> principalInfo;
++  Maybe<PrincipalInfo> interceptionPrincipalInfo;
+ 
+   if (loadInfo->TriggeringPrincipal()) {
+     principalInfo.emplace();
++    interceptionPrincipalInfo.emplace();
+     MOZ_ALWAYS_SUCCEEDS(PrincipalToPrincipalInfo(
+         loadInfo->TriggeringPrincipal(), principalInfo.ptr()));
++    MOZ_ALWAYS_SUCCEEDS(PrincipalToPrincipalInfo(
++        loadInfo->TriggeringPrincipal(), interceptionPrincipalInfo.ptr()));
++  }
++
++  nsTArray<RedirectHistoryEntryInfo> redirectChain;
++  for (const nsCOMPtr<nsIRedirectHistoryEntry>& redirectEntry :
++       loadInfo->RedirectChain()) {
++    RedirectHistoryEntryInfo* entry = redirectChain.AppendElement();
++    MOZ_ALWAYS_SUCCEEDS(RHEntryToRHEntryInfo(redirectEntry, entry));
++  }
++
++  bool isThirdPartyChannel;
++  // ThirdPartyUtil* thirdPartyUtil = ThirdPartyUtil::GetInstance();
++  nsCOMPtr<mozIThirdPartyUtil> thirdPartyUtil =
++      do_GetService(THIRDPARTYUTIL_CONTRACTID);
++  if (thirdPartyUtil) {
++    nsCOMPtr<nsIURI> uri;
++    MOZ_TRY(underlyingChannel->GetURI(getter_AddRefs(uri)));
++    MOZ_TRY(thirdPartyUtil->IsThirdPartyChannel(underlyingChannel, uri,
++                                                &isThirdPartyChannel));
+   }
+ 
+   // Note: all the arguments are copied rather than moved, which would be more
+@@ -761,7 +785,8 @@ Result<IPCInternalRequest, nsresult> GetIPCInternalRequest(
+       method, {spec}, ipcHeadersGuard, ipcHeaders, Nothing(), -1,
+       alternativeDataType, contentPolicyType, referrer, referrerPolicy,
+       requestMode, requestCredentials, cacheMode, requestRedirect, integrity,
+-      fragment, principalInfo);
++      fragment, principalInfo, interceptionPrincipalInfo, contentPolicyType,
++      redirectChain, isThirdPartyChannel);
+ }
+ 
+ nsresult MaybeStoreStreamForBackgroundThread(nsIInterceptedChannel* aChannel,
+diff --git a/dom/serviceworkers/moz.build b/dom/serviceworkers/moz.build
+index 885c87dace33c8dab39bc7e7c60768fadd7f58a5..11100a511317018fb5f923af665cf5e41b412ea3 100644
+--- a/dom/serviceworkers/moz.build
++++ b/dom/serviceworkers/moz.build
+@@ -103,6 +103,13 @@ IPDL_SOURCES += [
+     "ServiceWorkerRegistrarTypes.ipdlh",
+ ]
+ 
++LOCAL_INCLUDES += [
++    # For HttpBaseChannel.h dependencies
++    "/netwerk/base",
++    # For HttpBaseChannel.h
++    "/netwerk/protocol/http",
++]
++
+ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
+diff --git a/dom/xhr/XMLHttpRequestMainThread.cpp b/dom/xhr/XMLHttpRequestMainThread.cpp
+index c969ee9a88b4d94252651664c1bf3330dda3d86f..c58a65be2a162d0fe93848ba56ab70c3bf9e9a1f 100644
+--- a/dom/xhr/XMLHttpRequestMainThread.cpp
++++ b/dom/xhr/XMLHttpRequestMainThread.cpp
+@@ -3130,7 +3130,8 @@ void XMLHttpRequestMainThread::SetRequestHeader(const nsACString& aName,
+ 
+   // Step 5
+   bool isPrivilegedCaller = IsSystemXHR();
+-  bool isForbiddenHeader = nsContentUtils::IsForbiddenRequestHeader(aName);
++  bool isForbiddenHeader =
++      nsContentUtils::IsForbiddenRequestHeader(aName, aValue);
+   if (!isPrivilegedCaller && isForbiddenHeader) {
+     AutoTArray<nsString, 1> params;
+     CopyUTF8toUTF16(aName, *params.AppendElement());
+diff --git a/ipc/glue/BackgroundUtils.cpp b/ipc/glue/BackgroundUtils.cpp
+index f6ede009be9df6c84c4020e9f209e88b5cdb1c46..25e196e539912e1c375437b6d84c685692014caf 100644
+--- a/ipc/glue/BackgroundUtils.cpp
++++ b/ipc/glue/BackgroundUtils.cpp
+@@ -14,6 +14,7 @@
+ #include "mozilla/ipc/PBackgroundSharedTypes.h"
+ #include "mozilla/ipc/URIUtils.h"
+ #include "mozilla/net/CookieJarSettings.h"
++#include "mozilla/net/InterceptionInfo.h"
+ #include "mozilla/net/NeckoChannelParams.h"
+ #include "ExpandedPrincipal.h"
+ #include "nsIScriptSecurityManager.h"
+@@ -501,6 +502,29 @@ nsresult LoadInfoToLoadInfoArgs(nsILoadInfo* aLoadInfo,
+   nsCOMPtr<nsIURI> unstrippedURI;
+   Unused << aLoadInfo->GetUnstrippedURI(getter_AddRefs(unstrippedURI));
+ 
++  Maybe<InterceptionInfoArg> interceptionInfoArg;
++  nsIInterceptionInfo* interceptionInfo = aLoadInfo->InterceptionInfo();
++  if (interceptionInfo) {
++    Maybe<PrincipalInfo> triggeringPrincipalInfo;
++    if (interceptionInfo->TriggeringPrincipal()) {
++      triggeringPrincipalInfo.emplace();
++      rv = PrincipalToPrincipalInfo(interceptionInfo->TriggeringPrincipal(),
++                                    triggeringPrincipalInfo.ptr());
++    }
++
++    nsTArray<RedirectHistoryEntryInfo> redirectChain;
++    for (const nsCOMPtr<nsIRedirectHistoryEntry>& redirectEntry :
++         interceptionInfo->RedirectChain()) {
++      RedirectHistoryEntryInfo* entry = redirectChain.AppendElement();
++      rv = RHEntryToRHEntryInfo(redirectEntry, entry);
++      NS_ENSURE_SUCCESS(rv, rv);
++    }
++
++    interceptionInfoArg = Some(InterceptionInfoArg(
++        triggeringPrincipalInfo, interceptionInfo->ContentPolicyType(),
++        redirectChain, interceptionInfo->FromThirdParty()));
++  }
++
+   *aOptionalLoadInfoArgs = Some(LoadInfoArgs(
+       loadingPrincipalInfo, triggeringPrincipalInfo, principalToInheritInfo,
+       sandboxedLoadingPrincipalInfo, topLevelPrincipalInfo,
+@@ -543,7 +567,8 @@ nsresult LoadInfoToLoadInfoArgs(nsILoadInfo* aLoadInfo,
+       aLoadInfo->GetIsFromObjectOrEmbed(), cookieJarSettingsArgs,
+       aLoadInfo->GetRequestBlockingReason(), maybeCspToInheritInfo,
+       aLoadInfo->GetHasStoragePermission(), aLoadInfo->GetIsMetaRefresh(),
+-      aLoadInfo->GetLoadingEmbedderPolicy(), unstrippedURI));
++      aLoadInfo->GetLoadingEmbedderPolicy(), unstrippedURI,
++      interceptionInfoArg));
+ 
+   return NS_OK;
+ }
+@@ -691,7 +716,6 @@ nsresult LoadInfoArgsToLoadInfo(
+     NS_ENSURE_SUCCESS(rv, rv);
+     redirectChain.AppendElement(redirectHistoryEntry.forget());
+   }
+-
+   nsTArray<nsCOMPtr<nsIPrincipal>> ancestorPrincipals;
+   nsTArray<uint64_t> ancestorBrowsingContextIDs;
+   if (XRE_IsParentProcess() &&
+@@ -760,6 +784,34 @@ nsresult LoadInfoArgsToLoadInfo(
+     loadingContext = frameBrowsingContext->GetEmbedderElement();
+   }
+ 
++  nsCOMPtr<nsIInterceptionInfo> interceptionInfo;
++  if (loadInfoArgs.interceptionInfo().isSome()) {
++    const InterceptionInfoArg& interceptionInfoArg =
++        loadInfoArgs.interceptionInfo().ref();
++    nsCOMPtr<nsIPrincipal> triggeringPrincipal;
++    if (interceptionInfoArg.triggeringPrincipalInfo().isSome()) {
++      auto triggeringPrincipalOrErr = PrincipalInfoToPrincipal(
++          interceptionInfoArg.triggeringPrincipalInfo().ref());
++      if (NS_WARN_IF(triggeringPrincipalOrErr.isErr())) {
++        return triggeringPrincipalOrErr.unwrapErr();
++      }
++      triggeringPrincipal = triggeringPrincipalOrErr.unwrap();
++    }
++
++    RedirectHistoryArray redirectChain;
++    for (const RedirectHistoryEntryInfo& entryInfo :
++         interceptionInfoArg.redirectChain()) {
++      nsCOMPtr<nsIRedirectHistoryEntry> redirectHistoryEntry =
++          RHEntryInfoToRHEntry(entryInfo);
++      NS_ENSURE_SUCCESS(rv, rv);
++      redirectChain.AppendElement(redirectHistoryEntry.forget());
++    }
++
++    interceptionInfo = new InterceptionInfo(
++        triggeringPrincipal, interceptionInfoArg.contentPolicyType(),
++        redirectChain, interceptionInfoArg.fromThirdParty());
++  }
++
+   RefPtr<mozilla::net::LoadInfo> loadInfo = new mozilla::net::LoadInfo(
+       loadingPrincipal, triggeringPrincipal, principalToInherit,
+       sandboxedLoadingPrincipal, topLevelPrincipal,
+@@ -800,7 +852,8 @@ nsresult LoadInfoArgsToLoadInfo(
+       loadInfoArgs.isInDevToolsContext(), loadInfoArgs.parserCreatedScript(),
+       loadInfoArgs.hasStoragePermission(), loadInfoArgs.isMetaRefresh(),
+       loadInfoArgs.requestBlockingReason(), loadingContext,
+-      loadInfoArgs.loadingEmbedderPolicy(), loadInfoArgs.unstrippedURI());
++      loadInfoArgs.loadingEmbedderPolicy(), loadInfoArgs.unstrippedURI(),
++      interceptionInfo);
+ 
+   if (loadInfoArgs.isFromProcessingFrameAttributes()) {
+     loadInfo->SetIsFromProcessingFrameAttributes();
+diff --git a/js/src/gc/GC.cpp b/js/src/gc/GC.cpp
+index 14c4951c5b878516f3a05ec31632811a2e7863bd..5c350fc5bc5461052124ff96243ad8b34ca080a6 100644
+--- a/js/src/gc/GC.cpp
++++ b/js/src/gc/GC.cpp
+@@ -4643,6 +4643,10 @@ void GCRuntime::beginMarkPhase(AutoGCSession& session) {
+   for (GCZonesIter zone(this); !zone.done(); zone.next()) {
+     // Incremental marking barriers are enabled at this point.
+     zone->changeGCState(Zone::Prepare, Zone::MarkBlackOnly);
++
++    for (RealmsInZoneIter realm(zone); !realm.done(); realm.next()) {
++      realm->clearAllocatedDuringGC();
++    }
+   }
+ 
+   if (rt->isBeingDestroyed()) {
+diff --git a/js/src/jit-test/tests/gc/bug-1796901.js b/js/src/jit-test/tests/gc/bug-1796901.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..081b5b8e6e30aa5624e886fcacdd99cd47bacf22
+--- /dev/null
++++ b/js/src/jit-test/tests/gc/bug-1796901.js
+@@ -0,0 +1,4 @@
++// |jit-test| --no-threads
++gcslice(0);
++evalcx("lazy");
++abortgc();
+diff --git a/js/src/vm/Realm-inl.h b/js/src/vm/Realm-inl.h
+index 2663cac04a67a661fce4f2008076bacaed8f770e..e0b902d9b9d8780e4689e50dcc2e2af84ea11427 100644
+--- a/js/src/vm/Realm-inl.h
++++ b/js/src/vm/Realm-inl.h
+@@ -46,9 +46,14 @@ inline bool JS::Realm::hasLiveGlobal() const {
+ }
+ 
+ inline bool JS::Realm::marked() const {
+-  // Preserve this Realm if it has a live global or if it has been entered (to
+-  // ensure we don't destroy the Realm while we're allocating its global).
+-  return hasLiveGlobal() || hasBeenEnteredIgnoringJit();
++  // The Realm survives in the following cases:
++  //  - its global is live
++  //  - it has been entered (to ensure we don't destroy the Realm while we're
++  //    allocating its global)
++  //  - it was allocated after the start of an incremental GC (as there may be
++  //    pointers to it from other GC things)
++  return hasLiveGlobal() || hasBeenEnteredIgnoringJit() ||
++         allocatedDuringIncrementalGC_;
+ }
+ 
+ /* static */ inline js::ObjectRealm& js::ObjectRealm::get(const JSObject* obj) {
+diff --git a/js/src/vm/Realm.cpp b/js/src/vm/Realm.cpp
+index 53b7670cda33d9d09b861378c4c2c2e3fa82a853..abe25ec3183570107d1c935c31a92747b68d14ca 100644
+--- a/js/src/vm/Realm.cpp
++++ b/js/src/vm/Realm.cpp
+@@ -62,6 +62,8 @@ Realm::Realm(Compartment* comp, const JS::RealmOptions& options)
+       varNames_(zone_),
+       randomKeyGenerator_(runtime_->forkRandomKeyGenerator()),
+       debuggers_(zone_),
++      allocatedDuringIncrementalGC_(zone_->isGCMarkingOrSweeping() ||
++                                    zone_->isGCFinished()),
+       wasm(runtime_) {
+   MOZ_ASSERT_IF(creationOptions_.mergeable(),
+                 creationOptions_.invisibleToDebugger());
+diff --git a/js/src/vm/Realm.h b/js/src/vm/Realm.h
+index 1f8852befc72af22fe28a040198a944b3cb00083..5f7763c7ed529e59e8c8a54ee5c11beefff281c6 100644
+--- a/js/src/vm/Realm.h
++++ b/js/src/vm/Realm.h
+@@ -411,6 +411,7 @@ class JS::Realm : public JS::shadow::Realm {
+ 
+   bool isSelfHostingRealm_ = false;
+   bool isSystem_ = false;
++  bool allocatedDuringIncrementalGC_;
+ 
+   js::UniquePtr<js::coverage::LCovRealm> lcovRealm_ = nullptr;
+ 
+@@ -636,6 +637,7 @@ class JS::Realm : public JS::shadow::Realm {
+   }
+ 
+   inline bool marked() const;
++  void clearAllocatedDuringGC() { allocatedDuringIncrementalGC_ = false; }
+ 
+   /*
+    * The principals associated with this realm. Note that the same several
+diff --git a/layout/reftests/bugs/1792643-1-ref.html b/layout/reftests/bugs/1792643-1-ref.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..444853c34151bf766a0ae9484842b03878258519
+--- /dev/null
++++ b/layout/reftests/bugs/1792643-1-ref.html
+@@ -0,0 +1,36 @@
++<html>
++
++<head>
++  <meta charset="utf-8">
++  <title>Test for bug 1792643</title>
++  <style>
++    table {
++      width: 500px;
++    }
++
++    th {
++      background-color: green;
++    }
++
++    div {
++      width: 300px;
++      overflow: hidden;
++    }
++  </style>
++</head>
++
++<body>
++  <div>
++    <table>
++      <colgroup></colgroup>
++      <tr style="filter: hue-rotate(0);">
++        <th>foo</th>
++      </tr>
++      <tr style="will-change: transform;">
++        <th>bar</th>
++      </tr>
++    </table>
++  </div>
++</body>
++
++</html>
+diff --git a/layout/reftests/bugs/1792643-1.html b/layout/reftests/bugs/1792643-1.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..8391f64fd1b139aa5f24cb5aa3d743fecab6e366
+--- /dev/null
++++ b/layout/reftests/bugs/1792643-1.html
+@@ -0,0 +1,40 @@
++<html>
++
++<head>
++  <meta charset="utf-8">
++  <title>Test for bug 1792643</title>
++  <style>
++    table {
++      width: 500px;
++    }
++
++    th {
++      background-color: green;
++    }
++
++    colgroup {
++      background-color: red;
++    }
++
++    div {
++      width: 300px;
++      overflow: hidden;
++    }
++  </style>
++</head>
++
++<body>
++  <div>
++    <table>
++      <colgroup></colgroup>
++      <tr style="filter: hue-rotate(0);">
++        <th>foo</th>
++      </tr>
++      <tr style="will-change: transform;">
++        <th>bar</th>
++      </tr>
++    </table>
++  </div>
++</body>
++
++</html>
+diff --git a/layout/reftests/bugs/reftest.list b/layout/reftests/bugs/reftest.list
+index 470027f91dd9cc1164d3887e7bc7602b64b29d02..1c24617821745e13c44a6baaabb828ea37d53849 100644
+--- a/layout/reftests/bugs/reftest.list
++++ b/layout/reftests/bugs/reftest.list
+@@ -2105,3 +2105,4 @@ fuzzy(0-2,0-96600) == 1648282-1b.html 1648282-1-ref.html
+ != chrome://reftest/content/bugs/1688004.xhtml about:blank
+ == 1726663-1.html 1726663-1-ref.html
+ == 1735265-1.html 1735265-1-ref.html
++== 1792643-1.html 1792643-1-ref.html
+diff --git a/layout/tables/nsTableCellFrame.cpp b/layout/tables/nsTableCellFrame.cpp
+index 163de5ac03a2b3d118f30d169baa7cb911cbd8e1..385a68d57232d2dfef0a14bbf4a756553f98b816 100644
+--- a/layout/tables/nsTableCellFrame.cpp
++++ b/layout/tables/nsTableCellFrame.cpp
+@@ -483,7 +483,8 @@ void nsTableCellFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
+     }
+ 
+     // display borders if we need to
+-    ProcessBorders(GetTableFrame(), aBuilder, aLists);
++    nsTableFrame* tableFrame = GetTableFrame();
++    ProcessBorders(tableFrame, aBuilder, aLists);
+ 
+     // and display the selection border if we need to
+     if (IsSelected()) {
+@@ -513,17 +514,20 @@ void nsTableCellFrame::BuildDisplayList(nsDisplayListBuilder* aBuilder,
+       DisplayListClipState::AutoSaveRestore clipState(aBuilder);
+       nsDisplayListBuilder::AutoCurrentActiveScrolledRootSetter asrSetter(
+           aBuilder);
+-      if (IsStackingContext()) {
+-        // The col/colgroup items we create below will be inserted directly into the
+-        // BorderBackgrounds list of the table frame. That means that they'll be moved
+-        // *outside* of any wrapper items from this table cell, and will not participate in
+-        // this table cell's opacity / transform / filter / mask effects.
+-        // If this cell is a stacking context, then we may have one or more of those
+-        // wrapper items, and one of them may have captured a clip. In order to ensure
+-        // correct clipping and scrolling of the col/colgroup items, restore the clip and ASR
+-        // that we observed when we entered the table frame.
+-        // If this cell is a stacking context but doesn't have any clip capturing wrapper items,
+-        // then we'll double-apply the clip. That's ok.
++      if (IsStackingContext() || row->IsStackingContext() ||
++        rowGroup->IsStackingContext() || tableFrame->IsStackingContext()) {
++        // The col/colgroup items we create below will be inserted directly into
++        // the BorderBackgrounds list of the table frame. That means that
++        // they'll be moved *outside* of any wrapper items created for any
++        // frames between this table cell frame and the table wrapper frame, and
++        // will not participate in those frames's opacity / transform / filter /
++        // mask effects. If one of those frames is a stacking context, then we
++        // may have one or more of those wrapper items, and one of them may have
++        // captured a clip. In order to ensure correct clipping and scrolling of
++        // the col/colgroup items, restore the clip and ASR that we observed
++        // when we entered the table frame. If that frame is a stacking context
++        // but doesn't have any clip capturing wrapper items, then we'll
++        // double-apply the clip. That's ok.
+         clipState.SetClipChainForContainingBlockDescendants(
+             backgrounds->GetTableClipChain());
+         asrSetter.SetCurrentActiveScrolledRoot(backgrounds->GetTableASR());
+diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
+index b87714065456338dfc37570b63770bf09f31b6ec..f9f31be1fe4c6524f586a57456920786934cbc07 100644
+--- a/modules/libpref/init/StaticPrefList.yaml
++++ b/modules/libpref/init/StaticPrefList.yaml
+@@ -9896,6 +9896,11 @@
+   value: true
+   mirror: always
+ 
++- name: network.allow_large_stack_size_for_socket_thread
++  type: RelaxedAtomicBool
++  value: true
++  mirror: always
++
+ #---------------------------------------------------------------------------
+ # Prefs starting with "nglayout."
+ #---------------------------------------------------------------------------
+diff --git a/netwerk/base/InterceptionInfo.cpp b/netwerk/base/InterceptionInfo.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..977ec02e4700231aa558b1d0327183b70296954f
+--- /dev/null
++++ b/netwerk/base/InterceptionInfo.cpp
+@@ -0,0 +1,63 @@
++/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#include "mozilla/net/InterceptionInfo.h"
++#include "nsContentUtils.h"
++
++namespace mozilla::net {
++
++NS_IMPL_ISUPPORTS(InterceptionInfo, nsIInterceptionInfo)
++
++InterceptionInfo::InterceptionInfo(nsIPrincipal* aTriggeringPrincipal,
++                                   nsContentPolicyType aContentPolicyType,
++                                   const RedirectHistoryArray& aRedirectChain,
++                                   bool aFromThirdParty)
++    : mTriggeringPrincipal(aTriggeringPrincipal),
++      mContentPolicyType(aContentPolicyType),
++      mFromThirdParty(aFromThirdParty) {
++  SetRedirectChain(aRedirectChain);
++}
++
++nsIPrincipal* InterceptionInfo::TriggeringPrincipal() {
++  return mTriggeringPrincipal;
++}
++
++void InterceptionInfo::SetTriggeringPrincipal(nsIPrincipal* aPrincipal) {
++  mTriggeringPrincipal = aPrincipal;
++}
++
++nsContentPolicyType InterceptionInfo::ContentPolicyType() {
++  return mContentPolicyType;
++}
++
++nsContentPolicyType InterceptionInfo::ExternalContentPolicyType() {
++  return static_cast<nsContentPolicyType>(
++      nsContentUtils::InternalContentPolicyTypeToExternal(mContentPolicyType));
++}
++
++void InterceptionInfo::SetContentPolicyType(
++    const nsContentPolicyType aContentPolicyType) {
++  mContentPolicyType = aContentPolicyType;
++}
++
++const RedirectHistoryArray& InterceptionInfo::RedirectChain() {
++  return mRedirectChain;
++}
++
++void InterceptionInfo::SetRedirectChain(
++    const RedirectHistoryArray& aRedirectChain) {
++  for (auto entry : aRedirectChain) {
++    mRedirectChain.AppendElement(entry);
++  }
++}
++
++bool InterceptionInfo::FromThirdParty() { return mFromThirdParty; }
++
++void InterceptionInfo::SetFromThirdParty(bool aFromThirdParty) {
++  mFromThirdParty = aFromThirdParty;
++}
++
++}  // namespace mozilla::net
+diff --git a/netwerk/base/InterceptionInfo.h b/netwerk/base/InterceptionInfo.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..ad2f2a449902bd8fd6f167db4776085ed99c43ce
+--- /dev/null
++++ b/netwerk/base/InterceptionInfo.h
+@@ -0,0 +1,44 @@
++/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#ifndef mozilla_net_InterceptionInfo_h
++#define mozilla_net_InterceptionInfo_h
++
++#include "nsIContentSecurityPolicy.h"
++#include "nsIInterceptionInfo.h"
++#include "nsIPrincipal.h"
++#include "nsIRedirectHistoryEntry.h"
++#include "nsTArray.h"
++#include "nsCOMPtr.h"
++
++namespace mozilla::net {
++
++using RedirectHistoryArray = nsTArray<nsCOMPtr<nsIRedirectHistoryEntry>>;
++
++class InterceptionInfo final : public nsIInterceptionInfo {
++ public:
++  NS_DECL_THREADSAFE_ISUPPORTS
++  NS_DECL_NSIINTERCEPTIONINFO
++
++  InterceptionInfo(nsIPrincipal* aTriggeringPrincipal,
++                   nsContentPolicyType aContentPolicyType,
++                   const RedirectHistoryArray& aRedirectChain,
++                   bool aFromThirdParty);
++
++  using nsIInterceptionInfo::GetExtContentPolicyType;
++
++ private:
++  ~InterceptionInfo() = default;
++
++  nsCOMPtr<nsIPrincipal> mTriggeringPrincipal;
++  nsContentPolicyType mContentPolicyType{nsIContentPolicy::TYPE_INVALID};
++  RedirectHistoryArray mRedirectChain;
++  bool mFromThirdParty = false;
++};
++
++}  // namespace mozilla::net
++
++#endif
+diff --git a/netwerk/base/LoadInfo.cpp b/netwerk/base/LoadInfo.cpp
+index 2bca01945ce0efc0b1abac98e5adcb936bf3806b..8ad52e11a7bc1727950a0580c4a40e453d760bb7 100644
+--- a/netwerk/base/LoadInfo.cpp
++++ b/netwerk/base/LoadInfo.cpp
+@@ -575,7 +575,6 @@ LoadInfo::LoadInfo(const LoadInfo& rhs)
+       mForcePreflight(rhs.mForcePreflight),
+       mIsPreflight(rhs.mIsPreflight),
+       mLoadTriggeredFromExternal(rhs.mLoadTriggeredFromExternal),
+-
+       mDocumentHasUserInteracted(rhs.mDocumentHasUserInteracted),
+       mAllowListFutureDocumentsCreatedFromThisRedirectChain(
+           rhs.mAllowListFutureDocumentsCreatedFromThisRedirectChain),
+@@ -595,7 +594,8 @@ LoadInfo::LoadInfo(const LoadInfo& rhs)
+       mIsMediaInitialRequest(rhs.mIsMediaInitialRequest),
+       mIsFromObjectOrEmbed(rhs.mIsFromObjectOrEmbed),
+       mLoadingEmbedderPolicy(rhs.mLoadingEmbedderPolicy),
+-      mUnstrippedURI(rhs.mUnstrippedURI) {}
++      mUnstrippedURI(rhs.mUnstrippedURI),
++      mInterceptionInfo(rhs.mInterceptionInfo) {}
+ 
+ LoadInfo::LoadInfo(
+     nsIPrincipal* aLoadingPrincipal, nsIPrincipal* aTriggeringPrincipal,
+@@ -636,7 +636,7 @@ LoadInfo::LoadInfo(
+     bool aHasStoragePermission, bool aIsMetaRefresh,
+     uint32_t aRequestBlockingReason, nsINode* aLoadingContext,
+     nsILoadInfo::CrossOriginEmbedderPolicy aLoadingEmbedderPolicy,
+-    nsIURI* aUnstrippedURI)
++    nsIURI* aUnstrippedURI, nsIInterceptionInfo* aInterceptionInfo)
+     : mLoadingPrincipal(aLoadingPrincipal),
+       mTriggeringPrincipal(aTriggeringPrincipal),
+       mPrincipalToInherit(aPrincipalToInherit),
+@@ -701,9 +701,9 @@ LoadInfo::LoadInfo(
+       mParserCreatedScript(aParserCreatedScript),
+       mHasStoragePermission(aHasStoragePermission),
+       mIsMetaRefresh(aIsMetaRefresh),
+-
+       mLoadingEmbedderPolicy(aLoadingEmbedderPolicy),
+-      mUnstrippedURI(aUnstrippedURI) {
++      mUnstrippedURI(aUnstrippedURI),
++      mInterceptionInfo(aInterceptionInfo){
+   // Only top level TYPE_DOCUMENT loads can have a null loadingPrincipal
+   MOZ_ASSERT(mLoadingPrincipal ||
+              aContentPolicyType == nsIContentPolicy::TYPE_DOCUMENT);
+@@ -1951,5 +1951,11 @@ already_AddRefed<nsIContentSecurityPolicy> LoadInfo::GetCspToInherit() {
+   return cspToInherit.forget();
+ }
+ 
++nsIInterceptionInfo* LoadInfo::InterceptionInfo() { return mInterceptionInfo; }
++
++void LoadInfo::SetInterceptionInfo(nsIInterceptionInfo* aInfo) {
++  mInterceptionInfo = aInfo;
++}
++
+ }  // namespace net
+ }  // namespace mozilla
+diff --git a/netwerk/base/LoadInfo.h b/netwerk/base/LoadInfo.h
+index e4a93d501e95d3b8bbedf4d37ac26ffc74582256..e5f3f50e26e8eb31f35aec1f3601bb7a268920f1 100644
+--- a/netwerk/base/LoadInfo.h
++++ b/netwerk/base/LoadInfo.h
+@@ -8,6 +8,7 @@
+ #define mozilla_LoadInfo_h
+ 
+ #include "nsIContentSecurityPolicy.h"
++#include "nsIInterceptionInfo.h"
+ #include "nsILoadInfo.h"
+ #include "nsIPrincipal.h"
+ #include "nsIWeakReferenceUtils.h"  // for nsWeakPtr
+@@ -223,7 +224,7 @@ class LoadInfo final : public nsILoadInfo {
+       bool aHasStoragePermission, bool aIsMetaRefresh,
+       uint32_t aRequestBlockingReason, nsINode* aLoadingContext,
+       nsILoadInfo::CrossOriginEmbedderPolicy aLoadingEmbedderPolicy,
+-      nsIURI* aUnstrippedURI);
++      nsIURI* aUnstrippedURI, nsIInterceptionInfo* aInterceptionInfo);
+   LoadInfo(const LoadInfo& rhs);
+ 
+   NS_IMETHOD GetRedirects(JSContext* aCx,
+@@ -346,6 +347,8 @@ class LoadInfo final : public nsILoadInfo {
+       nsILoadInfo::EMBEDDER_POLICY_NULL;
+ 
+   nsCOMPtr<nsIURI> mUnstrippedURI;
++
++  nsCOMPtr<nsIInterceptionInfo> mInterceptionInfo;
+ };
+ 
+ }  // namespace net
+diff --git a/netwerk/base/TRRLoadInfo.cpp b/netwerk/base/TRRLoadInfo.cpp
+index 563abe8f7d04f2134ceef3e86487491e989153a1..e341fe811ddd9d04c7344504245d40899b288a9b 100644
+--- a/netwerk/base/TRRLoadInfo.cpp
++++ b/netwerk/base/TRRLoadInfo.cpp
+@@ -724,5 +724,8 @@ TRRLoadInfo::GetUnstrippedURI(nsIURI** aURI) {
+ NS_IMETHODIMP
+ TRRLoadInfo::SetUnstrippedURI(nsIURI* aURI) { return NS_ERROR_NOT_IMPLEMENTED; }
+ 
++nsIInterceptionInfo* TRRLoadInfo::InterceptionInfo() { return nullptr; }
++void TRRLoadInfo::SetInterceptionInfo(nsIInterceptionInfo* aPrincipla) {}
++
+ }  // namespace net
+ }  // namespace mozilla
+diff --git a/netwerk/base/moz.build b/netwerk/base/moz.build
+index 64295118f10b53764f8180a772f46aba2f074f76..4a18f1cb32b98a6b205781c56fd2b0921fe913e4 100644
+--- a/netwerk/base/moz.build
++++ b/netwerk/base/moz.build
+@@ -47,6 +47,7 @@ XPIDL_SOURCES += [
+     "nsIIncrementalStreamLoader.idl",
+     "nsIInputStreamChannel.idl",
+     "nsIInputStreamPump.idl",
++    "nsIInterceptionInfo.idl",
+     "nsIIOService.idl",
+     "nsILoadContextInfo.idl",
+     "nsILoadGroup.idl",
+@@ -159,6 +160,7 @@ EXPORTS.mozilla.net += [
+     "Dashboard.h",
+     "DashboardTypes.h",
+     "DefaultURI.h",
++    "InterceptionInfo.h",
+     "IOActivityMonitor.h",
+     "MemoryDownloader.h",
+     "NetworkConnectivityService.h",
+@@ -179,6 +181,7 @@ UNIFIED_SOURCES += [
+     "Dashboard.cpp",
+     "DefaultURI.cpp",
+     "EventTokenBucket.cpp",
++    "InterceptionInfo.cpp",
+     "IOActivityMonitor.cpp",
+     "LoadContextInfo.cpp",
+     "LoadInfo.cpp",
+diff --git a/netwerk/base/nsIInterceptionInfo.idl b/netwerk/base/nsIInterceptionInfo.idl
+new file mode 100644
+index 0000000000000000000000000000000000000000..d3c1b030ac551e5d3a16b03350051516fe84e2b7
+--- /dev/null
++++ b/netwerk/base/nsIInterceptionInfo.idl
+@@ -0,0 +1,73 @@
++/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
++ * vim: ft=cpp tw=78 sw=2 et ts=2 sts=2 cin
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#include "nsISupports.idl"
++#include "nsIContentPolicy.idl"
++
++interface nsIPrincipal;
++interface nsIRedirectHistoryEntry;
++
++%{C++
++#include "nsTArray.h"
++%}
++
++[ref] native nsIRedirectHistoryEntryArray(const nsTArray<nsCOMPtr<nsIRedirectHistoryEntry>>);
++/**
++ * nsIInterceptionInfo is used to record the needed information of the
++ * InterceptedHttpChannel.
++ * This infomration need to be propagated to the new channel which created by
++ * FetchEvent.request or ServiceWorker NavigationPreload.
++ */
++[scriptable, builtinclass, uuid(8b9cd81f-3cd1-4f6a-9086-92a9bbf055f4)]
++interface nsIInterceptionInfo : nsISupports
++{
++  /**
++   * InterceptedHttpChannel's triggering principal
++   */
++  [noscript, notxpcom, nostdcall, binaryname(TriggeringPrincipal)]
++  nsIPrincipal binaryTriggeringPrincipal();
++
++  [noscript, notxpcom, nostdcall, binaryname(SetTriggeringPrincipal)]
++  void binarySetTriggeringPrincipal(in nsIPrincipal aPrincipal);
++
++  /**
++   * InterceptedHttpChannel's content policy type
++   */
++  [noscript, notxpcom, nostdcall, binaryname(ContentPolicyType)]
++  nsContentPolicyType binaryContentPolicyType();
++
++  [noscript, notxpcom, nostdcall, binaryname(ExternalContentPolicyType)]
++  nsContentPolicyType binaryExternalContentPolicyType();
++
++  [noscript, notxpcom, nostdcall, binaryname(SetContentPolicyType)]
++  void binarySetContentPolicyType(in nsContentPolicyType aContentPolicyType);
++
++%{ C++
++  inline ExtContentPolicyType GetExtContentPolicyType()
++  {
++    return static_cast<ExtContentPolicyType>(ExternalContentPolicyType());
++  }
++%}
++
++  /**
++   * The InterceptedHttpChannel's redirect chain
++   */
++  [noscript, notxpcom, nostdcall, binaryname(RedirectChain)]
++  nsIRedirectHistoryEntryArray binaryRedirectChain();
++
++  [noscript, notxpcom, nostdcall, binaryname(SetRedirectChain)]
++  void binarySetRedirectChain(
++      in nsIRedirectHistoryEntryArray aRedirectChain);
++
++  /**
++   * The InterceptedHttpChannel is a third party channel or not.
++   */
++  [noscript, notxpcom, nostdcall, binaryname(FromThirdParty)]
++  bool binaryFromThirdParty();
++
++  [noscript, notxpcom, nostdcall, binaryname(SetFromThirdParty)]
++  void binarySetFromThirdParty(in bool aFromThirdParty);
++};
+diff --git a/netwerk/base/nsILoadInfo.idl b/netwerk/base/nsILoadInfo.idl
+index 4bc499915f178610d25ccc5083bc39aac86b0fbd..ac9906fb3d0c854c49bb1005da85b0842095c17c 100644
+--- a/netwerk/base/nsILoadInfo.idl
++++ b/netwerk/base/nsILoadInfo.idl
+@@ -7,6 +7,7 @@
+ #include "nsISupports.idl"
+ #include "nsIContentPolicy.idl"
+ #include "nsIScriptSecurityManager.idl"
++#include "nsIInterceptionInfo.idl"
+ 
+ interface nsIChannel;
+ interface nsIContentSecurityPolicy;
+@@ -654,8 +655,10 @@ interface nsILoadInfo : nsISupports
+     MOZ_ASSERT(NS_SUCCEEDED(rv));
+     return static_cast<ExtContentPolicyType>(result);
+   }
++
+ %}
+ 
++
+   /**
+    * The internal contentPolicyType of the channel, used for constructing
+    * RequestContext values when creating a fetch event for an intercepted
+@@ -1384,4 +1387,16 @@ interface nsILoadInfo : nsISupports
+    * stripping was performed.
+    */
+   attribute nsIURI unstrippedURI;
++
++  /**
++   * Propagated information from InterceptedHttpChannel
++   * It should be null when the channel is not created from FetchEvent.request
++   * or ServiceWorker NavigationPreload.
++   * nsIFetchEventInfo is C++ only, so it is not an attribute.
++   */
++  [noscript, notxpcom, nostdcall, binaryname(InterceptionInfo)]
++  nsIInterceptionInfo binaryInterceptionInfo();
++
++  [noscript, notxpcom, nostdcall, binaryname(SetInterceptionInfo)]
++  void binarySetInterceptionInfo(in nsIInterceptionInfo info);
+ };
+diff --git a/netwerk/base/nsInputStreamPump.cpp b/netwerk/base/nsInputStreamPump.cpp
+index d6d4ac33eb3dae4b4f7af1cefd064f470fe07573..9cf546e510994b093f7e39895eaecf5ab69baf2b 100644
+--- a/netwerk/base/nsInputStreamPump.cpp
++++ b/netwerk/base/nsInputStreamPump.cpp
+@@ -191,12 +191,31 @@ nsInputStreamPump::Cancel(nsresult status) {
+ 
+   // close input stream
+   if (mAsyncStream) {
+-    mAsyncStream->CloseWithStatus(status);
+-    if (mSuspendCount == 0) EnsureWaiting();
+-    // Otherwise, EnsureWaiting will be called by Resume().
++    // If mSuspendCount != 0, EnsureWaiting will be called by Resume().
+     // Note that while suspended, OnInputStreamReady will
+     // not do anything, and also note that calling asyncWait
+     // on a closed stream works and will dispatch an event immediately.
++
++    nsCOMPtr<nsIEventTarget> currentTarget = NS_GetCurrentThread();
++    if (mTargetThread && currentTarget != mTargetThread) {
++      nsresult rv = mTargetThread->Dispatch(NS_NewRunnableFunction(
++          "nsInputStreamPump::Cancel", [self = RefPtr{this}, status] {
++            RecursiveMutexAutoLock lock(self->mMutex);
++            if (!self->mAsyncStream) {
++              return;
++            }
++            self->mAsyncStream->CloseWithStatus(status);
++            if (self->mSuspendCount == 0) {
++              self->EnsureWaiting();
++            }
++          }));
++      NS_ENSURE_SUCCESS(rv, rv);
++    } else {
++      mAsyncStream->CloseWithStatus(status);
++      if (mSuspendCount == 0) {
++        EnsureWaiting();
++      }
++    }
+   }
+   return NS_OK;
+ }
+diff --git a/netwerk/base/nsSocketTransportService2.cpp b/netwerk/base/nsSocketTransportService2.cpp
+index 3cad25875445a3cf2e44205f5680d6192a74bbb7..bedaaadae86098624c2e0b80126862c871799db5 100644
+--- a/netwerk/base/nsSocketTransportService2.cpp
++++ b/netwerk/base/nsSocketTransportService2.cpp
+@@ -716,6 +716,21 @@ void nsSocketTransportService::UpdatePrefs(const char* aPref, void* aSelf) {
+   static_cast<nsSocketTransportService*>(aSelf)->UpdatePrefs();
+ }
+ 
++static uint32_t GetThreadStackSize() {
++#ifdef XP_WIN
++  if (!StaticPrefs::network_allow_large_stack_size_for_socket_thread()) {
++    return nsIThreadManager::DEFAULT_STACK_SIZE;
++  }
++
++  const uint32_t kWindowsThreadStackSize = 512 * 1024;
++  // We can remove this custom stack size when DEFAULT_STACK_SIZE is increased.
++  static_assert(kWindowsThreadStackSize > nsIThreadManager::DEFAULT_STACK_SIZE);
++  return kWindowsThreadStackSize;
++#else
++  return nsIThreadManager::DEFAULT_STACK_SIZE;
++#endif
++}
++
+ // called from main thread only
+ NS_IMETHODIMP
+ nsSocketTransportService::Init() {
+@@ -733,8 +748,8 @@ nsSocketTransportService::Init() {
+   }
+ 
+   nsCOMPtr<nsIThread> thread;
+-  nsresult rv =
+-      NS_NewNamedThread("Socket Thread", getter_AddRefs(thread), this);
++  nsresult rv = NS_NewNamedThread("Socket Thread", getter_AddRefs(thread), this,
++                                  GetThreadStackSize());
+   NS_ENSURE_SUCCESS(rv, rv);
+ 
+   {
+diff --git a/netwerk/cookie/CookieCommons.cpp b/netwerk/cookie/CookieCommons.cpp
+index 2137877725bdbe19d4587833ed572e9d8f4031a1..a7635d383b93b2f8bb18c3cad7d5af154ccbc492 100644
+--- a/netwerk/cookie/CookieCommons.cpp
++++ b/netwerk/cookie/CookieCommons.cpp
+@@ -475,12 +475,25 @@ bool CookieCommons::IsSafeTopLevelNav(nsIChannel* aChannel) {
+     return false;
+   }
+   nsCOMPtr<nsILoadInfo> loadInfo = aChannel->LoadInfo();
+-  if (loadInfo->GetExternalContentPolicyType() !=
++  nsCOMPtr<nsIInterceptionInfo> interceptionInfo = loadInfo->InterceptionInfo();
++  if ((loadInfo->GetExternalContentPolicyType() !=
++           ExtContentPolicy::TYPE_DOCUMENT &&
++       loadInfo->GetExternalContentPolicyType() !=
++           ExtContentPolicy::TYPE_SAVEAS_DOWNLOAD) &&
++      !interceptionInfo) {
++    return false;
++  }
++
++  if (interceptionInfo &&
++      interceptionInfo->GetExtContentPolicyType() !=
+           ExtContentPolicy::TYPE_DOCUMENT &&
+-      loadInfo->GetExternalContentPolicyType() !=
+-          ExtContentPolicy::TYPE_SAVEAS_DOWNLOAD) {
++      interceptionInfo->GetExtContentPolicyType() !=
++          ExtContentPolicy::TYPE_SAVEAS_DOWNLOAD &&
++      interceptionInfo->GetExtContentPolicyType() !=
++          ExtContentPolicy::TYPE_INVALID) {
+     return false;
+   }
++
+   return NS_IsSafeMethodNav(aChannel);
+ }
+ 
+@@ -492,24 +505,47 @@ bool CookieCommons::IsSameSiteForeign(nsIChannel* aChannel, nsIURI* aHostURI) {
+   // Do not treat loads triggered by web extensions as foreign
+   nsCOMPtr<nsIURI> channelURI;
+   NS_GetFinalChannelURI(aChannel, getter_AddRefs(channelURI));
+-  RefPtr<BasePrincipal> triggeringPrincipal =
+-      BasePrincipal::Cast(loadInfo->TriggeringPrincipal());
+-  if (triggeringPrincipal->AddonPolicy() &&
+-      triggeringPrincipal->AddonAllowsLoad(channelURI)) {
+-    return false;
++
++  nsCOMPtr<nsIInterceptionInfo> interceptionInfo = loadInfo->InterceptionInfo();
++
++  RefPtr<BasePrincipal> triggeringPrincipal;
++  ExtContentPolicy contentPolicyType;
++  if (interceptionInfo && interceptionInfo->TriggeringPrincipal()) {
++    triggeringPrincipal =
++        BasePrincipal::Cast(interceptionInfo->TriggeringPrincipal());
++    contentPolicyType = interceptionInfo->GetExtContentPolicyType();
++  } else {
++    triggeringPrincipal = BasePrincipal::Cast(loadInfo->TriggeringPrincipal());
++    contentPolicyType = loadInfo->GetExternalContentPolicyType();
++
++    if (triggeringPrincipal->AddonPolicy() &&
++        triggeringPrincipal->AddonAllowsLoad(channelURI)) {
++      return false;
++    }
+   }
++  const nsTArray<nsCOMPtr<nsIRedirectHistoryEntry>>& redirectChain(
++      interceptionInfo && interceptionInfo->TriggeringPrincipal()
++          ? interceptionInfo->RedirectChain()
++          : loadInfo->RedirectChain());
+ 
+   bool isForeign = true;
+   nsresult rv;
+-  if (loadInfo->GetExternalContentPolicyType() ==
+-          ExtContentPolicy::TYPE_DOCUMENT ||
+-      loadInfo->GetExternalContentPolicyType() ==
+-          ExtContentPolicy::TYPE_SAVEAS_DOWNLOAD) {
++  if (contentPolicyType == ExtContentPolicy::TYPE_DOCUMENT ||
++      contentPolicyType == ExtContentPolicy::TYPE_SAVEAS_DOWNLOAD) {
+     // for loads of TYPE_DOCUMENT we query the hostURI from the
+     // triggeringPrincipal which returns the URI of the document that caused the
+     // navigation.
+     rv = triggeringPrincipal->IsThirdPartyChannel(aChannel, &isForeign);
+   } else {
++    // If the load is caused by FetchEvent.request or NavigationPreload request,
++    // check the original InterceptedHttpChannel is a third-party channel or
++    // not.
++    if (interceptionInfo && interceptionInfo->TriggeringPrincipal()) {
++      isForeign = interceptionInfo->FromThirdParty();
++      if (isForeign) {
++        return true;
++      }
++    }
+     nsCOMPtr<mozIThirdPartyUtil> thirdPartyUtil =
+         do_GetService(THIRDPARTYUTIL_CONTRACTID);
+     if (!thirdPartyUtil) {
+@@ -528,10 +564,8 @@ bool CookieCommons::IsSameSiteForeign(nsIChannel* aChannel, nsIURI* aHostURI) {
+   // iframe which would send same-site cookies. Hence, if the iframe navigation
+   // was triggered by a cross-origin triggeringPrincipal, we treat the load as
+   // foreign.
+-  if (loadInfo->GetExternalContentPolicyType() ==
+-      ExtContentPolicy::TYPE_SUBDOCUMENT) {
+-    rv = loadInfo->TriggeringPrincipal()->IsThirdPartyChannel(aChannel,
+-                                                              &isForeign);
++  if (contentPolicyType == ExtContentPolicy::TYPE_SUBDOCUMENT) {
++    rv = triggeringPrincipal->IsThirdPartyChannel(aChannel, &isForeign);
+     if (NS_FAILED(rv) || isForeign) {
+       return true;
+     }
+@@ -542,7 +576,7 @@ bool CookieCommons::IsSameSiteForeign(nsIChannel* aChannel, nsIURI* aHostURI) {
+   // with regards to CSRF.
+ 
+   nsCOMPtr<nsIPrincipal> redirectPrincipal;
+-  for (nsIRedirectHistoryEntry* entry : loadInfo->RedirectChain()) {
++  for (nsIRedirectHistoryEntry* entry : redirectChain) {
+     entry->GetPrincipal(getter_AddRefs(redirectPrincipal));
+     if (redirectPrincipal) {
+       rv = redirectPrincipal->IsThirdPartyChannel(aChannel, &isForeign);
+diff --git a/netwerk/ipc/NeckoChannelParams.ipdlh b/netwerk/ipc/NeckoChannelParams.ipdlh
+index 89eabe2c74bcf07a96a3082c1e41decebd25ecd1..f051d377b78fb2cf61c23be77653be90c958ae81 100644
+--- a/netwerk/ipc/NeckoChannelParams.ipdlh
++++ b/netwerk/ipc/NeckoChannelParams.ipdlh
+@@ -76,6 +76,14 @@ struct RedirectHistoryEntryInfo
+   nsCString           remoteAddress;
+ };
+ 
++struct InterceptionInfoArg
++{
++  PrincipalInfo?              triggeringPrincipalInfo;
++  nsContentPolicyType         contentPolicyType;
++  RedirectHistoryEntryInfo[]  redirectChain;
++  bool                        fromThirdParty;
++};
++
+ struct LoadInfoArgs
+ {
+   PrincipalInfo?              requestingPrincipalInfo;
+@@ -161,6 +169,7 @@ struct LoadInfoArgs
+   bool                        isMetaRefresh;
+   CrossOriginEmbedderPolicy   loadingEmbedderPolicy;
+   nsIURI                      unstrippedURI;
++  InterceptionInfoArg?        interceptionInfo;
+ };
+ 
+ /**
+diff --git a/netwerk/system/mac/nsNetworkLinkService.mm b/netwerk/system/mac/nsNetworkLinkService.mm
+index 09dd4650107aae51de06c5f9dd875d6fb119a121..4509e30085cc94dc4e6c4e1785923b7a7ddeabf4 100644
+--- a/netwerk/system/mac/nsNetworkLinkService.mm
++++ b/netwerk/system/mac/nsNetworkLinkService.mm
+@@ -246,11 +246,14 @@ static bool scanArp(char* ip, char* mac, size_t maclen) {
+     if (st == 0 || errno != ENOMEM) {
+       break;
+     }
+-    needed += needed / 8;
+ 
+-    auto tmp = MakeUnique<char[]>(needed);
++    size_t increased = needed;
++    increased += increased / 8;
++
++    auto tmp = MakeUnique<char[]>(increased);
+     memcpy(&tmp[0], &buf[0], needed);
+     buf = std::move(tmp);
++    needed = increased;
+   }
+   if (st == -1) {
+     return false;
+diff --git a/testing/web-platform/meta/fetch/range/sw.https.window.js.ini b/testing/web-platform/meta/fetch/range/sw.https.window.js.ini
+index f1c1ad7348bc0fc7c54421fdfb0c88e125beb6d6..e3b1e847940b17e8b15f0441e44954141c0e27e3 100644
+--- a/testing/web-platform/meta/fetch/range/sw.https.window.js.ini
++++ b/testing/web-platform/meta/fetch/range/sw.https.window.js.ini
+@@ -2,10 +2,8 @@
+   disabled:
+     if asan and (os == "linux") and (bits == 64): https://bugzilla.mozilla.org/show_bug.cgi?id=1509373
+   max-asserts: 2
+-  expected:
+-    if (os == "linux") and not debug and webrender and not fission: [OK, ERROR]
+-    if (os == "win") and (processor == "x86") and not debug: [OK, TIMEOUT]
+-    if (os == "mac") and not debug: [OK, ERROR]
++  expected: TIMEOUT # see previous revision for how to re-enable
++
+   [Ranged response not allowed following no-cors ranged request]
+     expected:
+       if (os == "linux") and not debug and webrender: [FAIL, PASS]
+@@ -30,3 +28,21 @@
+     expected:
+       if (processor == "x86") and not debug: [PASS, NOTRUN]
+ 
++  [Defer range header filter tests to service worker]
++    expected: TIMEOUT
++
++  [Defer range header passthrough tests to service worker]
++    expected: NOTRUN
++
++  [Ranged response not allowed following no-cors ranged request]
++    expected: NOTRUN
++
++  [Non-opaque ranged response executed]
++    expected: NOTRUN
++
++  [Accept-Encoding should not appear in a service worker]
++    expected: NOTRUN
++
++  [Opaque range preload successes and failures should be indistinguishable]
++    expected: NOTRUN
++
+diff --git a/testing/web-platform/tests/fetch/api/basic/request-forbidden-headers.any.js b/testing/web-platform/tests/fetch/api/basic/request-forbidden-headers.any.js
+index 5d85c4e62d32b0e1dff0265967693fde688694b2..fa5e277abe2f7d3b295a4f4deaaf4379670c74e1 100644
+--- a/testing/web-platform/tests/fetch/api/basic/request-forbidden-headers.any.js
++++ b/testing/web-platform/tests/fetch/api/basic/request-forbidden-headers.any.js
+@@ -16,6 +16,21 @@ function requestForbiddenHeaders(desc, forbiddenHeaders) {
+   }, desc);
+ }
+ 
++function requestValidOverrideHeaders(desc, validHeaders) {
++  var url = RESOURCES_DIR + "inspect-headers.py";
++  var requestInit = {"headers": validHeaders}
++  var urlParameters = "?headers=" + Object.keys(validHeaders).join("|");
++
++  promise_test(function(test){
++    return fetch(url + urlParameters, requestInit).then(function(resp) {
++      assert_equals(resp.status, 200, "HTTP status is 200");
++      assert_equals(resp.type , "basic", "Response's type is basic");
++      for (var header in validHeaders)
++        assert_equals(resp.headers.get("x-request-" + header), validHeaders[header], header + "is not skipped for non-forbidden methods");
++    });
++  }, desc);
++}
++
+ requestForbiddenHeaders("Accept-Charset is a forbidden request header", {"Accept-Charset": "utf-8"});
+ requestForbiddenHeaders("Accept-Encoding is a forbidden request header", {"Accept-Encoding": ""});
+ 
+@@ -41,3 +56,42 @@ requestForbiddenHeaders("Proxy- is a forbidden request header", {"Proxy-": "valu
+ requestForbiddenHeaders("Proxy-Test is a forbidden request header", {"Proxy-Test": "value"});
+ requestForbiddenHeaders("Sec- is a forbidden request header", {"Sec-": "value"});
+ requestForbiddenHeaders("Sec-Test is a forbidden request header", {"Sec-Test": "value"});
++
++let forbiddenMethods = [
++  "TRACE",
++  "TRACK",
++  "CONNECT",
++  "trace",
++  "track",
++  "connect",
++  "trace,",
++  "GET,track ",
++  " connect",
++];
++
++let overrideHeaders = [
++  "x-http-method-override",
++  "x-http-method",
++  "x-method-override",
++  "X-HTTP-METHOD-OVERRIDE",
++  "X-HTTP-METHOD",
++  "X-METHOD-OVERRIDE",
++];
++
++for (forbiddenMethod of forbiddenMethods) {
++    for (overrideHeader of overrideHeaders) {
++       requestForbiddenHeaders(`header ${overrideHeader} is forbidden to use value ${forbiddenMethod}`, {[overrideHeader]: forbiddenMethod});
++    }
++}
++
++let permittedValues = [
++  "GETTRACE",
++  "GET",
++  "\",TRACE\",",
++];
++
++for (permittedValue of permittedValues) {
++    for (overrideHeader of overrideHeaders) {
++       requestValidOverrideHeaders(`header ${overrideHeader} is allowed to use value ${permittedValue}`, {[overrideHeader]: permittedValue});
++    }
++}
+diff --git a/testing/web-platform/tests/xhr/setrequestheader-header-forbidden.htm b/testing/web-platform/tests/xhr/setrequestheader-header-forbidden.htm
+index cc24d94499cc80f4a906822e0d3db4774858cf20..0b273776bc104e0db11fb99192bc27ed80dfa6c5 100644
+--- a/testing/web-platform/tests/xhr/setrequestheader-header-forbidden.htm
++++ b/testing/web-platform/tests/xhr/setrequestheader-header-forbidden.htm
+@@ -37,6 +37,58 @@
+         client.setRequestHeader("Sec-X", "TEST")
+         client.send(null)
+         assert_equals(client.responseText, "")
++        })
++
++        test (function() {
++
++        let forbiddenMethods = [
++          "TRACE",
++          "TRACK",
++          "CONNECT",
++          "trace",
++          "track",
++          "connect",
++          "trace,",
++          "GET,track ",
++          " connect",
++        ];
++
++        let overrideHeaders = [
++          "x-http-method-override",
++          "x-http-method",
++          "x-method-override",
++          "X-HTTP-METHOD-OVERRIDE",
++          "X-HTTP-METHOD",
++          "X-METHOD-OVERRIDE",
++        ];
++
++        for (forbiddenMethod of forbiddenMethods) {
++          for (overrideHeader of overrideHeaders) {
++             var client = new XMLHttpRequest()
++             client.open("POST",
++                     `resources/inspect-headers.py?filter_value=${forbiddenMethod}`, false)
++             client.setRequestHeader(overrideHeader, forbiddenMethod)
++             client.send(null)
++             assert_equals(client.responseText, "")
++          }
++        }
++
++        let permittedValues = [
++        "GETTRACE",
++        "GET",
++        "\",TRACE\",",
++        ];
++
++        for (permittedValue of permittedValues) {
++          for (overrideHeader of overrideHeaders) {
++             var client = new XMLHttpRequest()
++             client.open("POST",
++                     `resources/inspect-headers.py?filter_name=${overrideHeader}`, false)
++             client.setRequestHeader(overrideHeader, permittedValue)
++             client.send(null)
++             assert_equals(client.responseText, overrideHeader + ": " + permittedValue + "\n")
++          }
++        }
+       })
+     </script>
+   </body>
+diff --git a/toolkit/components/printing/content/print.js b/toolkit/components/printing/content/print.js
+index b90a3ab70d2a20488675d8e2d57bf82cfe95bfec..360b33ff396ea537ef6524ebc1fdf007ed020a09 100644
+--- a/toolkit/components/printing/content/print.js
++++ b/toolkit/components/printing/content/print.js
+@@ -349,9 +349,7 @@ var PrintEventHandler = {
+     await new Promise(resolve => window.requestAnimationFrame(resolve));
+ 
+     // Now that we're showing the form, select the destination select.
+-    window.focus();
+-    let fm = Services.focus;
+-    fm.setFocus(document.getElementById("printer-picker"), fm.FLAG_SHOWRING);
++    document.getElementById("printer-picker").focus({ focusVisible: true });
+ 
+     await initialPreviewDone;
+   },
+diff --git a/toolkit/modules/SubDialog.jsm b/toolkit/modules/SubDialog.jsm
+index c3fd2bdbef903289a77f4726b41c3f91cd0a2901..3940846de48456037397706cbcd4492591815e19 100644
+--- a/toolkit/modules/SubDialog.jsm
++++ b/toolkit/modules/SubDialog.jsm
+@@ -839,7 +839,7 @@ SubDialog.prototype = {
+     if (!focusedElement) {
+       // Ensure the focus is pulled out of the content document even if there's
+       // nothing focusable in the dialog.
+-      this._frame.contentWindow.focus();
++      this._frame.focus();
+     }
+   },
+ 
+diff --git a/widget/WidgetEventImpl.cpp b/widget/WidgetEventImpl.cpp
+index ee3f8fb4104da1277f30d546b3e382b84a9fabfd..d6c47da1b578def85c7ba8ad6270ac34472624cd 100644
+--- a/widget/WidgetEventImpl.cpp
++++ b/widget/WidgetEventImpl.cpp
+@@ -1193,6 +1193,37 @@ void WidgetKeyboardEvent::GetDOMCodeName(CodeNameIndex aCodeNameIndex,
+   MOZ_RELEASE_ASSERT(
+       static_cast<size_t>(aCodeNameIndex) < ArrayLength(kCodeNames),
+       "Illegal physical code enumeration value");
++
++  // Generate some continuous runs of codes, rather than looking them up.
++  if (aCodeNameIndex >= CODE_NAME_INDEX_KeyA &&
++      aCodeNameIndex <= CODE_NAME_INDEX_KeyZ) {
++    uint32_t index = aCodeNameIndex - CODE_NAME_INDEX_KeyA;
++    aCodeName.AssignLiteral(u"Key");
++    aCodeName.Append(u'A' + index);
++    return;
++  }
++  if (aCodeNameIndex >= CODE_NAME_INDEX_Digit0 &&
++      aCodeNameIndex <= CODE_NAME_INDEX_Digit9) {
++    uint32_t index = aCodeNameIndex - CODE_NAME_INDEX_Digit0;
++    aCodeName.AssignLiteral(u"Digit");
++    aCodeName.AppendInt(index);
++    return;
++  }
++  if (aCodeNameIndex >= CODE_NAME_INDEX_Numpad0 &&
++      aCodeNameIndex <= CODE_NAME_INDEX_Numpad9) {
++    uint32_t index = aCodeNameIndex - CODE_NAME_INDEX_Numpad0;
++    aCodeName.AssignLiteral(u"Numpad");
++    aCodeName.AppendInt(index);
++    return;
++  }
++  if (aCodeNameIndex >= CODE_NAME_INDEX_F1 &&
++      aCodeNameIndex <= CODE_NAME_INDEX_F24) {
++    uint32_t index = aCodeNameIndex - CODE_NAME_INDEX_F1;
++    aCodeName.Assign(u'F');
++    aCodeName.AppendInt(index + 1);
++    return;
++  }
++
+   aCodeName = kCodeNames[aCodeNameIndex];
+ }
+ 
+diff --git a/xpcom/io/nsLocalFileUnix.cpp b/xpcom/io/nsLocalFileUnix.cpp
+index 174e7c78d810f51b4888246cbf49424e996b4661..97168b02845f35be71c0752b4ad0983d6a81c342 100644
+--- a/xpcom/io/nsLocalFileUnix.cpp
++++ b/xpcom/io/nsLocalFileUnix.cpp
+@@ -1853,9 +1853,13 @@ nsLocalFile::GetNativeTarget(nsACString& aResult) {
+     return NS_ERROR_OUT_OF_MEMORY;
+   }
+ 
+-  if (readlink(mPath.get(), target.BeginWriting(), (size_t)size) < 0) {
++  ssize_t written = readlink(mPath.get(), target.BeginWriting(), size_t(size));
++  if (written < 0) {
+     return NSRESULT_FOR_ERRNO();
+   }
++  // Target might have changed since the lstat call, or lstat might lie, see bug
++  // 1791029.
++  target.Truncate(written);
+ 
+   nsresult rv = NS_OK;
+   nsCOMPtr<nsIFile> self(this);
+@@ -1903,12 +1907,13 @@ nsLocalFile::GetNativeTarget(nsACString& aResult) {
+       break;
+     }
+ 
+-    int32_t linkLen =
++    ssize_t linkLen =
+         readlink(flatRetval.get(), newTarget.BeginWriting(), size);
+     if (linkLen == -1) {
+       rv = NSRESULT_FOR_ERRNO();
+       break;
+     }
++    newTarget.Truncate(linkLen);
+     target = newTarget;
+   }
+ 

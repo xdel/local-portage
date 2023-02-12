@@ -1,0 +1,89 @@
+# Copyright 1999-2015 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+EAPI=7
+
+USE_RUBY="ruby27"
+
+inherit eutils git-r3 toolchain-funcs pax-utils multiprocessing ruby-single
+
+DESCRIPTION="A headless WebKit scriptable with a JavaScript API"
+HOMEPAGE="http://phantomjs.org/"
+EGIT_REPO_URI="https://github.com/ariya/phantomjs.git"
+EGIT_SUBMODULES=( '*' )
+EGIT_COMMIT="2.1.1"
+
+LICENSE="BSD"
+SLOT="0"
+KEYWORDS="amd64 x86"
+IUSE="examples libressl"
+
+RDEPEND="dev-libs/icu:=
+	!libressl? (
+		dev-libs/openssl:0
+	)
+	libressl? (
+		dev-libs/libressl
+	)
+	media-libs/fontconfig
+	media-libs/freetype
+	media-libs/gstreamer:1.0
+	media-libs/gst-plugins-base:1.0
+	media-libs/libpng:0=
+	virtual/jpeg:0"
+DEPEND="${RDEPEND}
+	${RUBY_DEPS}
+	net-misc/openssh
+	app-arch/unzip
+	virtual/pkgconfig"
+
+src_prepare() {
+	eapply_user
+
+	# Respect CC, CXX, {C,CXX,LD}FLAGS in .qmake.cache
+	sed -i \
+		-e "/^SYSTEM_VARIABLES=/i \
+		CC='$(tc-getCC)'\n\
+		CXX='$(tc-getCXX)'\n\
+		CFLAGS='${CFLAGS}'\n\
+		CXXFLAGS='${CXXFLAGS}'\n\
+		LDFLAGS='${LDFLAGS}'\n\
+		QMakeVar set QMAKE_CFLAGS_RELEASE\n\
+		QMakeVar set QMAKE_CFLAGS_DEBUG\n\
+		QMakeVar set QMAKE_CXXFLAGS_RELEASE\n\
+		QMakeVar set QMAKE_CXXFLAGS_DEBUG\n\
+		QMakeVar set QMAKE_LFLAGS_RELEASE\n\
+		QMakeVar set QMAKE_LFLAGS_DEBUG\n"\
+		src/qt/qtbase/configure \
+		|| die
+
+	# Respect CC, CXX, LINK and *FLAGS in config.tests
+	find src/qt/qtbase/config.tests/unix -name '*.test' -type f -exec \
+		sed -i -e "/bin\/qmake/ s: \"\$SRCDIR/: \
+			'QMAKE_CC=$(tc-getCC)'    'QMAKE_CXX=$(tc-getCXX)'      'QMAKE_LINK=$(tc-getCXX)' \
+			'QMAKE_CFLAGS+=${CFLAGS}' 'QMAKE_CXXFLAGS+=${CXXFLAGS}' 'QMAKE_LFLAGS+=${LDFLAGS}'&:" \
+		{} + || die
+}
+
+src_compile() {
+	./build.py \
+		--confirm \
+		--jobs $(makeopts_jobs) \
+		--qt-config "$($(tc-getPKG_CONFIG) --cflags-only-I freetype2)" \
+		|| die
+}
+
+src_test() {
+	./bin/phantomjs test/run-tests.js || die
+}
+
+src_install() {
+	pax-mark m bin/phantomjs || die
+	dobin bin/phantomjs
+	dodoc ChangeLog README.md
+	if use examples ; then
+		docinto examples
+		dodoc examples/*
+	fi
+}

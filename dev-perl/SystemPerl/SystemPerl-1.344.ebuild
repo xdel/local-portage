@@ -1,8 +1,10 @@
-# Distributed under the terms of the GNU General Public License v2+
+# Copyright 1999-2021 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=7
 
-MODULE_AUTHOR="WSNYDER"
+DIST_AUTHOR="WSNYDER"
+DIST_VERSION=${PV}
 inherit perl-module
 
 DESCRIPTION="Perl parsing, utilities and extensions to the SystemC language"
@@ -25,3 +27,4 @@ src_install() {
 	doins src/*.{cpp,h}
 	use examples && dodoc -r example
 }
+

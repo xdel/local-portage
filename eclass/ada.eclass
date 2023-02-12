@@ -28,7 +28,7 @@ case "${EAPI:-0}" in
 		die "Unsupported EAPI=${EAPI:-0} (too old) for ${ECLASS}"
 		;;
 	6|7)
-		# EAPI=5 is required for sane USE_EXPAND dependencies
+		# EAPI=6 is required for sane USE_EXPAND dependencies
 		;;
 	*)
 		die "Unsupported EAPI=${EAPI} (unknown) for ${ECLASS}"

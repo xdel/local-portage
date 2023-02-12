@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/dev-util/glade/Attic/glade-2.12.2-r1.ebuild,v 1.10 2012/06/16 12:05:51 pacho dead $
 
-EAPI="5"
+EAPI="6"
 
 inherit gnome2
 
@@ -15,8 +15,8 @@ KEYWORDS="alpha amd64 ppc ppc64 sparc x86"
 IUSE="accessibility gnome"
 
 RDEPEND=">=dev-libs/libxml2-2.4.1:2
-		 >=x11-libs/gtk+-2.8:2
-		 gnome? (
+	>=x11-libs/gtk+-2.8:2
+	gnome? (
 					>=gnome-base/libgnomeui-2.9
 					>=gnome-base/libgnomecanvas-2
 					>=gnome-base/libbonoboui-2
@@ -30,6 +30,6 @@ DEPEND="${RDEPEND}
 
 DOCS="AUTHORS ChangeLog FAQ NEWS README TODO"
 
-pkg_setup() {
-	G2CONF="$(use_enable gnome)"
+src_configure() {
+	gnome2_src_configure $(use_enable gnome)
 }

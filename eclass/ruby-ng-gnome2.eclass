@@ -1,4 +1,4 @@
-# Copyright 1999-2020 Gentoo Authors
+# Copyright 1999-2022 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 # @ECLASS: ruby-ng-gnome2.eclass
@@ -6,26 +6,26 @@
 # Ruby herd <ruby@gentoo.org>
 # @AUTHOR:
 # Author: Hans de Graaff <graaff@gentoo.org>
-# @SUPPORTED_EAPIS: 6 7
+# @SUPPORTED_EAPIS: 7
 # @PROVIDES: ruby-ng
 # @BLURB: An eclass to simplify handling of various ruby-gnome2 parts.
 # @DESCRIPTION:
 # This eclass simplifies installation of the various pieces of
 # ruby-gnome2 since they share a very common installation procedure.
 
-case "${EAPI:-0}" in
-	6)	inherit eapi7-ver ;;
-	7)	;;
-	*)
-		die "Unsupported EAPI=${EAPI} (unknown) for ${ECLASS}"
-		;;
+case ${EAPI} in
+	7) ;;
+	*) die "${ECLASS}: EAPI ${EAPI:-0} not supported" ;;
 esac
+
+if [[ ! ${_RUBY_NG_GNOME2_ECLASS} ]]; then
+_RUBY_NG_GNOME2_ECLASS=1
 
 RUBY_FAKEGEM_NAME="${RUBY_FAKEGEM_NAME:-${PN#ruby-}}"
 RUBY_FAKEGEM_TASK_TEST=""
 RUBY_FAKEGEM_TASK_DOC=""
 
-# @ECLASS-VARIABLE: RUBY_GNOME2_NEED_VIRTX
+# @ECLASS_VARIABLE: RUBY_GNOME2_NEED_VIRTX
 # @PRE_INHERIT
 # @DESCRIPTION:
 # If set to 'yes', the test is run with virtx. Set before inheriting this
@@ -40,7 +40,7 @@ fi
 IUSE="test"
 RESTRICT+=" !test? ( test )"
 
-DEPEND="virtual/pkgconfig"
+BDEPEND="virtual/pkgconfig"
 ruby_add_bdepend "
 	dev-ruby/pkg-config
 	test? ( >=dev-ruby/test-unit-2 )"
@@ -82,6 +82,8 @@ all_ruby_prepare() {
 # @DESCRIPTION:
 # Run the configure script in the subbinding for each specific ruby target.
 each_ruby_configure() {
+	debug-print-function ${FUNCNAME} "${@}"
+
 	[[ -e extconf.rb ]] || return
 
 	${RUBY} extconf.rb || die "extconf.rb failed"
@@ -91,6 +93,8 @@ each_ruby_configure() {
 # @DESCRIPTION:
 # Compile the C bindings in the subbinding for each specific ruby target.
 each_ruby_compile() {
+	debug-print-function ${FUNCNAME} "${@}"
+
 	[[ -e Makefile ]] || return
 
 	# We have injected --no-undefined in Ruby as a safety precaution
@@ -109,10 +113,12 @@ each_ruby_compile() {
 # @DESCRIPTION:
 # Install the files in the subbinding for each specific ruby target.
 each_ruby_install() {
+	debug-print-function ${FUNCNAME} "${@}"
+
 	if [[ -e Makefile ]]; then
 		# Create the directories, or the package will create them as files.
 		local archdir=$(ruby_rbconfig_value "sitearchdir")
-		dodir ${archdir#${EPREFIX}} /usr/$(get_libdir)/pkgconfig
+		dodir "${archdir#${EPREFIX}}" /usr/$(get_libdir)/pkgconfig
 
 		emake DESTDIR="${D}" install
 	fi
@@ -124,6 +130,8 @@ each_ruby_install() {
 # @DESCRIPTION:
 # Install the files common to all ruby targets.
 all_ruby_install() {
+	debug-print-function ${FUNCNAME} "${@}"
+
 	for doc in ../AUTHORS ../NEWS ChangeLog README; do
 		[[ -s ${doc} ]] && dodoc $doc
 	done
@@ -139,6 +147,8 @@ all_ruby_install() {
 # @DESCRIPTION:
 # Run the tests for this package.
 each_ruby_test() {
+	debug-print-function ${FUNCNAME} "${@}"
+
 	[[ -e test/run-test.rb ]] || return
 
 	if [[ ${RUBY_GNOME2_NEED_VIRTX} == yes ]]; then
@@ -147,3 +157,5 @@ each_ruby_test() {
 		${RUBY} test/run-test.rb || die
 	fi
 }
+
+fi

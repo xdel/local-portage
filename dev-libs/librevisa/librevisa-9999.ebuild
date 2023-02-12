@@ -2,8 +2,8 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=5
-inherit base autotools eutils git-r3
+EAPI=6
+inherit autotools eutils git-r3
 
 DESCRIPTION="Library for VISA standard for interfacing test and measurement equipment"
 HOMEPAGE="http://www.librevisa.org/"

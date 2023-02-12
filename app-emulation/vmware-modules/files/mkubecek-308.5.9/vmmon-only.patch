@@ -1,0 +1,1307 @@
+--- a/vmmon-only/common/task.c	2018-01-09 10:13:12.000000000 +0300
++++ b/vmmon-only/common/task.c	2022-07-19 23:13:22.483075354 +0300
+@@ -1597,12 +1597,23 @@
+    {
+       uint64 raxGetsWiped, rcxGetsWiped;
+ 
++#ifdef CALL_NOSPEC
++      __asm__ __volatile__(CALL_NOSPEC
++                           : "=a" (raxGetsWiped),
++                             "=c" (rcxGetsWiped)
++                           : "0" (codePtr),
++                             "1" (crosspage),
++                             THUNK_TARGET(codePtr)
++                           : "rdx", "r8", "r9", "r10", "r11", "cc", "memory");
++#else
+       __asm__ __volatile__("call *%%rax"
+                            : "=a" (raxGetsWiped),
+                              "=c" (rcxGetsWiped)
+                            : "0" (codePtr),
+                              "1" (crosspage)
+                            : "rdx", "r8", "r9", "r10", "r11", "cc", "memory");
++#endif
++
+    }
+ #elif defined(_MSC_VER)
+    /*
+--- a/vmmon-only/include/compat_compiler.h	1970-01-01 03:00:00.000000000 +0300
++++ b/vmmon-only/include/compat_compiler.h	2022-07-19 23:13:22.483075354 +0300
+@@ -0,0 +1,15 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef __COMPAT_COMPILER_H__
++#define __COMPAT_COMPILER_H__
++
++#ifndef fallthrough
++#ifndef __has_attribute
++	#define fallthrough do {} while (0)
++#elif __has_attribute(__fallthrough__)
++	#define fallthrough __attribute__((__fallthrough__))
++#else
++	#define fallthrough do {} while (0)
++#endif /* __has_attribute */
++#endif /* fallthrough */
++
++#endif /* __COMPAT_COMPILER_H__ */
+--- a/vmmon-only/include/compat_mmap_lock.h	1970-01-01 03:00:00.000000000 +0300
++++ b/vmmon-only/include/compat_mmap_lock.h	2022-07-19 23:13:22.486408718 +0300
+@@ -0,0 +1,34 @@
++#ifndef __COMPAT_MMAP_LOCK_H__
++#define __COMPAT_MMAP_LOCK_H__
++
++#include <linux/mm.h>
++
++/*
++ * In 5.8-rc1, mmap locking was reworked to use wrappers around mmap_sem
++ * (which was also renamed to mmap_lock). All code is now supposed to use
++ * these wrappers as the internal implementation of the lock may change in
++ * the future.
++ *
++ * Check also _LINUX_MMAP_LOCK_H to handle possible backports to distribution
++ * pre-5.8 kernel. This macro is defined in <linux/mmap_lock.h> which is also
++ * included in <linux/mm.h> since the commit introducing the wrappers so that
++ * we should have it defined in any kernel providing the new API.
++ */
++
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)) || defined(_LINUX_MMAP_LOCK_H)
++#include <linux/mmap_lock.h>
++#else
++
++static inline void mmap_read_lock(struct mm_struct *mm)
++{
++	down_read(&mm->mmap_sem);
++}
++
++static inline void mmap_read_unlock(struct mm_struct *mm)
++{
++	up_read(&mm->mmap_sem);
++}
++
++#endif /* 5.8.0 */
++
++#endif /* __COMPAT_MMAP_LOCK_H__ */
+--- a/vmmon-only/include/compat_poll.h	1970-01-01 03:00:00.000000000 +0300
++++ b/vmmon-only/include/compat_poll.h	2022-07-19 23:13:22.486408718 +0300
+@@ -0,0 +1,30 @@
++#ifndef __COMPAT_POLL_H__
++#define __COMPAT_POLL_H__
++
++#include <linux/poll.h>
++
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0))
++
++#ifndef __poll_t
++typedef unsigned int __poll_t;
++#endif
++
++static inline __poll_t compat_vfs_poll(struct file *file,
++				       struct poll_table_struct *pt)
++{
++	if (unlikely(!file->f_op->poll))
++		return DEFAULT_POLLMASK;
++	return file->f_op->poll(file, pt);
++}
++
++#else
++
++static inline __poll_t compat_vfs_poll(struct file *file,
++				       struct poll_table_struct *pt)
++{
++	return vfs_poll(file, pt);
++}
++
++#endif
++
++#endif /* __COMPAT_POLL_H__ */
+--- a/vmmon-only/include/compat_sched.h	2018-01-09 10:13:12.000000000 +0300
++++ b/vmmon-only/include/compat_sched.h	2022-07-19 23:13:22.486408718 +0300
+@@ -289,5 +289,20 @@
+ #define compat_kill_pid(pid, sig, flag) kill_pid(pid, sig, flag)
+ #endif
+ 
++/*
++ * Since v5.14-rc1, task_struct::state hase been renamed to __state and is
++ * is longer supposed to be accessed without READ_ONCE/WRITE_ONCE.
++ */
++#ifdef get_current_state
++static inline int compat_get_task_state(const struct task_struct *t)
++{
++	return READ_ONCE(t->__state);
++}
++#else
++static inline int compat_get_task_state(const struct task_struct *t)
++{
++	return READ_ONCE(t->state);
++}
++#endif
+ 
+ #endif /* __COMPAT_SCHED_H__ */
+--- a/vmmon-only/include/compat_timer.h	1970-01-01 03:00:00.000000000 +0300
++++ b/vmmon-only/include/compat_timer.h	2022-07-19 23:13:22.486408718 +0300
+@@ -0,0 +1,33 @@
++#ifndef __COMPAT_TIMER_H__
++#   define __COMPAT_TIMER_H__
++
++#include <linux/timer.h>
++
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)) && !defined(timer_setup)
++
++typedef unsigned long compat_timer_arg_t;
++
++static inline void compat_timer_setup(struct timer_list *timer,
++				      void (*func)(compat_timer_arg_t),
++				      unsigned int flags)
++{
++	init_timer(timer);
++	timer->function = func;
++	timer->data = 0;
++	timer->flags = flags;
++}
++
++#else /* new timer interface since 4.15 */
++
++typedef struct timer_list *compat_timer_arg_t;
++
++static inline void compat_timer_setup(struct timer_list *timer,
++				      void (*func)(compat_timer_arg_t),
++				      unsigned int flags)
++{
++	timer_setup(timer, func, flags);
++}
++
++#endif /* new timer interface since 4.15 */
++
++#endif /* __COMPAT_TIMER_H__ */
+--- a/vmmon-only/include/hashFunc.h	2018-01-09 10:13:12.000000000 +0300
++++ b/vmmon-only/include/hashFunc.h	2022-07-19 23:13:22.486408718 +0300
+@@ -39,6 +39,8 @@
+ #include "vm_basic_defs.h"
+ #include "vm_assert.h"
+ 
++#include "compat_compiler.h"
++
+ /*
+  * operations
+  */
+@@ -251,6 +253,7 @@
+   {
+     /* c is reserved for the length */
+   case  2: b+=k[1];
++	   fallthrough;
+   case  1: a+=k[0];
+     /* case 0: nothing left to add */
+   }
+--- a/vmmon-only/include/vm_asm_x86.h	2018-01-09 10:13:12.000000000 +0300
++++ b/vmmon-only/include/vm_asm_x86.h	2022-07-19 23:13:22.486408718 +0300
+@@ -69,8 +69,9 @@
+ #if (__GNUC__ >= 4) && (__GNUC_MINOR__ >= 1)
+ #define ASSERT_ON_COMPILE_SELECTOR_SIZE(expr)                                \
+    ASSERT_ON_COMPILE(sizeof(Selector) == 2 &&                                \
+-                     ((__builtin_constant_p(expr) && ((expr) >> 16) == 0) || \
+-                      sizeof(expr) <= 2))
++		     __builtin_choose_expr(__builtin_constant_p(expr),       \
++					   ((expr) >> 16) == 0,              \
++					   sizeof(expr) <= 2))
+ #else
+ /* gcc 3.3.3 is not able to produce a constant expression (PR 356383) */
+ #define ASSERT_ON_COMPILE_SELECTOR_SIZE(expr)
+--- a/vmmon-only/include/vm_assert.h	2018-01-09 10:13:12.000000000 +0300
++++ b/vmmon-only/include/vm_assert.h	2022-07-19 23:13:22.486408718 +0300
+@@ -67,6 +67,7 @@
+ #if defined (VMKPANIC) 
+ #include "vmk_assert.h"
+ #else /* !VMKPANIC */
++#include <linux/kernel.h>
+ #define _ASSERT_PANIC(name) \
+            Panic(_##name##Fmt "\n", __FILE__, __LINE__)
+ #define _ASSERT_PANIC_BUG(bug, name) \
+@@ -118,7 +119,7 @@
+ } while(0)
+ 
+ #else
+-NORETURN void Panic(const char *fmt, ...) PRINTF_DECL(1, 2);
++#define Panic panic
+ #endif
+ 
+ void LogThrottled(uint32 *count, const char *fmt, ...) PRINTF_DECL(2, 3);
+--- a/vmmon-only/include/x86_basic_defs.h	2018-01-09 10:13:12.000000000 +0300
++++ b/vmmon-only/include/x86_basic_defs.h	2022-07-19 23:13:22.486408718 +0300
+@@ -35,6 +35,8 @@
+ #define INCLUDE_ALLOW_VMCORE
+ #include "includeCheck.h"
+ 
++#include <asm/processor-flags.h>
++
+ #define X86_MAX_INSTR_LEN  15   /* Max byte length of an x86 instruction. */
+ 
+ #define NUM_IDT_VECTORS 256
+@@ -62,7 +64,9 @@
+ #define CR3_PDB_MASK   0xfffff000
+ #define CR3_IGNORE     0xFFF
+ #define PAE_CR3_IGNORE 0x1F
++#ifndef CR3_PCID_MASK
+ #define CR3_PCID_MASK  0xFFF
++#endif
+ #define CR3_NO_FLUSH   (1ULL << 63)
+ 
+ #define CR4_VME        0x00000001
+--- a/vmmon-only/include/x86cpuid.h	2018-01-09 10:13:12.000000000 +0300
++++ b/vmmon-only/include/x86cpuid.h	2022-07-19 23:13:22.486408718 +0300
+@@ -897,11 +897,8 @@
+  *
+  * e.g. - CPUID_VIRT_BITS_MASK  = 0xff00
+  *      - CPUID_VIRT_BITS_SHIFT = 8
+- *
+- * Note: The MASK definitions must use some gymnastics to get
+- * around a warning when shifting left by 32.
+  */
+-#define VMW_BIT_MASK(shift)  (((1 << (shift - 1)) << 1) - 1)
++#define VMW_BIT_MASK(shift)  (0xffffffffu >> (32 - shift))
+ 
+ #define FIELD(lvl, ecxIn, reg, bitpos, size, name, s, c3)      \
+    CPUID_##name##_SHIFT        = bitpos,                       \
+--- a/vmmon-only/include/x86msr.h	2018-01-09 10:13:12.000000000 +0300
++++ b/vmmon-only/include/x86msr.h	2022-07-19 23:13:22.486408718 +0300
+@@ -24,6 +24,7 @@
+ 
+ #ifndef _X86MSR_H_
+ #define _X86MSR_H_
++#include <asm/msr-index.h>
+ #define INCLUDE_ALLOW_USERLEVEL
+ #define INCLUDE_ALLOW_VMX
+ 
+@@ -108,7 +109,9 @@
+ #define MSR_BD_TSC_RATIO      0xc0000104
+ 
+ 
++#ifndef MSR_MISC_FEATURES_ENABLES
+ #define MSR_MISC_FEATURES_ENABLES            0x140
++#endif
+ 
+ /* Intel Core Architecture and later: use only architected counters. */
+ #define IA32_MSR_PERF_CAPABILITIES                0x345
+@@ -302,7 +305,9 @@
+ #define MSR_K7_HWCR_SSEDIS         0x00008000ULL // Disable SSE bit
+ #define MSR_K7_HWCR_MONMWAITUSEREN 0x00000400ULL // Enable MONITOR/MWAIT CPL>0
+ #define MSR_K7_HWCR_TLBFFDIS       0x00000040ULL // Disable TLB Flush Filter
++#ifndef MSR_K7_HWCR_SMMLOCK
+ #define MSR_K7_HWCR_SMMLOCK        0x00000001ULL // Lock SMM environment
++#endif
+ 
+ #ifndef MSR_K8_SYSCFG
+ #define MSR_K8_SYSCFG        0xc0010010
+@@ -479,7 +484,11 @@
+ /*
+  * MISC_FEATURES_ENABLES bits
+  */
++#ifdef MSR_MISC_FEATURES_ENABLES_CPUID_FAULT
++#define MSR_MISC_FEATURES_ENABLES_CPUID_FAULTING MSR_MISC_FEATURES_ENABLES_CPUID_FAULT
++#else
+ #define MSR_MISC_FEATURES_ENABLES_CPUID_FAULTING 1
++#endif
+ 
+ 
+ 
+--- a/vmmon-only/linux/driver.c	2022-07-20 18:06:05.567005489 +0300
++++ b/vmmon-only/linux/driver.c	2022-07-19 23:13:22.489742082 +0300
+@@ -21,6 +21,7 @@
+ 
+ #define EXPORT_SYMTAB
+ 
++#include "compat_timer.h"
+ #include <linux/file.h>
+ #include <linux/highmem.h>
+ #include <linux/poll.h>
+@@ -80,6 +81,9 @@
+ 
+ struct VMXLinuxState linuxState;
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
++typedef int vm_fault_t;
++#endif
+ 
+ /*
+  *----------------------------------------------------------------------
+@@ -104,12 +108,10 @@
+ 
+ static int LinuxDriver_Close(struct inode *inode, struct file *filp);
+ static unsigned int LinuxDriverPoll(struct file *file, poll_table *wait);
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+ static vm_fault_t LinuxDriverFault(struct vm_fault *fault);
+-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+-static int LinuxDriverFault(struct vm_fault *fault);
+ #elif defined(VMW_NOPAGE_2624)
+-static int LinuxDriverFault(struct vm_area_struct *vma, struct vm_fault *fault);
++static vm_fault_t LinuxDriverFault(struct vm_area_struct *vma, struct vm_fault *fault);
+ #else
+ static struct page *LinuxDriverNoPage(struct vm_area_struct *vma,
+                                       unsigned long address,
+@@ -117,11 +119,7 @@
+ #endif
+ static int LinuxDriverMmap(struct file *filp, struct vm_area_struct *vma);
+ 
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+-static void LinuxDriverPollTimeout(struct timer_list *clientData);
+-#else
+-static void LinuxDriverPollTimeout(unsigned long clientData);
+-#endif
++static void LinuxDriverPollTimeout(compat_timer_arg_t unused);
+ static unsigned int LinuxDriverEstimateTSCkHz(void);
+ 
+ static struct vm_operations_struct vmuser_mops = {
+@@ -233,11 +231,7 @@
+  *----------------------------------------------------------------------
+  */
+ static void
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+-LinuxDriverEstimateTSCkHzDeferred(struct timer_list *data)
+-#else
+-LinuxDriverEstimateTSCkHzDeferred(unsigned long data)
+-#endif
++LinuxDriverEstimateTSCkHzDeferred(compat_timer_arg_t unused)
+ {
+    LinuxDriverEstimateTSCkHz();
+ }
+@@ -275,10 +269,6 @@
+    }
+ 
+    Vmx86_ReadTSCAndUptime(&tsckHzStartTime);
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
+-   tscTimer.function = LinuxDriverEstimateTSCkHzDeferred;
+-   tscTimer.data     = 0;
+-#endif
+    tscTimer.expires  = jiffies + 4 * HZ;
+    add_timer(&tscTimer);
+ }
+@@ -321,14 +311,7 @@
+     */
+ 
+    init_waitqueue_head(&linuxState.pollQueue);
+-
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+-   timer_setup(&linuxState.pollTimer, LinuxDriverPollTimeout, 0);
+-#else
+-   init_timer(&linuxState.pollTimer);
+-   linuxState.pollTimer.data = 0;
+-   linuxState.pollTimer.function = LinuxDriverPollTimeout;
+-#endif
++   compat_timer_setup(&linuxState.pollTimer, LinuxDriverPollTimeout, 0);
+ 
+    linuxState.fastClockThread = NULL;
+    linuxState.fastClockFile = NULL;
+@@ -377,11 +360,7 @@
+        linuxState.deviceName, linuxState.major, linuxState.minor);
+ 
+    HostIF_InitUptime();
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+-   timer_setup(&tscTimer, LinuxDriverEstimateTSCkHzDeferred, 0UL);
+-#else
+-   init_timer(&tscTimer);
+-#endif
++   compat_timer_setup(&tscTimer, LinuxDriverEstimateTSCkHzDeferred, 0);
+    LinuxDriverInitTSCkHz();
+    Vmx86_InitIDList();
+ 
+@@ -762,23 +741,12 @@
+ LinuxDriverWakeUp(Bool selective)  // IN:
+ {
+    if (selective && linuxState.pollList != NULL) {
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-      struct timeval tv;
+-#else
+-      struct timespec64 ts;
+-#endif
+       VmTimeType now;
+       VMLinux *p;
+       VMLinux *next;
+ 
+       HostIF_PollListLock(1);
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-      do_gettimeofday(&tv);
+-      now = tv.tv_sec * 1000000ULL + tv.tv_usec;
+-#else
+-      ktime_get_real_ts64(&ts);
+-      now = ts.tv_sec * 1000000ULL + ts.tv_nsec / NSEC_PER_USEC;
+-#endif
++      now = ktime_get_ns() / NSEC_PER_USEC;
+ 
+       for (p = linuxState.pollList; p != NULL; p = next) {
+          next = p->pollForw;
+@@ -845,21 +813,10 @@
+       }
+    } else {
+       if (linuxState.fastClockThread && vmLinux->pollTimeoutPtr != NULL) {
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-         struct timeval tv;
++         u64 now = ktime_get_ns() / NSEC_PER_USEC;
+ 
+-         do_gettimeofday(&tv);
+          poll_wait(filp, &vmLinux->pollQueue, wait);
+-         vmLinux->pollTime = *vmLinux->pollTimeoutPtr +
+-                                       tv.tv_sec * 1000000ULL + tv.tv_usec;
+-#else
+-         struct timespec64 ts;
+-
+-         ktime_get_real_ts64(&ts);
+-         poll_wait(filp, &vmLinux->pollQueue, wait);
+-         vmLinux->pollTime = *vmLinux->pollTimeoutPtr +
+-                                       ts.tv_sec * 1000000ULL + ts.tv_nsec / NSEC_PER_USEC;
+-#endif
++         vmLinux->pollTime = *vmLinux->pollTimeoutPtr + now;
+          if (vmLinux->pollBack == NULL) {
+             HostIF_PollListLock(2);
+             if (vmLinux->pollBack == NULL) {
+@@ -897,11 +854,7 @@
+  */
+ 
+ static void
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+-LinuxDriverPollTimeout(struct timer_list *clientData)  // IN:
+-#else
+-LinuxDriverPollTimeout(unsigned long clientData)  // IN:
+-#endif
++LinuxDriverPollTimeout(compat_timer_arg_t unused)  // IN:
+ {
+    LinuxDriverWakeUp(FALSE);
+ }
+@@ -926,15 +879,12 @@
+  *-----------------------------------------------------------------------------
+  */
+ 
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+ static vm_fault_t
+ LinuxDriverFault(struct vm_fault *fault)     //IN/OUT
+-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+-static int
+-LinuxDriverFault(struct vm_fault *fault)     //IN/OUT
+ #elif defined(VMW_NOPAGE_2624)
+-static int LinuxDriverFault(struct vm_area_struct *vma, //IN
+-                            struct vm_fault *fault)     //IN/OUT
++static vm_fault_t LinuxDriverFault(struct vm_area_struct *vma, //IN
++				   struct vm_fault *fault)     //IN/OUT
+ #else
+ static struct page *LinuxDriverNoPage(struct vm_area_struct *vma, //IN
+                                       unsigned long address,      //IN
+@@ -1333,8 +1283,6 @@
+  *-----------------------------------------------------------------------------
+  */
+ 
+-#include <linux/compiler-gcc.h>
+-
+ __always_inline static Bool
+ LinuxDriverSyncReadTSCs(uint64 *delta) // OUT: TSC max - TSC min
+ {
+--- a/vmmon-only/linux/hostif.c	2022-07-20 18:06:05.837007914 +0300
++++ b/vmmon-only/linux/hostif.c	2022-07-19 23:13:22.489742082 +0300
+@@ -24,13 +24,13 @@
+  *
+  */
+ 
+-#include <asm/apic.h>
+ 
+ /* Must come before any kernel header file --hpreg */
+ #include "driver-config.h"
+ 
+ /* Must come before vmware.h --hpreg */
+ #include "compat_page.h"
++#include "compat_timer.h"
+ #include <linux/binfmts.h>
+ #include <linux/delay.h>
+ #include <linux/file.h>
+@@ -69,7 +69,10 @@
+ #endif
+ 
+ #include <asm/io.h>
++#include <asm/page.h>
++#include <asm/tlbflush.h>
+ #include <asm/uaccess.h>
++#include <asm/irq_vectors.h>
+ #include <linux/mc146818rtc.h>
+ #include <linux/capability.h>
+ #include <linux/kthread.h>
+@@ -78,6 +81,7 @@
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+ #include <linux/taskstats_kern.h> // For linux/sched/signal.h without version check
+ #endif
++#include <linux/eventfd.h>
+ 
+ #include "vmware.h"
+ #include "x86apic.h"
+@@ -99,6 +103,65 @@
+ #include "pgtbl.h"
+ #include "vmmonInt.h"
+ #include "versioned_atomic.h"
++#include "compat_poll.h"
++#include "compat_mmap_lock.h"
++#include "compat_sched.h"
++
++/*
++ * Ugly... but we cannot use RHEL_RELEASE_VERSION() in the condition if
++ * the macro is not defined.
++ */
++#undef __RHEL_PAGE_ACCT_HACK
++#ifdef RHEL_RELEASE_CODE
++	#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 4)
++		#define __RHEL_PAGE_ACCT_HACK
++	#endif
++	#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 5)
++		#define __RHEL85_PAGE_ACCT_HACK
++	#endif
++#endif
++
++static unsigned long get_nr_pagetable(void)
++{
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0) || \
++    defined(__RHEL85_PAGE_ACCT_HACK)
++   return global_node_page_state(NR_PAGETABLE);
++#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
++   return global_zone_page_state(NR_PAGETABLE);
++#else
++   return global_page_state(NR_PAGETABLE);
++#endif
++}
++
++static unsigned long get_nr_slab_unreclaimable(void)
++{
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || \
++    defined(__RHEL_PAGE_ACCT_HACK)
++   return global_node_page_state_pages(NR_SLAB_UNRECLAIMABLE_B);
++#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)
++   return global_node_page_state(NR_SLAB_UNRECLAIMABLE);
++#else
++   return global_page_state(NR_SLAB_UNRECLAIMABLE);
++#endif
++}
++
++static unsigned long get_nr_unevictable(void)
++{
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0)
++   return global_node_page_state(NR_UNEVICTABLE);
++#else
++   return global_page_state(NR_UNEVICTABLE);
++#endif
++}
++
++static unsigned long get_nr_anon_mapped(void)
++{
++ #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0)
++   return global_node_page_state(NR_ANON_MAPPED);
++ #else
++   return global_page_state(NR_ANON_PAGES);
++ #endif
++}
+ 
+ /*
+  * Determine if we can use high resolution timers.
+@@ -143,13 +206,7 @@
+  */
+ #define LOCKED_PAGE_SLACK 10000
+ 
+-static struct {
+-   Atomic_uint64     uptimeBase;
+-   VersionedAtomic   version;
+-   uint64            monotimeBase;
+-   unsigned long     jiffiesBase;
+-   struct timer_list timer;
+-} uptimeState;
++u64 uptime_base;
+ 
+ /*
+  * First Page Locking strategy
+@@ -208,6 +265,22 @@
+ uint8 monitorIPIVector;
+ uint8 hvIPIVector;
+ 
++static unsigned long compat_totalram_pages(void)
++{
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0) && \
++    !defined(__RHEL_PAGE_ACCT_HACK)
++	return totalram_pages;
++#else
++	return totalram_pages();
++#endif
++}
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0) && defined(VERIFY_WRITE)
++	#define write_access_ok(addr, size) access_ok(VERIFY_WRITE, addr, size)
++#else
++	#define write_access_ok(addr, size) access_ok(addr, size)
++#endif
++
+ /*
+  *-----------------------------------------------------------------------------
+  *
+@@ -478,7 +551,7 @@
+    while ((vcpuid = VCPUSet_FindFirst(&req)) != VCPUID_INVALID) {
+       struct task_struct *t = vm->vmhost->vcpuSemaTask[vcpuid];
+       VCPUSet_Remove(&req, vcpuid);
+-      if (t && (t->state & TASK_INTERRUPTIBLE)) {
++      if (t && (compat_get_task_state(t) & TASK_INTERRUPTIBLE)) {
+          wake_up_process(t);
+       }
+    }
+@@ -630,6 +703,15 @@
+    MutexUnlock(&fastClockMutex, callerID);
+ }
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
++static int crosspage_set_exec(pte_t *pte, unsigned long addr, void *data)
++{
++	struct page *p = data;
++
++	set_pte(pte, mk_pte(p, VM_PAGE_KERNEL_EXEC));
++	return 0;
++}
++#endif
+ 
+ /*
+  *-----------------------------------------------------------------------------
+@@ -696,7 +778,29 @@
+ static void *
+ MapCrossPage(struct page *p)  // IN:
+ {
++#if COMPAT_LINUX_VERSION_CHECK_LT(5, 8, 0)
+    return vmap(&p, 1, VM_MAP, VM_PAGE_KERNEL_EXEC);
++#else
++   void *addr;
++
++   addr = vmap(&p, 1, VM_MAP, VM_PAGE_KERNEL_EXEC);
++   if (!addr)
++	   return NULL;
++
++   /* Starting with 5.8, vmap() always sets the NX bit, but the cross
++    * page needs to be executable. */
++   if (apply_to_page_range(current->mm, (unsigned long)addr, PAGE_SIZE,
++			   crosspage_set_exec, p)) {
++      vunmap(addr);
++      return NULL;
++   }
++
++   preempt_disable();
++   __flush_tlb_all();
++   preempt_enable();
++
++   return addr;
++#endif
+ }
+ 
+ 
+@@ -1165,7 +1269,7 @@
+ {
+    int retval;
+ 
+-   down_read(&current->mm->mmap_sem);
++   mmap_read_lock(current->mm);
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
+    retval = get_user_pages((unsigned long)uvAddr, numPages, 0, ppages, NULL);
+ #elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 6, 0)
+@@ -1174,7 +1278,7 @@
+    retval = get_user_pages(current, current->mm, (unsigned long)uvAddr,
+                            numPages, 0, 0, ppages, NULL);
+ #endif
+-   up_read(&current->mm->mmap_sem);
++   mmap_read_unlock(current->mm);
+ 
+    return retval != numPages;
+ }
+@@ -1570,18 +1674,7 @@
+ HostIF_EstimateLockedPageLimit(const VMDriver* vm,                // IN
+ 			       unsigned int currentlyLockedPages) // IN
+ {
+-   /*
+-    * This variable is available and exported to modules,
+-    * since at least 2.6.0.
+-    */
+-
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-   extern unsigned long totalram_pages;
+-
+-   unsigned int totalPhysicalPages = totalram_pages;
+-#else
+-   unsigned int totalPhysicalPages = totalram_pages();
+-#endif
++   unsigned int totalPhysicalPages = compat_totalram_pages();
+ 
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 28)
+    return MemDefaults_CalcMaxLockedPages(totalPhysicalPages);
+@@ -1599,28 +1692,11 @@
+    unsigned int reservedPages = MEMDEFAULTS_MIN_HOST_PAGES;
+    unsigned int hugePages = (vm == NULL) ? 0 :
+       BYTES_2_PAGES(vm->memInfo.hugePageBytes);
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
+-   unsigned int lockedPages = global_zone_page_state(NR_PAGETABLE) +
+-#else
+-   unsigned int lockedPages = global_page_state(NR_PAGETABLE) +
+-#endif
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)
+-                              global_node_page_state(NR_SLAB_UNRECLAIMABLE) +
+-#else
+-                              global_page_state(NR_SLAB_UNRECLAIMABLE) +
+-#endif
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0)
+-                              global_node_page_state(NR_UNEVICTABLE) +
+-#else
+-                              global_page_state(NR_UNEVICTABLE) +
+-#endif
++   unsigned int lockedPages = get_nr_pagetable() +
++                              get_nr_slab_unreclaimable() +
++                              get_nr_unevictable() +
+                               hugePages + reservedPages;
+-   unsigned int anonPages =
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0)
+-      global_node_page_state(NR_ANON_MAPPED);
+-#else
+-      global_page_state(NR_ANON_PAGES);
+-#endif
++   unsigned int anonPages = get_nr_anon_mapped();
+    unsigned int swapPages = BYTES_2_PAGES(linuxState.swapSize);
+ 
+    if (anonPages > swapPages) {
+@@ -1681,162 +1757,6 @@
+ /*
+  *----------------------------------------------------------------------
+  *
+- * HostIFReadUptimeWork --
+- *
+- *      Reads the current uptime.  The uptime is based on getimeofday,
+- *      which provides the needed high resolution.  However, we don't
+- *      want uptime to be warped by e.g. calls to settimeofday.  So, we
+- *      use a jiffies based monotonic clock to sanity check the uptime.
+- *      If the uptime is more than one second from the monotonic time,
+- *      we assume that the time of day has been set, and recalculate the
+- *      uptime base to get uptime back on track with monotonic time.  On
+- *      the other hand, we do expect jiffies based monotonic time and
+- *      timeofday to have small drift (due to NTP rate correction, etc).
+- *      We handle this by rebasing the jiffies based monotonic clock
+- *      every second (see HostIFUptimeResyncMono).
+- *      
+- * Results:
+- *      The uptime, in units of UPTIME_FREQ.  Also returns the jiffies
+- *      value that was used in the monotonic time calculation.
+- *
+- * Side effects:
+- *      May reset the uptime base in the case gettimeofday warp was 
+- *      detected.
+- *
+- *----------------------------------------------------------------------
+- */
+-
+-static uint64
+-HostIFReadUptimeWork(unsigned long *j)  // OUT: current jiffies 
+-{
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-   struct timeval tv;
+-#else
+-   struct timespec64 ts;
+-#endif
+-   uint64 monotime, uptime, upBase, monoBase;
+-   int64 diff;
+-   uint32 version;
+-   unsigned long jifs, jifBase;
+-   unsigned int attempts = 0;
+-
+-   /* Assert that HostIF_InitUptime has been called. */
+-   ASSERT(uptimeState.timer.function);
+-
+- retry:
+-   do {
+-      version  = VersionedAtomic_BeginTryRead(&uptimeState.version);
+-      jifs     = jiffies;
+-      jifBase  = uptimeState.jiffiesBase;
+-      monoBase = uptimeState.monotimeBase;
+-   } while (!VersionedAtomic_EndTryRead(&uptimeState.version, version));
+-
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-   do_gettimeofday(&tv);
+-#else
+-   ktime_get_real_ts64(&ts);
+-#endif
+-   upBase = Atomic_Read64(&uptimeState.uptimeBase);
+-   
+-   monotime = (uint64)(jifs - jifBase) * (UPTIME_FREQ / HZ);
+-   monotime += monoBase;
+-
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-   uptime = tv.tv_usec * (UPTIME_FREQ / 1000000) + tv.tv_sec * UPTIME_FREQ;
+-#else
+-   uptime = ts.tv_nsec / NSEC_PER_USEC	* (UPTIME_FREQ / 1000000) + ts.tv_sec * UPTIME_FREQ;
+-#endif
+-   uptime += upBase;
+-   
+-   /* 
+-    * Use the jiffies based monotonic time to sanity check gettimeofday.
+-    * If they differ by more than one second, assume the time of day has
+-    * been warped, and use the jiffies time to undo (most of) the warp.
+-    */
+-
+-   diff = uptime - monotime;
+-   if (UNLIKELY(diff < -UPTIME_FREQ || diff > UPTIME_FREQ)) {
+-      /* Compute a new uptimeBase to get uptime back on track. */
+-      uint64 newUpBase = monotime - (uptime - upBase);
+-
+-      attempts++;
+-      if (!Atomic_CMPXCHG64(&uptimeState.uptimeBase, &upBase, &newUpBase) && 
+-          attempts < 5) {
+-         /* Another thread updated uptimeBase.  Recalculate uptime. */
+-         goto retry;
+-      }
+-      uptime = monotime;
+-
+-      Log("%s: detected settimeofday: fixed uptimeBase old %"FMT64"u "
+-          "new %"FMT64"u attempts %u\n", __func__,
+-          upBase, newUpBase, attempts);
+-   }
+-   *j = jifs;
+-
+-   return uptime;
+-}
+-
+-
+-/*
+- *----------------------------------------------------------------------
+- *
+- * HostIFUptimeResyncMono --
+- *
+- *      Timer that fires ever second to resynchronize the jiffies based
+- *      monotonic time with the uptime.
+- *
+- * Results:
+- *      None
+- *
+- * Side effects:
+- *      Resets the monotonic time bases so that jiffies based monotonic
+- *      time does not drift from gettimeofday over the long term.
+- *
+- *----------------------------------------------------------------------
+- */
+-
+-static void
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+-HostIFUptimeResyncMono(struct timer_list *data)  // IN: ignored
+-#else
+-HostIFUptimeResyncMono(unsigned long data)  // IN: ignored
+-#endif
+-{
+-   unsigned long jifs;
+-   uintptr_t flags;
+-
+-   /* 
+-    * Read the uptime and the corresponding jiffies value.  This will
+-    * also correct the uptime (which is based on time of day) if needed
+-    * before we rebase monotonic time (which is based on jiffies).
+-    */
+-
+-   uint64 uptime = HostIFReadUptimeWork(&jifs);
+-
+-   /* 
+-    * Every second, recalculate monoBase and jiffiesBase to squash small
+-    * drift between gettimeofday and jiffies.  Also, this prevents
+-    * (jiffies - jiffiesBase) wrap on 32-bits.
+-    */
+-
+-   SAVE_FLAGS(flags);
+-   CLEAR_INTERRUPTS();
+-   VersionedAtomic_BeginWrite(&uptimeState.version);
+-
+-   uptimeState.monotimeBase = uptime;
+-   uptimeState.jiffiesBase  = jifs;
+-
+-   VersionedAtomic_EndWrite(&uptimeState.version);
+-   RESTORE_FLAGS(flags);
+-
+-   /* Reschedule this timer to expire in one second. */
+-   mod_timer(&uptimeState.timer, jifs + HZ);
+-}
+-
+-
+-/*
+- *----------------------------------------------------------------------
+- *
+  * HostIF_InitUptime --
+  *
+  *      Initialize the uptime clock's state.
+@@ -1845,8 +1765,7 @@
+  *      None
+  *
+  * Side effects:
+- *      Sets the initial values for the uptime state, and schedules
+- *      the uptime timer.
++ *      Sets the initial value for the uptime base.
+  *
+  *----------------------------------------------------------------------
+  */
+@@ -1854,31 +1773,7 @@
+ void
+ HostIF_InitUptime(void)
+ {
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-   struct timeval tv;
+-
+-   uptimeState.jiffiesBase = jiffies;
+-   do_gettimeofday(&tv);
+-   Atomic_Write64(&uptimeState.uptimeBase, 
+-                  -(tv.tv_usec * (UPTIME_FREQ / 1000000) + 
+-                    tv.tv_sec * UPTIME_FREQ));
+-#else
+-   struct timespec64 ts;
+-
+-   uptimeState.jiffiesBase = jiffies;
+-   ktime_get_real_ts64(&ts);
+-   Atomic_Write64(&uptimeState.uptimeBase, 
+-                  -(ts.tv_nsec / NSEC_PER_USEC	* (UPTIME_FREQ / 1000000) + 
+-                    ts.tv_sec * UPTIME_FREQ));
+-#endif
+-
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
+-   timer_setup(&uptimeState.timer, HostIFUptimeResyncMono, 0);
+-#else
+-   init_timer(&uptimeState.timer);
+-   uptimeState.timer.function = HostIFUptimeResyncMono;
+-#endif
+-   mod_timer(&uptimeState.timer, jiffies + HZ);
++   uptime_base = ktime_get_ns();
+ }
+ 
+ 
+@@ -1887,13 +1782,13 @@
+  *
+  * HostIF_CleanupUptime --
+  *
+- *      Cleanup uptime state, called at module unloading time.
++ *      No-op, left for backward compatibility.
+  *
+  * Results:
+  *      None
+  *
+  * Side effects:
+- *      Deschedule the uptime timer.
++ *      None
+  *
+  *----------------------------------------------------------------------
+  */
+@@ -1901,7 +1796,6 @@
+ void
+ HostIF_CleanupUptime(void)
+ {
+-   del_timer_sync(&uptimeState.timer);
+ }
+ 
+ 
+@@ -1925,9 +1819,10 @@
+ uint64
+ HostIF_ReadUptime(void)
+ {
+-   unsigned long jifs;
++   u64 tm;
+ 
+-   return HostIFReadUptimeWork(&jifs);
++   tm = ktime_get_ns();
++   return (tm - uptime_base) / (NSEC_PER_SEC / UPTIME_FREQ);
+ }
+ 
+ 
+@@ -2274,6 +2169,27 @@
+ 
+ #if defined(CONFIG_SMP) || defined(CONFIG_X86_UP_IOAPIC) || \
+     defined(CONFIG_X86_UP_APIC) || defined(CONFIG_X86_LOCAL_APIC)
++
++#if COMPAT_LINUX_VERSION_CHECK_LT(5, 8, 0)
++static long compat_copy_from_kernel_nofault(void *dst, VA src, size_t size)
++{
++   mm_segment_t old_fs;
++   long ret;
++
++   old_fs = get_fs();
++   set_fs(KERNEL_DS);
++   ret = HostIF_CopyFromUser(dst, (const void *)src, size);
++   set_fs(old_fs);
++
++   return ret;
++}
++#else
++static long compat_copy_from_kernel_nofault(void *dst, VA src, size_t size)
++{
++   return copy_from_kernel_nofault(dst, (const void *)src, size);
++}
++#endif
++
+ /*
+  *----------------------------------------------------------------------
+  *
+@@ -2293,19 +2209,11 @@
+ static Bool
+ isVAReadable(VA r)  // IN:
+ {
+-   mm_segment_t old_fs;
+    uint32 dummy;
+-   int ret;
+-   
+-   old_fs = get_fs();
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)
+-   set_fs(KERNEL_DS);
+-#else
+-   set_fs(get_ds());
+-#endif
++   long ret;
++
+    r = APICR_TO_ADDR(r, APICR_VERSION);
+-   ret = HostIF_CopyFromUser(&dummy, (void*)r, sizeof(dummy));
+-   set_fs(old_fs);
++   ret = compat_copy_from_kernel_nofault(&dummy, r, sizeof(dummy));
+ 
+    return ret == 0;
+ }
+@@ -2335,11 +2243,7 @@
+    volatile void *hostapic;
+ 
+    ASSERT_ON_COMPILE(APICR_SIZE <= PAGE_SIZE);
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
+-   hostapic = (volatile void *) ioremap_nocache(ma, PAGE_SIZE);
+-#else
+    hostapic = (volatile void *) ioremap(ma, PAGE_SIZE);
+-#endif
+    if (hostapic) {
+       if ((APIC_VERSIONREG(hostapic) & 0xF0) == 0x10) {
+ 	 vm->hostAPIC.base = (volatile uint32 (*)[4]) hostapic;
+@@ -2495,48 +2399,41 @@
+                      uint64 *args)   // IN:
+ {
+    struct file *file;
+-   mm_segment_t old_fs;
+    int res;
+    int waitFD = args[0];
+    int timeoutms = args[2];
+    uint64 value;
++   struct poll_wqueues table;
++   unsigned int mask;
+ 
+    file = vmware_fget(waitFD);
+    if (file == NULL) {
+       return MX_WAITERROR;
+    }
+ 
+-   old_fs = get_fs();
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)
+-   set_fs(KERNEL_DS);
+-#else
+-   set_fs(get_ds());
+-#endif
+-
+-   {
+-      struct poll_wqueues table;
+-      unsigned int mask;
+-      
+-      poll_initwait(&table);
+-      current->state = TASK_INTERRUPTIBLE;
+-      mask = file->f_op->poll(file, &table.pt);
+-      if (!(mask & (POLLIN | POLLERR | POLLHUP))) {
+-         vm->vmhost->vcpuSemaTask[vcpuid] = current;
+-         schedule_timeout(timeoutms * HZ / 1000);  // convert to Hz
+-         vm->vmhost->vcpuSemaTask[vcpuid] = NULL;
+-      }
+-      current->state = TASK_RUNNING;
+-      poll_freewait(&table);
++   poll_initwait(&table);
++   set_current_state(TASK_INTERRUPTIBLE);
++   mask = compat_vfs_poll(file, &table.pt);
++   if (!(mask & (POLLIN | POLLERR | POLLHUP))) {
++      vm->vmhost->vcpuSemaTask[vcpuid] = current;
++      schedule_timeout(timeoutms * HZ / 1000);  // convert to Hz
++      vm->vmhost->vcpuSemaTask[vcpuid] = NULL;
+    }
++   set_current_state(TASK_RUNNING);
++   poll_freewait(&table);
+ 
+    /*
+     * Userland only writes in multiples of sizeof(uint64). This will allow
+     * the code to happily deal with a pipe or an eventfd. We only care about
+     * reading no bytes (EAGAIN - non blocking fd) or sizeof(uint64).
++    *
++    * Upstream Linux changed the function parameter types/ordering in 4.14.0.
+     */
+-
+-   res = file->f_op->read(file, (char *) &value, sizeof value, &file->f_pos);
+-
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
++   res = kernel_read(file, file->f_pos, (char *)&value, sizeof value);
++#else
++   res = kernel_read(file, &value, sizeof value, &file->f_pos);
++#endif
+    if (res == sizeof value) {
+       res = MX_WAITNORMAL;
+    } else {
+@@ -2545,7 +2442,6 @@
+       }
+    }
+ 
+-   set_fs(old_fs);
+    fput(file);
+ 
+    /*
+@@ -2598,7 +2494,7 @@
+    FOR_EACH_VCPU_IN_SET(vcs, vcpuid) {
+       struct task_struct *t = vm->vmhost->vcpuSemaTask[vcpuid];
+       vm->vmhost->vcpuSemaTask[vcpuid] = NULL;
+-      if (t && (t->state & TASK_INTERRUPTIBLE)) {
++      if (t && (compat_get_task_state(t) & TASK_INTERRUPTIBLE)) {
+          wake_up_process(t);
+       }
+    } ROF_EACH_VCPU_IN_SET();
+@@ -2628,8 +2524,8 @@
+ int
+ HostIF_SemaphoreSignal(uint64 *args)  // IN:
+ {
++   struct eventfd_ctx *eventfd;
+    struct file *file;
+-   mm_segment_t old_fs;
+    int res;
+    int signalFD = args[1];
+    uint64 value = 1;  // make an eventfd happy should it be there
+@@ -2639,26 +2535,34 @@
+       return MX_WAITERROR;
+    }
+ 
+-   old_fs = get_fs();
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)
+-   set_fs(KERNEL_DS);
+-#else
+-   set_fs(get_ds());
+-#endif
++   /*
++    * If it's eventfd, use specific eventfd interface as kernel writes
++    * to eventfd may not be allowed in kernel 5.10 and later.
++    */
++   eventfd = eventfd_ctx_fileget(file);
++   if (!IS_ERR(eventfd)) {
++      eventfd_signal(eventfd, 1);
++      fput(file);
++      return MX_WAITNORMAL;
++   }
+ 
+    /*
+     * Always write sizeof(uint64) bytes. This works fine for eventfd and
+     * pipes. The data written is formatted to make an eventfd happy should
+     * it be present.
++    *
++    * Upstream Linux changed the function parameter types/ordering in 4.14.0.
+     */
+-
+-   res = file->f_op->write(file, (char *) &value, sizeof value, &file->f_pos);
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
++   res = kernel_write(file, (char *)&value, sizeof value, file->f_pos);
++#else
++   res = kernel_write(file, &value, sizeof value, &file->f_pos);
++#endif
+ 
+    if (res == sizeof value) {
+       res = MX_WAITNORMAL;
+    }
+ 
+-   set_fs(old_fs);
+    fput(file);
+ 
+    /*
+@@ -3388,7 +3292,11 @@
+          return -1;
+       }
+    }
+-   res = filp->f_op->read(filp, (void *) &buf, sizeof(buf), &pos);
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
++   res = kernel_read(filp, pos, (char *)&buf, sizeof(buf));
++#else
++   res = kernel_read(filp, &buf, sizeof(buf), &pos);
++#endif
+    if (res <= 0) {
+       if (res != -ERESTARTSYS) {
+          Log("/dev/rtc read failed: %d\n", res);
+@@ -3427,12 +3335,9 @@
+ {
+    struct file *filp = (struct file *) data;
+    int res;
+-   mm_segment_t oldFS;
+    unsigned int rate = 0;
+    unsigned int prevRate = 0;
+ 
+-   oldFS = get_fs();
+-   set_fs(KERNEL_DS);
+    allow_signal(SIGKILL);
+    set_user_nice(current, linuxState.fastClockPriority);
+ 
+@@ -3466,7 +3371,6 @@
+ 
+  out:
+    LinuxDriverWakeUp(TRUE);
+-   set_fs(oldFS);
+ 
+    /*
+     * Do not exit thread until we are told to do so.
+@@ -3587,11 +3491,7 @@
+       }
+    } else {
+       if (linuxState.fastClockThread) {
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 2, 99)
+          send_sig(SIGKILL, linuxState.fastClockThread, 1);
+-#else
+-         force_sig(SIGKILL, linuxState.fastClockThread);
+-#endif
+          kthread_stop(linuxState.fastClockThread);
+ 	 close_rtc(linuxState.fastClockFile, current->files);
+ 
+@@ -3639,11 +3539,7 @@
+ 
+    ASSERT(handle);
+ 
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+-   if (!access_ok(VERIFY_WRITE, p, size)) {
+-#else
+-   if (!access_ok(p, size)) {
+-#endif
++   if (!write_access_ok(p, size)) {
+       printk(KERN_ERR "%s: Couldn't verify write to uva 0x%p with size %"
+              FMTSZ"u\n", __func__, p, size);
+ 
+--- a/vmmon-only/Makefile	2022-07-20 18:06:03.013649219 +0300
++++ b/vmmon-only/Makefile	2022-07-19 23:13:22.483075354 +0300
+@@ -49,10 +49,10 @@
+ ifdef LINUXINCLUDE
+ HEADER_DIR = $(LINUXINCLUDE)
+ else
+-HEADER_DIR = $(KERNEL_DIR)
++HEADER_DIR = /lib/modules/$(VM_UNAME)/build/include
+ endif
+ 
+-BUILD_DIR = $(KBUILD_OUTPUT)
++BUILD_DIR = $(HEADER_DIR)/..
+ 
+ DRIVER := vmmon
+ PRODUCT := @@PRODUCT@@
+@@ -106,8 +106,6 @@
+ VM_CC := $(CC)
+ export VM_CC
+ 
+-MAKEOVERRIDES := $(filter-out CC=%,$(MAKEOVERRIDES))
+-
+ #
+ # Define a setup target that gets built before the actual driver.
+ # This target may not be used at all, but if it is then it will be defined
+--- a/vmmon-only/Makefile.kernel	2022-07-20 18:06:03.076983121 +0300
++++ b/vmmon-only/Makefile.kernel	2022-07-19 23:13:22.483075354 +0300
+@@ -22,7 +22,7 @@
+ INCLUDE := -I$(SRCROOT)/include -I$(SRCROOT)/common -I$(SRCROOT)/linux \
+ 	   -I$(SRCROOT)/vmcore
+ 
+-EXTRA_CFLAGS := $(CC_OPTS) $(INCLUDE) $(LINUXINCLUDE)
++EXTRA_CFLAGS := $(CC_OPTS) $(INCLUDE)
+ 
+ EXTRA_CFLAGS += $(call vm_check_build, $(SRCROOT)/autoconf/smpcall.c, -DVMW_HAVE_SMP_CALL_3ARG, )
+ EXTRA_CFLAGS += $(call vm_check_build, $(SRCROOT)/autoconf/tsc_khz.c, -DVMW_HAVE_TSC_KHZ, )
+@@ -33,7 +33,7 @@
+ 		$(wildcard $(SRCROOT)/linux/*.c $(SRCROOT)/common/*.c $(SRCROOT)/vmcore/*.c)))
+ 
+ clean:
+-	rm -rf $(wildcard $(DRIVER).mod.c $(DRIVER).ko .tmp_versions \
++	rm -rf $(wildcard $(DRIVER).mod.c $(DRIVER).ko .tmp_versions .cache.mk \
+ 		Module.symvers Modules.symvers Module.markers modules.order \
+ 		$(foreach dir,linux/ common/ vmcore/ \
+ 		./,$(addprefix $(dir),.*.cmd .*.o.flags *.o)))

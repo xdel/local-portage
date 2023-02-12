@@ -38,7 +38,7 @@
 # PYTHON_COMPAT=( python2_7 )
 # inherit python-any-r1 scons-utils toolchain-funcs
 #
-# EAPI=5
+# EAPI=6
 #
 # src_configure() {
 # 	MYSCONS=(

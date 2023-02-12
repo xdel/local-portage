@@ -1,0 +1,11 @@
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -41,7 +41,7 @@
+   common_sources,
+   ]
+ 
+-foreach name: ['lua-5.4', 'lua-5.3', 'lua-5.2', 'lua-5.1', 'lua']
++foreach name: ['lua5.4', 'lua5.3', 'lua5.2', 'lua5.1', 'lua']
+   lua_dep = dependency(name, version: '>=5.1', required: false)
+   if lua_dep.found()
+     break

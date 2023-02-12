@@ -31,7 +31,7 @@ DEPEND="${RDEPEND}
 	dev-util/gperf"
 
 PATCHES=(
-	"${FILESDIR}"/${P}-no-local-ltdl.patch
+	# "${FILESDIR}"/${P}-no-local-ltdl.patch
 )
 
 src_prepare() {

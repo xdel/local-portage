@@ -1,10 +1,10 @@
 # Copyright 1999-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=6
+EAPI=7
 
 PYTHON_COMPAT=( python{3_8,3_9} )
-inherit eapi7-ver perl-module python-r1 toolchain-funcs git-r3
+inherit perl-module python-r1 toolchain-funcs git-r3
 
 MY_PV="$(ver_cut 1-2)"
 

@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/sys-fs/obexfs/obexfs-0.12.ebuild,v 1.2 2015/01/04 11:06:06 pacho Exp $
 
-EAPI=5
+EAPI=6
 
 DESCRIPTION="FUSE filesystem interface for ObexFTP"
 HOMEPAGE="http://dev.zuckschwerdt.org/openobex/wiki/ObexFs"

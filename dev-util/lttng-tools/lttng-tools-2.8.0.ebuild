@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/dev-util/lttng-tools/lttng-tools-2.6.0_rc3.ebuild,v 1.1 2014/11/22 00:24:38 dlan Exp $
 
-EAPI=5
+EAPI=6
 
 inherit linux-info
 

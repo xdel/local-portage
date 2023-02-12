@@ -1,14 +1,14 @@
 # Copyright 1999-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=6
+EAPI=7
 
 PATCH_GCC_VER=4.9.4
 PATCH_VER="1.4"
 UCLIBC_VER="1.0"
 
 # Hardened gcc 4 stuff
-PIE_VER="0.6.4"
+# PIE_VER="0.6.4"
 SPECS_VER="0.2.0"
 SPECS_GCC_VER="4.4.3"
 # arch/libc configurations known to be stable with {PIE,SSP}-by-default
@@ -116,7 +116,12 @@ src_prepare() {
 	sed -i \
 		-e "/xoscons/s:gnatmake:${GNATMAKE}:g" \
 		gcc-interface-${REL}-gpl-${PV}-src/Makefile.in || die "sed failed"
-
+	# Fixing newer eclass patching
+	# sed -i -e 's/--- gcc/--- a\/gcc/g' -e 's/+++ gcc/+++ b\/gcc/g' \
+	#	"${WORKDIR}"/piepatch/02_all_gcc48_config.in.patch \
+	#	"${WORKDIR}"/piepatch/05_all_gcc48_gcc.c.patch \
+	#	"${WORKDIR}"/piepatch/20_all_gcc49_config_crtbeginp.patch \
+	#	"${WORKDIR}"/piepatch/24_all_gcc49_invoke.texi.patch
 	mv ${P}-src/src/ada ${MYP}/gcc/ || die
 	mv gcc-interface-${REL}-gpl-${PV}-src ${MYP}/gcc/ada/gcc-interface || die
 	mv ${FSFGCC}/gcc/doc/gcc.info ${MYP}/gcc/doc/ || die
@@ -139,8 +144,9 @@ src_prepare() {
 	toolchain_src_prepare
 
 	use vanilla && return 0
-	# Use -r1 for newer piepatchet that use DRIVER_SELF_SPECS for the hardened specs.
+	# Use -r1 for newer pieapplyet that use DRIVER_SELF_SPECS for the hardened specs.
 	[[ ${CHOST} == ${CTARGET} ]] && eapply "${FILESDIR}"/gcc-spec-env-r1.patch
+	eapply_user
 }
 
 src_configure() {

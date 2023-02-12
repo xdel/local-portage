@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/virtual/perl-IO/perl-IO-1.310.0.ebuild,v 1.1 2014/07/07 19:40:40 dilfridge Exp $
 
-EAPI=5
+EAPI=6
 
 DESCRIPTION="Virtual for IO"
 HOMEPAGE=""

@@ -24,7 +24,7 @@
 # TODO busybox IUSE (arch has a mkinitcpio-busybox thats specifically for mkinitcpio I think...)
 #TODO genkernel stuff /usr/share/genkernel
 
-EAPI=5
+EAPI=6
 
 MY_P="${P/_rc/-rc}"
 

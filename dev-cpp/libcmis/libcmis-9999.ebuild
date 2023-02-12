@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/dev-cpp/libcmis/libcmis-9999.ebuild,v 1.14 2014/12/28 21:28:58 dilfridge Exp $
 
-EAPI=5
+EAPI=6
 
 EGIT_REPO_URI="git://git.code.sf.net/p/libcmis/code"
 [[ ${PV} == 9999 ]] && SCM_ECLASS="git-r3"

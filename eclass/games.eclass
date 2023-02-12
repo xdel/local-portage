@@ -29,7 +29,7 @@
 if [[ -z ${_GAMES_ECLASS} ]]; then
 _GAMES_ECLASS=1
 
-inherit base multilib toolchain-funcs eutils user
+inherit multilib toolchain-funcs eutils user
 
 case ${EAPI:-0} in
 	0|1) EXPORT_FUNCTIONS pkg_setup src_compile pkg_preinst pkg_postinst ;;

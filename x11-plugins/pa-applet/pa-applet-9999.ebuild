@@ -2,13 +2,13 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=5
+EAPI=6
 
 inherit autotools git-r3
 
 DESCRIPTION="systray-applet that allows you to control some of PulseAudio's features."
-HOMEPAGE="https://github.com/michaelmyc/pa-applet"
-EGIT_REPO_URI="https://github.com/michaelmyc/pa-applet.git"
+HOMEPAGE="https://github.com/Riesi/pa-applet-revamp"
+EGIT_REPO_URI="https://github.com/Riesi/pa-applet-revamp.git"
 
 LICENSE="BSD"
 SLOT="0"
@@ -26,4 +26,5 @@ DEPEND="${RDEPEND}
 src_prepare() {
 	sed -i -e 's| -Werror||' src/Makefile.am || die
 	./autogen.sh || die
+	eapply_user
 }

@@ -2,7 +2,8 @@
 
 EAPI="6"
 
-PYTHON_COMPAT=( python3_{8,9,10} pypy3 )
+DISTUTILS_USE_PEP517=no
+PYTHON_COMPAT=( python3_{9..11} )
 
 inherit eutils distutils-r1
 

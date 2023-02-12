@@ -1,7 +1,7 @@
 # Copyright 1999-2017 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=5
+EAPI=6
 
 inherit eutils flag-o-matic linux-info linux-mod user versionator udev
 
@@ -28,6 +28,8 @@ S=${WORKDIR}
 
 pkg_setup() {
 	CONFIG_CHECK="~HIGH_RES_TIMERS"
+	kernel_is ge 5 5 0 &&
+		CONFIG_CHECK="${CONFIG_CHECK} X86_IOPL_IOPERM" # to avoid startup problems with vmnet-natd
 	if kernel_is ge 2 6 37 && kernel_is lt 2 6 39; then
 		CONFIG_CHECK="${CONFIG_CHECK} BKL"
 	fi
@@ -51,11 +53,16 @@ pkg_setup() {
 	VMWARE_MODULE_LIST_ALL="vmblock vmmon vmnet vmci vsock"
 	VMWARE_MODULE_LIST="vmblock vmmon vmnet"
 	use vmci && VMWARE_MODULE_LIST="${VMWARE_MODULE_LIST} vmci"
-	use vsock && VMWARE_MODULE_LIST="${VMWARE_MODULE_LIST} vsock"
+	use vsock && VMWARE_MODULE_LIST="${VMWARE_MODULE_LIST} vsock" # vsock must be listed AFTER vmci
 
 	VMWARE_MOD_DIR="${PN}-${PVR}"
 
-	BUILD_TARGETS="auto-build KERNEL_DIR=${KERNEL_DIR} KBUILD_OUTPUT=${KV_OUT_DIR}"
+	BUILD_TARGETS="auto-build"
+	BUILD_PARAMS="KERNEL_DIR=${KERNEL_DIR} KBUILD_OUTPUT=${KV_OUT_DIR}"
+	# Since kernel 5.5 (commit 39808e451fdf) the Module.symvers is not read automatically
+	# but an extra parameter KBUILD_EXTRA_SYMBOLS has been defined for that purpose.
+	# Here vsock needs symbols defined by vmci
+	kernel_is ge 5 5 0 && BUILD_PARAMS="${BUILD_PARAMS} KBUILD_EXTRA_SYMBOLS=${S}/Module.symvers"
 
 	enewgroup "${VMWARE_GROUP}"
 
@@ -126,14 +133,17 @@ src_prepare() {
 	kernel_is ge 5 00 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.00-02-do_gettimeofday.patch"
 	kernel_is ge 5 01 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.01-00-vm_fault_t.patch"
 	kernel_is ge 5 01 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.01-01-kernel_ds.patch"
-
-	if kernel_is -lt 4 5 ; then
-		kernel_is ge 4 4 167 && epatch "${FILESDIR}/${PV_MAJOR}-4.4-get-user-pages.patch"
-	fi
+	kernel_is ge 5 03 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.03-00-force_sig.patch"
+	kernel_is ge 5 04 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.04-00-skb_frag_t.patch"
+	kernel_is ge 5 06 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.06-00-proc_create.patch"
+	kernel_is ge 5 06 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.06-01-ioremap_nocache.patch"
+	kernel_is ge 5 06 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.06-02-timeval.patch"
+	epatch "${FILESDIR}/mkubecek-${PV}/vmnet-only.patch"
+	epatch "${FILESDIR}/mkubecek-${PV}/vmmon-only.patch"
 
 	# Allow user patches so they can support RC kernels and whatever else
-	epatch "${FILESDIR}/${PV_MAJOR}-5.5-vmmon-fix-smp.patch"
 	epatch_user
+	eapply_user
 }
 
 src_install() {

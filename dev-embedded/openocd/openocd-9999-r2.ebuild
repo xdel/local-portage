@@ -38,6 +38,7 @@ src_prepare() {
 		sed -i -e "/@include version.texi/d" doc/${PN}.texi || die
 		AT_NO_RECURSIVE=yes eautoreconf
 	fi
+	eapply "${FILESDIR}"/capstone.patch
 	default
 }
 

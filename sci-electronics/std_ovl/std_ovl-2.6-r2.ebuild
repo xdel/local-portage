@@ -1,6 +1,6 @@
 # Distributed under the terms of the GNU General Public License v2+
 
-EAPI=5
+EAPI=6
 inherit eutils
 
 MY_PV="v2p8.1_Apr2014"

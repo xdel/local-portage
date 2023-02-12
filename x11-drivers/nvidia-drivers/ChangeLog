@@ -223,7 +223,7 @@
   nvidia-drivers-304.121.ebuild, nvidia-drivers-331.79.ebuild,
   nvidia-drivers-334.21-r3.ebuild, nvidia-drivers-337.25.ebuild,
   nvidia-drivers-340.17.ebuild, nvidia-drivers-96.43.23.ebuild:
-  Update dependencies to require guaranteed EAPI=5 or multilib ebuilds, bug
+  Update dependencies to require guaranteed EAPI=6 or multilib ebuilds, bug
   #513718.
 
   16 Jun 2014; Jeroen Roovers <jer@gentoo.org>

@@ -5,7 +5,7 @@
 #       be built as it needs forrest which we do not have
 # TODO: package and use optional dependency jeuclid
 
-EAPI="5"
+EAPI="6"
 
 JAVA_PKG_IUSE="doc examples source test"
 

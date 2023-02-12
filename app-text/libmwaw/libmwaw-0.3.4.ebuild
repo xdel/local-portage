@@ -2,9 +2,9 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/app-text/libmwaw/libmwaw-0.3.1.ebuild,v 1.2 2014/10/10 20:17:48 maekke Exp $
 
-EAPI=5
+EAPI=6
 
-inherit base eutils
+inherit eutils
 
 DESCRIPTION="Library parsing many pre-OSX MAC text formats"
 HOMEPAGE="http://sourceforge.net/p/libmwaw/wiki/Home/"

@@ -2194,7 +2194,7 @@
 
   27 Nov 2012; Mike Gilbert <floppym@gentoo.org> +chromium-24.0.1312.25.ebuild,
   -chromium-24.0.1312.5.ebuild:
-  Beta channel bump. EAPI=5. Add slot-operator dep for v8.
+  Beta channel bump. EAPI=6. Add slot-operator dep for v8.
 
   27 Nov 2012; Agostino Sarubbo <ago@gentoo.org> chromium-23.0.1271.91.ebuild:
   Stable for x86, wrt bug #444826

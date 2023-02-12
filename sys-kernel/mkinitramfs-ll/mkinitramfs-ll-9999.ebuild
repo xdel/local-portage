@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: sys-kernel/mkinitramfs-ll/mkinitramfs-ll-9999.ebuild,v 1.16 2015/05/26 08:41:42 Exp $
 
-EAPI=5
+EAPI=6
 
 case "${PV}" in
 	(9999*)
@@ -94,7 +94,7 @@ pkg_setup()
 src_prepare()
 {
 	sed -e '/COPYING.*$/d' -i Makefile
-	epatch_user
+	eapply_user
 }
 
 src_install()

@@ -3,7 +3,7 @@
 # Author Achim Gottinger <achim@gentoo.org>
 # $Header: /var/cvsroot/gentoo-x86/gnome-base/scrollkeeper/Attic/scrollkeeper-0.2.ebuild,v 1.7 2001/10/06 10:06:50 hallski dead $
 
-EAPI=5
+EAPI=6
 
 
 A="${P}.tar.gz"

@@ -4,7 +4,7 @@
 
 EAPI=6
 
-PYTHON_COMPAT=( python2_7 )
+PYTHON_COMPAT=( python3_{7,8,9,10} )
 inherit vcs-snapshot python-any-r1 java-pkg-2 java-ant-2
 
 DESCRIPTION="Java library for reading and writing data in life sciences image file formats"

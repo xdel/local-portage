@@ -3,7 +3,8 @@
 # $Id$
 
 EAPI=6
-PYTHON_COMPAT=( python{3_7,3_8,3_9} )
+DISTUTILS_USE_PEP517=no
+PYTHON_COMPAT=( python3_{9..11} )
 
 inherit distutils-r1
 

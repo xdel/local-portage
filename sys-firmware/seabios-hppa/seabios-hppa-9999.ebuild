@@ -3,7 +3,8 @@
 
 EAPI="6"
 
-PYTHON_COMPAT=( python3_{7,8,9} )
+DISTUTILS_USE_PEP517=no
+PYTHON_COMPAT=( python3_{9..11} )
 
 inherit eutils flag-o-matic python-r1
 
@@ -15,7 +16,7 @@ inherit eutils flag-o-matic python-r1
 if [[ ${PV} = *9999* ]]; then
     inherit git-r3
     EGIT_REPO_URI="https://github.com/hdeller/seabios-hppa.git"
-    EGIT_BRANCH="seabios-hppa-v3"
+    EGIT_BRANCH="master"
 fi
 
 DESCRIPTION="Port of SEABIOS to the parisc/hppa architecture"
@@ -49,12 +50,11 @@ _emake() {
 }
 
 src_compile() {
-
-	_emake CROSS_PREFIX=hppa-linux-gnu- parisc
-	mv out/hppa-firmware.img ../hppa-firmware-master.img || die
+	_emake CROSS_PREFIX=hppa-linux-gnu- all
+	mv out/bios.bin out/hppa-firmware-master.img
 }
 
 src_install() {
 	insinto /usr/share/qemu
-	doins ../hppa-firmware-master.img
+	doins out/hppa-firmware-master.img
 }

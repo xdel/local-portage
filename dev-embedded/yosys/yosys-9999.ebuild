@@ -7,7 +7,8 @@ PYTHON_COMPAT=( python3_8 python3_9 )
 
 inherit eutils git-r3 python-any-r1
 
-ABCREV="3709744c60696c5e3f4cc123939921ce8107fe04"
+# Update abcrev from yosys tree reference if linking fails
+ABCREV="ab5b16ede2ff3a4ab5209df24db2c76700899684"
 DESCRIPTION="Yosys - Yosys Open SYnthesis Suite"
 HOMEPAGE="http://www.clifford.at/icestorm/"
 LICENSE="ISC"
@@ -21,7 +22,7 @@ IUSE="abc"
 
 RDEPEND="
 	sys-libs/readline:=
-	virtual/libffi
+	dev-libs/libffi
 	dev-vcs/git
 	dev-lang/tcl:=
 	dev-vcs/mercurial"

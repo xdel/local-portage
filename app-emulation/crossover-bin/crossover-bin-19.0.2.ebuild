@@ -1,8 +1,8 @@
 # Copyright 1999-2021 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=7
-PYTHON_COMPAT=( python3_{7..9} )
+EAPI=8
+PYTHON_COMPAT=( python3_{8..10} )
 
 inherit python-single-r1 unpacker
 
@@ -85,7 +85,7 @@ RDEPEND="${DEPEND}
 	pcap? ( net-libs/libpcap[abi_x86_32(-)] )
 	png? ( media-libs/libpng:0[abi_x86_32(-)] )
 	scanner? ( media-gfx/sane-backends[abi_x86_32(-)] )
-	ssl? ( net-libs/gnutls:0/30[abi_x86_32(-)] )
+	ssl? ( net-libs/gnutls:0/30.30[abi_x86_32(-)] )
 	v4l? ( media-libs/libv4l[abi_x86_32(-)] )
 	vulkan? ( media-libs/vulkan-loader[abi_x86_32(-)] )
 	dev-libs/glib:2

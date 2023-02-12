@@ -1,0 +1,22 @@
+--- a/src/target/arm_disassembler.c
++++ b/src/target/arm_disassembler.c
+@@ -16,7 +16,7 @@
+ #include <helper/log.h>
+ 
+ #if HAVE_CAPSTONE
+-#include <capstone.h>
++#include <capstone/capstone.h>
+ #endif
+ 
+ /*
+--- a/src/target/a64_disassembler.c
++++ b/src/target/a64_disassembler.c
+@@ -15,7 +15,7 @@
+ 
+ #if HAVE_CAPSTONE
+ 
+-#include <capstone.h>
++#include <capstone/capstone.h>
+ 
+ static void print_opcode(struct command_invocation *cmd, const cs_insn *insn)
+ {
