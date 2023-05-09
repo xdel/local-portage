@@ -138,11 +138,33 @@ src_prepare() {
 	kernel_is ge 5 06 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.06-00-proc_create.patch"
 	kernel_is ge 5 06 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.06-01-ioremap_nocache.patch"
 	kernel_is ge 5 06 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.06-02-timeval.patch"
-	epatch "${FILESDIR}/mkubecek-${PV}/vmnet-only.patch"
-	epatch "${FILESDIR}/mkubecek-${PV}/vmmon-only.patch"
+	# mkubecek tree
+	kernel_is ge 5 08 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.19-00-compat-vfs-poll.patch"
+	kernel_is ge 5 08 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.04-00-compat-skb.patch"
+	kernel_is ge 5 08 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.08-00-mmap.patch"
+	kernel_is ge 5 08 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.08-01-vmmon-slab.patch"
+	kernel_is ge 5 08 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.08-02-vmmon-asm-irq.patch"
+	kernel_is ge 5 08 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.08-03-nx-handling.patch"
+	kernel_is ge 5 08 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.08-04-eventfd-nullptr.patch"
+	kernel_is ge 5 10 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.10-00-csum-copy.patch"
+	kernel_is ge 5 10 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.10-01-no-setfs.patch"
+	kernel_is ge 5 10 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.10-02-no-setfs.patch"
+	kernel_is ge 5 10 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.10-03-no-setfs.patch"
+	kernel_is ge 5 10 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.10-04-avoid-writes-to-eventfd.patch"
+	kernel_is ge 5 10 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.10-05-avoid-alloc-for-crosspages.patch"
+	kernel_is ge 5 13 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.13-00-fix-arg-mismatch.patch"
+	kernel_is ge 5 15 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.15-00-fix-task-struct-access.patch"
+	kernel_is ge 5 15 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.15-01-use-fallthrough-pseudokeyword.patch"
+	kernel_is ge 5 16 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.16-00-wa-sanitize-shift.patch"
+	kernel_is ge 5 17 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.17-01-use-accessors-for-net-device.patch"
+	kernel_is ge 5 17 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.17-02-avoid-use-pde-data.patch"
+	kernel_is ge 5 18 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.18-00-use-netif-rx.patch"
+	kernel_is ge 5 18 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.18-01-use-more-robust-vmw-bit-mask.patch"
+	kernel_is ge 5 19 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.19-00-open-code-csum-and-copy-to-user.patch"
+	kernel_is ge 5 19 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.19-01-fix-wireless-dd.patch"
+	kernel_is ge 5 19 0 && epatch "${FILESDIR}/${PV_MAJOR}-5.19-02-modules-do-not-ignore-cc.patch"
 
 	# Allow user patches so they can support RC kernels and whatever else
-	epatch_user
 	eapply_user
 }
 

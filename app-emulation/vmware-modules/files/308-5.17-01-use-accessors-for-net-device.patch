@@ -1,0 +1,84 @@
+commit beef72981e69d5dd36b93a797a62764742b71073
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Tue Jan 11 17:25:45 2022 +0100
+
+    vmnet: use accessors for net_device::dev_addr
+    
+    Mainline commit adeef3e32146 ("net: constify netdev->dev_addr") in 5.17-rc1
+    makes dev_addr member of struct net_device const but accessors should be
+    used to modify it since 5.15 to make sure rbtree with hardware address list
+    is updated properly.
+    
+    Use dev_addr_set() and __dev_addr_set() in VNetNetifSetMAC() and
+    VNetNetIf_Create(). For kernels before 5.15 provide our own version of the
+    accessors. As SMAC_SetMac() only reads dev_addr, constify the corresponding
+    argument.
+
+diff --git a/vmnet-only/netif.c b/vmnet-only/netif.c
+index bcd9a7c..5397ea2 100644
+--- a/vmnet-only/netif.c
++++ b/vmnet-only/netif.c
+@@ -65,6 +65,19 @@ static void VNetNetifSetMulticast(struct net_device *dev);
+ static int  VNetNetIfProcRead(char *page, char **start, off_t off,
+                               int count, int *eof, void *data);
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
++static void
++__dev_addr_set(struct net_device *dev, const void *addr, size_t len)
++{
++	memcpy(dev->dev_addr, addr, len);
++}
++
++static void dev_addr_set(struct net_device *dev, const u8 *addr)
++{
++	__dev_addr_set(dev, addr, dev->addr_len);
++}
++#endif
++
+ /*
+  *----------------------------------------------------------------------
+  *
+@@ -219,7 +232,7 @@ VNetNetIf_Create(char *devName,  // IN:
+ 
+    memset(&netIf->stats, 0, sizeof netIf->stats);
+ 
+-   memcpy(dev->dev_addr, netIf->port.paddr, sizeof netIf->port.paddr);
++   __dev_addr_set(dev, netIf->port.paddr, sizeof(netIf->port.paddr));
+ 
+    if (register_netdev(dev) != 0) {
+       LOG(0, (KERN_NOTICE "%s: could not register network device\n",
+@@ -498,7 +511,7 @@ VNetNetifSetMAC(struct net_device *dev, // IN:
+       return -EINVAL;
+    }
+    memcpy(netIf->port.paddr, addr->sa_data, dev->addr_len);
+-   memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
++   dev_addr_set(dev, addr->sa_data);
+    return 0;
+ }
+ 
+diff --git a/vmnet-only/smac.c b/vmnet-only/smac.c
+index 71b711e..2ca8ea5 100644
+--- a/vmnet-only/smac.c
++++ b/vmnet-only/smac.c
+@@ -4119,7 +4119,7 @@ SMAC_InitState(SMACState **ptr) // OUT: pointer to alloced/inited state
+ 
+ void SMACINT
+ SMAC_SetMac(SMACState *state,  // IN: state to update
+-	    uint8 *mac)        // IN: pointer to host adapter's MAC
++	    const uint8 *mac)  // IN: pointer to host adapter's MAC
+ {
+    VNETKdPrintCall(("SMAC_SetMac"));
+    ASSERT(state);
+diff --git a/vmnet-only/smac.h b/vmnet-only/smac.h
+index c8df9d2..f03fd3f 100644
+--- a/vmnet-only/smac.h
++++ b/vmnet-only/smac.h
+@@ -72,7 +72,7 @@ Bool BridgeIPv4MatchAddrMAC(const ULONG ipAddr, const uint8 *mac);
+ void SMACINT
+ SMAC_InitState(struct SMACState **ptr);           // IN: state to alloc/init
+ void SMACINT
+-SMAC_SetMac(struct SMACState *state, uint8 *mac); // IN: state, and host MAC
++SMAC_SetMac(struct SMACState *state, const uint8 *mac); // IN: state, and host MAC
+ void SMACINT
+ SMAC_CleanupState(struct SMACState **ptr);        // IN: state to cleanup/dealloc
+ 

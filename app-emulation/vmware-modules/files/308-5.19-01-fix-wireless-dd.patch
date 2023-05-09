@@ -1,0 +1,38 @@
+commit 2913d33d56d27a4133663da30fb04cac2c375112
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Tue Jun 7 21:29:28 2022 +0200
+
+    vmnet: fix wireless device detection
+    
+    Mainline commit c304eddcecfe ("net: wrap the wireless pointers in struct
+    net_device in an ifdef") in 5.19-rc1 makess ieee80211_ptr member present in
+    struct net_device only if CONFIG_CFG80211 is enabled. Do the same for the
+    code testing its value in VNetBridgeIsDeviceWireless() to fix build against
+    kernel with CONFIG_CFG80211 disabled. Functionally, this is equivalent to
+    newly introduced wireless_group_needed() helper in upstream kernel code.
+    
+    We can use the same code also for older kernels as with CONFIG_CFG80211
+    disabled, the pointer should be null anyway.
+
+diff --git a/vmnet-only/bridge.c b/vmnet-only/bridge.c
+index 12f8863..5ab9203 100644
+--- a/vmnet-only/bridge.c
++++ b/vmnet-only/bridge.c
+@@ -813,10 +813,14 @@ VNetBridgeIsDeviceWireless(struct net_device *dev) //IN: sock
+ {
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22)
+ #  if defined(CONFIG_WIRELESS_EXT)
+-   return dev->ieee80211_ptr != NULL || dev->wireless_handlers != NULL;
+-#  else
+-   return dev->ieee80211_ptr != NULL;
++   if (dev->wireless_handlers)
++      return true;
+ #  endif
++#  if IS_ENABLED(CONFIG_CFG80211)
++   if (dev->ieee80211_ptr)
++      return true;
++#  endif
++   return false;
+ #elif defined(CONFIG_WIRELESS_EXT)
+    return dev->wireless_handlers != NULL;
+ #elif !defined(CONFIG_NET_RADIO)

@@ -1,0 +1,85 @@
+commit d680c2be3f91c5f59658820685435c40e12a7a5c
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Wed Oct 14 11:31:37 2020 +0200
+
+    vmnet: use new compat_csum_and_copy_to_user() calling convention
+    
+    Part of bigger csum_and_copy rework, commit c693cc4676a0 ("saner calling
+    conventions for csum_and_copy_..._user()") in 5.10-rc1 drops last two
+    arguments and changes the way errors are reported.
+    
+    Provide a compat wrapper with new calling convention and rewrite callers in
+    vmnet to use it. Unfortunately there doesn't seem to be a way to recognize
+    which calling convention kernel has so version check is used.
+
+Index: work/vmnet-only/userif.c
+===================================================================
+--- work.orig/vmnet-only/userif.c
++++ work/vmnet-only/userif.c
+@@ -110,6 +110,24 @@
+ #endif
+ }
+ 
++#if COMPAT_LINUX_VERSION_CHECK_LT(5, 10, 0)
++static inline
++__wsum compat_csum_and_copy_to_user(const void *src, void __user *dst, int len)
++{
++	int err;
++	__wsum ret;
++
++	ret = csum_and_copy_to_user(src, dst, len, 0, &err);
++	return err ? 0 : ret;
++}
++#else
++static inline
++__wsum compat_csum_and_copy_to_user(const void *src, void __user *dst, int len)
++{
++	return csum_and_copy_to_user(src, dst, len);
++}
++#endif
++
+ /*
+  *-----------------------------------------------------------------------------
+  *
+@@ -595,7 +613,6 @@
+ 		     char *buf)			// OUT: where to copy data
+ {
+    unsigned int csum;
+-   int err = 0;
+    int len = skb_headlen(skb) - offset;
+    char *curr = buf;
+    const skb_frag_t *frag;
+@@ -608,10 +625,9 @@
+       return -EINVAL;
+    }
+ 
+-   csum = csum_and_copy_to_user(skb->data + offset, curr, len, 0, &err);
+-   if (err) {
+-      return err;
+-   }
++   csum = compat_csum_and_copy_to_user(skb->data + offset, curr, len);
++   if (!csum)
++	   return -EFAULT;
+    curr += len;
+ 
+    for (frag = skb_shinfo(skb)->frags;
+@@ -622,14 +638,13 @@
+ 	 const void *vaddr;
+ 
+         vaddr = compat_kmap_frag(frag);
+-        tmpCsum = csum_and_copy_to_user(vaddr + compat_skb_frag_off(frag),
+-                                        curr, compat_skb_frag_size(frag), 0,
+-                                        &err);
++        tmpCsum = compat_csum_and_copy_to_user(vaddr + compat_skb_frag_off(frag),
++                                        curr, compat_skb_frag_size(frag));
+         compat_kunmap_frag(frag);
+ 
+-	 if (err) {
+-	    return err;
+-	 }
++        if (!tmpCsum)
++               return -EFAULT;
++
+ 	 csum = csum_block_add(csum, tmpCsum, curr - buf);
+ 	 curr += compat_skb_frag_size(frag);
+       }

@@ -1,0 +1,39 @@
+commit 5914825cb9705d2a25a8fb3ff4f088d920443d55
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Fri Jun 17 09:29:35 2022 +0200
+
+    modules: do not ignore the CC variable
+    
+    For an unknown reason, makefiles of both modules deliberately ignore the
+    CC variable so that e.g. "make CC=gcc-12" uses the default compiler for
+    build as if no CC value was given.
+    
+    As this went away with 14.x.x, simply drop the two lines responsible for
+    this behaviour.
+
+diff --git a/vmmon-only/Makefile b/vmmon-only/Makefile
+index e278bc8..6cf73b8 100644
+--- a/vmmon-only/Makefile
++++ b/vmmon-only/Makefile
+@@ -106,8 +106,6 @@ export VM_CCVER
+ VM_CC := $(CC)
+ export VM_CC
+ 
+-MAKEOVERRIDES := $(filter-out CC=%,$(MAKEOVERRIDES))
+-
+ #
+ # Define a setup target that gets built before the actual driver.
+ # This target may not be used at all, but if it is then it will be defined
+diff --git a/vmnet-only/Makefile b/vmnet-only/Makefile
+index bbb88b4..d4cd827 100644
+--- a/vmnet-only/Makefile
++++ b/vmnet-only/Makefile
+@@ -106,8 +106,6 @@ export VM_CCVER
+ VM_CC := $(CC)
+ export VM_CC
+ 
+-MAKEOVERRIDES := $(filter-out CC=%,$(MAKEOVERRIDES))
+-
+ #
+ # Define a setup target that gets built before the actual driver.
+ # This target may not be used at all, but if it is then it will be defined

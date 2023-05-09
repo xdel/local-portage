@@ -1,0 +1,106 @@
+commit 37dac6e70e564a2eaf79be7c0b4473919874b733
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Tue May 31 23:29:42 2022 +0200
+
+    vmnet: open code csum_and_copy_to_user on kernel >= 5.19
+    
+    Mainline commit 6308499b5e99 ("net: unexport csum_and_copy_{from,to}_user")
+    in 5.19-rc1 unexports csum_and_copy_to_user as no in-tree module is using
+    it. A clean solution would probably be rewriting the code to use iovec
+    iterator as csum_and_copy_to_iter() is still exported (or perhaps
+    skb_copy_and_csum_datagram() might be used instead). Anything like this
+    would be way too intrusive so it would have to wait for VMware developers.
+    
+    For now, use the simplest solution and replace the calls to
+    csum_and_copy_to_user() on 5.19 and newer with open coded implementation.
+    As the optimized x86 version uses csum_partial_copy_generic() which is not
+    exported on x86_64 either, copy the generic one from include/net/checksum.h
+    instead. This will be less efficient but hopefully the performace hit will
+    not be noticeable.
+
+diff --git a/vmnet-only/userif.c b/vmnet-only/userif.c
+index 3f6160b..ba8d11f 100644
+--- a/vmnet-only/userif.c
++++ b/vmnet-only/userif.c
+@@ -111,22 +111,31 @@
+ }
+ 
+ #if COMPAT_LINUX_VERSION_CHECK_LT(5, 10, 0)
+-static inline
+-__wsum compat_csum_and_copy_to_user(const void *src, void __user *dst, int len)
++static inline unsigned int
++compat_csum_and_copy_to_user(const void *src, void __user *dst, int len,
++			     int *err)
+ {
+-	int err;
+-	__wsum ret;
+-
+-	ret = csum_and_copy_to_user(src, dst, len, 0, &err);
+-	return err ? 0 : ret;
++	return csum_and_copy_to_user(src, dst, len, 0, err);
+ }
+ #else
+-static inline
+-__wsum compat_csum_and_copy_to_user(const void *src, void __user *dst, int len)
++static inline unsigned int
++compat_csum_and_copy_to_user(const void *src, void __user *dst, int len,
++			     int *err)
+ {
+-	return csum_and_copy_to_user(src, dst, len);
++	unsigned int csum;
++
++#if COMPAT_LINUX_VERSION_CHECK_LT(5, 19, 0)
++	csum = csum_and_copy_to_user(src, dst, len);
++#else
++	csum = csum_partial(src, len, ~0U);
++	if (copy_to_user(dst, src, len))
++		csum = 0;
++#endif /* 5.19 */
++
++	*err = (csum == 0 ? -EFAULT : 0);
++	return csum;
+ }
+-#endif
++#endif /* 5.10 */
+ 
+ /*
+  *-----------------------------------------------------------------------------
+@@ -613,6 +622,7 @@
+ 		     char *buf)			// OUT: where to copy data
+ {
+    unsigned int csum;
++   int err = 0;
+    int len = skb_headlen(skb) - offset;
+    char *curr = buf;
+    const skb_frag_t *frag;
+@@ -625,9 +635,10 @@
+       return -EINVAL;
+    }
+ 
+-   csum = compat_csum_and_copy_to_user(skb->data + offset, curr, len);
+-   if (!csum)
+-	   return -EFAULT;
++   csum = compat_csum_and_copy_to_user(skb->data + offset, curr, len, &err);
++   if (err) {
++      return err;
++   }
+    curr += len;
+ 
+    for (frag = skb_shinfo(skb)->frags;
+@@ -639,11 +650,13 @@
+ 
+         vaddr = compat_kmap_frag(frag);
+         tmpCsum = compat_csum_and_copy_to_user(vaddr + compat_skb_frag_off(frag),
+-                                        curr, compat_skb_frag_size(frag));
++                                        curr, compat_skb_frag_size(frag), &err);
+         compat_kunmap_frag(frag);
+ 
+-        if (!tmpCsum)
+-               return -EFAULT;
++
++        if (err) {
++          return err;
++        }
+ 
+ 	 csum = csum_block_add(csum, tmpCsum, curr - buf);
+ 	 curr += compat_skb_frag_size(frag);

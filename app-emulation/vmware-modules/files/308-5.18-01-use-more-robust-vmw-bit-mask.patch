@@ -1,0 +1,28 @@
+commit d40195d340b0bfcd731ce46f71ea89a2a287fd53
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Mon May 23 14:42:21 2022 +0200
+
+    vmmon: use more robust version of VMW_BIT_MASK()
+    
+    The definition of VMW_BIT_MASK() macro splits the shift into two to prevent
+    a compiler warning when used with argument of 32 but this no longer fools
+    current gcc versions. Use a better implementation based on right shifting
+    an unsigned word of all ones as workstation >= 14.1.7 does.
+
+diff --git a/vmmon-only/include/x86cpuid.h b/vmmon-only/include/x86cpuid.h
+index f953904..40d9a5e 100644
+--- a/vmmon-only/include/x86cpuid.h
++++ b/vmmon-only/include/x86cpuid.h
+@@ -897,11 +897,8 @@ FIELD(81E,  0, ECX,  8,  3, NODES_PER_PKG,                         NA,  FALSE)
+  *
+  * e.g. - CPUID_VIRT_BITS_MASK  = 0xff00
+  *      - CPUID_VIRT_BITS_SHIFT = 8
+- *
+- * Note: The MASK definitions must use some gymnastics to get
+- * around a warning when shifting left by 32.
+  */
+-#define VMW_BIT_MASK(shift)  (((1 << (shift - 1)) << 1) - 1)
++#define VMW_BIT_MASK(shift)  (0xffffffffu >> (32 - shift))
+ 
+ #define FIELD(lvl, ecxIn, reg, bitpos, size, name, s, c3)      \
+    CPUID_##name##_SHIFT        = bitpos,                       \

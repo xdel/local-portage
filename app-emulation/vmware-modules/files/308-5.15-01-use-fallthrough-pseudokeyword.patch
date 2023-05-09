@@ -1,0 +1,98 @@
+commit 41405275b20ac124ab0e029310fbe0ea677fa2fa
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Mon Jul 19 23:34:32 2021 +0200
+
+    vmnet: use fallthrough pseudokeyword
+    
+    Starting with mainline commit b7eb335e26a9 ("Makefile: Enable
+    -Wimplicit-fallthrough for Clang"), kernel build only recognizes the
+    fallthrough pseudokeyword as intentional switch fallthrough marker. Even if
+    said commit was later reverted the change affecting gcc builds was left in
+    place.
+    
+    Replace comment markers with fallthrough pseudokeyword. When building
+    against kernel which does not define it, provide a simplified definition
+    of fallthrough macro.
+
+Index: work/vmmon-only/include/compat_compiler.h
+===================================================================
+--- /dev/null
++++ work/vmmon-only/include/compat_compiler.h
+@@ -0,0 +1,15 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef __COMPAT_COMPILER_H__
++#define __COMPAT_COMPILER_H__
++
++#ifndef fallthrough
++#ifndef __has_attribute
++	#define fallthrough do {} while (0)
++#elif __has_attribute(__fallthrough__)
++	#define fallthrough __attribute__((__fallthrough__))
++#else
++	#define fallthrough do {} while (0)
++#endif /* __has_attribute */
++#endif /* fallthrough */
++
++#endif /* __COMPAT_COMPILER_H__ */
+Index: work/vmnet-only/compat_compiler.h
+===================================================================
+--- /dev/null
++++ work/vmnet-only/compat_compiler.h
+@@ -0,0 +1,15 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef __COMPAT_COMPILER_H__
++#define __COMPAT_COMPILER_H__
++
++#ifndef fallthrough
++#ifndef __has_attribute
++	#define fallthrough do {} while (0)
++#elif __has_attribute(__fallthrough__)
++	#define fallthrough __attribute__((__fallthrough__))
++#else
++	#define fallthrough do {} while (0)
++#endif /* __has_attribute */
++#endif /* fallthrough */
++
++#endif /* __COMPAT_COMPILER_H__ */
+Index: work/vmnet-only/driver.c
+===================================================================
+--- work.orig/vmnet-only/driver.c
++++ work/vmnet-only/driver.c
+@@ -38,6 +38,7 @@
+ #include "compat_sock.h"
+ #include <linux/kdev_t.h>
+ #include <linux/mutex.h>
++#include "compat_compiler.h"
+ 
+ #define __KERNEL_SYSCALLS__
+ #include <asm/io.h>
+@@ -971,7 +972,7 @@ VNetFileOpUnlockedIoctl(struct file    *
+          }
+          /* Should we require verFromUser == VNET_API_VERSION? */
+       }
+-      /* fall thru */
++      fallthrough;
+ 
+    case SIOCGETAPIVERSION:
+       retval = put_user(VNET_API_VERSION, (uint32 *)ioarg) ?  -EFAULT : 0;
+Index: work/vmmon-only/include/hashFunc.h
+===================================================================
+--- work.orig/vmmon-only/include/hashFunc.h
++++ work/vmmon-only/include/hashFunc.h
+@@ -39,6 +39,8 @@
+ #include "vm_basic_defs.h"
+ #include "vm_assert.h"
+ 
++#include "compat_compiler.h"
++
+ /*
+  * operations
+  */
+@@ -251,6 +253,7 @@ static INLINE ub8 hash2(register const u
+   {
+     /* c is reserved for the length */
+   case  2: b+=k[1];
++	fallthrough;
+   case  1: a+=k[0];
+     /* case 0: nothing left to add */
+   }

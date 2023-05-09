@@ -1,0 +1,35 @@
+commit df6c964d7b44d3d5c83b90dbf8ed6f8dd6c4cab5
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Thu May 20 11:27:39 2021 +0200
+
+    vmnet: fix argument type mismatch in VNetHub_AllocPvn() and VNetHubAlloc()
+    
+    There is a mismatch of id argument type between declaration and definition
+    of functions VNetHub_AllocPvn() and VNetHubAlloc(). While innocuous - the
+    declaration uses id[VNET_PVN_ID_LEN] and the definition id[] - gcc >= 11
+    issues a warning.
+    
+    Use id[VNET_PVN_ID_LEN] to silence the compiler warning.
+
+Index: work/vmnet-only/hub.c
+===================================================================
+--- work.orig/vmnet-only/hub.c
++++ work/vmnet-only/hub.c
+@@ -234,7 +234,7 @@ VNetHub_AllocVnet(int hubNum) // IN: the
+  */
+ 
+ VNetJack *
+-VNetHub_AllocPvn(uint8 id[]) // IN: the PVN ID to alloc on
++VNetHub_AllocPvn(uint8 id[VNET_PVN_ID_LEN]) // IN: the PVN ID to alloc on
+ {
+    return VNetHubAlloc(TRUE, -1, id);
+ }
+@@ -258,7 +258,7 @@ VNetHub_AllocPvn(uint8 id[]) // IN: the
+ VNetJack *
+ VNetHubAlloc(Bool allocPvn, // IN: TRUE for PVN, FALSE for vnet
+ 	     int hubNum,    // IN: vnet # to use (-1 if allocPvn == TRUE)
+-	     uint8 id[])    // IN: PVN ID to use (NULL if allocPvn == FALSE)
++	     uint8 id[VNET_PVN_ID_LEN])    // IN: PVN ID to use (NULL if allocPvn == FALSE)
+ {
+    VNetHub *hub;
+    VNetJack *jack;

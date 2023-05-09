@@ -1,0 +1,93 @@
+commit b399de9b4d127ecbad2ab08acd7aa9100135cc54
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Wed Jun 30 11:05:16 2021 +0200
+
+    vmmon: fix task_struct::state access patterns
+    
+    Mainline commit 2f064a59a11f ("sched: Change task_struct::state") in
+    5.14-rc1 finishes a series fixing racy access patterns to task state and
+    renames task_struct::state to __state so that code old code acessing it
+    directly fails to build.
+    
+    Two of these in HostIF_SemaphoreWait() can be rewritten into calls to
+    set_current_state() unconditionally (second one may do with
+    __set_current_state() but I don't feel confident enough about that).
+    There are also two places where vmmon code reads task_struct::state;
+    provide a compat accessor using READ_ONCE() and use it instead of
+    a direct read. To avoid kernel version check, check presence of
+    get_current_state() macro introduced in the same commit as state member
+    rename.
+
+Index: work/vmmon-only/include/compat_sched.h
+===================================================================
+--- work.orig/vmmon-only/include/compat_sched.h
++++ work/vmmon-only/include/compat_sched.h
+@@ -289,5 +289,20 @@ typedef struct pid * compat_pid;
+ #define compat_kill_pid(pid, sig, flag) kill_pid(pid, sig, flag)
+ #endif
+ 
++/*
++ * Since v5.14-rc1, task_struct::state hase been renamed to __state and is
++ * is longer supposed to be accessed without READ_ONCE/WRITE_ONCE.
++ */
++#ifdef get_current_state
++static inline int compat_get_task_state(const struct task_struct *t)
++{
++	return READ_ONCE(t->__state);
++}
++#else
++static inline int compat_get_task_state(const struct task_struct *t)
++{
++	return READ_ONCE(t->state);
++}
++#endif
+ 
+ #endif /* __COMPAT_SCHED_H__ */
+Index: work/vmmon-only/linux/hostif.c
+===================================================================
+--- work.orig/vmmon-only/linux/hostif.c
++++ work/vmmon-only/linux/hostif.c
+@@ -105,6 +105,7 @@
+ #include "versioned_atomic.h"
+ #include "compat_poll.h"
+ #include "compat_mmap_lock.h"
++#include "compat_sched.h"
+ 
+ /*
+  * Determine if we can use high resolution timers.
+@@ -484,7 +485,7 @@ HostIF_WakeUpYielders(VMDriver *vm,
+    while ((vcpuid = VCPUSet_FindFirst(&req)) != VCPUID_INVALID) {
+       struct task_struct *t = vm->vmhost->vcpuSemaTask[vcpuid];
+       VCPUSet_Remove(&req, vcpuid);
+-      if (t && (t->state & TASK_INTERRUPTIBLE)) {
++      if (t && (compat_get_task_state(t) & TASK_INTERRUPTIBLE)) {
+          wake_up_process(t);
+       }
+    }
+@@ -2561,7 +2562,7 @@ HostIF_SemaphoreWait(VMDriver *vm,   //
+    }
+ 
+    poll_initwait(&table);
+-   current->state = TASK_INTERRUPTIBLE;
++   set_current_state(TASK_INTERRUPTIBLE);
+    mask = compat_vfs_poll(file, &table.pt);
+    if (!(mask & (POLLIN | POLLERR | POLLHUP))) {
+       vm->vmhost->vcpuSemaTask[vcpuid] = current;
+@@ -2569,7 +2570,7 @@ HostIF_SemaphoreWait(VMDriver *vm,   //
+       vm->vmhost->vcpuSemaTask[vcpuid] = NULL;
+    }
+ 
+-   current->state = TASK_RUNNING;
++   set_current_state(TASK_RUNNING);
+    poll_freewait(&table);
+ 
+    /*
+@@ -2644,7 +2645,7 @@ HostIF_SemaphoreForceWakeup(VMDriver *vm
+    FOR_EACH_VCPU_IN_SET(vcs, vcpuid) {
+       struct task_struct *t = vm->vmhost->vcpuSemaTask[vcpuid];
+       vm->vmhost->vcpuSemaTask[vcpuid] = NULL;
+-      if (t && (t->state & TASK_INTERRUPTIBLE)) {
++      if (t && (compat_get_task_state(t) & TASK_INTERRUPTIBLE)) {
+          wake_up_process(t);
+       }
+    } ROF_EACH_VCPU_IN_SET();

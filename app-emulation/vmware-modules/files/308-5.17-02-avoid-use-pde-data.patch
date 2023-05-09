@@ -1,0 +1,47 @@
+commit 5042ee1223d5b00220b7efde4671157f3c0aabf6
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Sun Jan 23 17:19:57 2022 +0100
+
+    vmnet: avoid using PDE_DATA() on new kernels
+    
+    Mainline commit 359745d78351 ("proc: remove PDE_DATA() completely") in
+    5.17-rc1 removes PDE_DATA() helper and replaces its calls with newly
+    introduced pde_data().
+    
+    Rather than switching to pde_data(), sync the code with 15.x.y branches
+    which use proc_create_single_data() where available (kernel 4.18 and newer)
+    and only call PDE_DATA() on older kernels where it still exists.
+
+diff --git a/vmnet-only/procfs.c b/vmnet-only/procfs.c
+index 58e1c4e..0dfcc2e 100644
+--- a/vmnet-only/procfs.c
++++ b/vmnet-only/procfs.c
+@@ -137,6 +137,7 @@ VNetProcShow(struct seq_file *p, // IN:
+ }
+ 
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
+ /*
+  *----------------------------------------------------------------------
+  *
+@@ -177,6 +178,7 @@ static struct file_operations fops = {
+ };
+ #endif
+ #endif
++#endif
+ 
+ 
+ /*
+@@ -212,7 +214,12 @@ VNetProcMakeEntryInt(VNetProcEntry   *parent,   // IN:
+       } else {
+          ent->data   = data;
+          ent->fn     = fn;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0)
++         ent->pde    = proc_create_single_data(name, mode, parent->pde,
++                                               VNetProcShow, ent);
++#else
+          ent->pde    = proc_create_data(name, mode, parent->pde, &fops, ent);
++#endif
+       }
+       if (ent->pde != NULL) {
+          *ret = ent;

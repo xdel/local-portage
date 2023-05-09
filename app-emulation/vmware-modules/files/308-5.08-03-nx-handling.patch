@@ -1,0 +1,51 @@
+commit a0015e124fb32cd92f5d13b9eda05e94e3c96f88
+Author: Jan Andres <jandres@gmx.net>
+Date:   Fri Sep 4 10:53:10 2020 +0200
+
+    Fix NX bit handling for Linux 5.8+
+    
+    Do not use vmap() to map the cross page, it needs to be executable and
+    vmap() unconditionally sets the NX bit starting with commit cca98e9f8b5e
+    ("mm: enforce that vmap can't map pages executable") in 5.8-rc1.
+    
+    Emulate previous behavior of vmap() by using alloc_vm_area() and
+    explicitly setting the PTE.
+
+Index: work/vmmon-only/linux/hostif.c
+===================================================================
+--- work.orig/vmmon-only/linux/hostif.c
++++ work/vmmon-only/linux/hostif.c
+@@ -69,6 +69,8 @@
+ #endif
+ 
+ #include <asm/io.h>
++#include <asm/page.h>
++#include <asm/tlbflush.h>
+ #include <asm/uaccess.h>
+ #include <asm/irq_vectors.h>
+ #include <linux/mc146818rtc.h>
+@@ -699,7 +701,24 @@ HostIF_PollListUnlock(int callerID) // I
+ static void *
+ MapCrossPage(struct page *p)  // IN:
+ {
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0)
+    return vmap(&p, 1, VM_MAP, VM_PAGE_KERNEL_EXEC);
++#else
++   /* Starting with 5.8, vmap() always sets the NX bit, but the cross
++    * page needs to be executable. */
++   pte_t *ptes[1];
++   struct vm_struct *area = alloc_vm_area(1UL << PAGE_SHIFT, ptes);
++   if (area == NULL)
++      return NULL;
++
++   set_pte(ptes[0], mk_pte(p, VM_PAGE_KERNEL_EXEC));
++
++   preempt_disable();
++   __flush_tlb_all();
++   preempt_enable();
++
++   return area->addr;
++#endif
+ }
+ 
+ 

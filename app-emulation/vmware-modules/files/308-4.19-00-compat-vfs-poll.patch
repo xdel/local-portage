@@ -1,0 +1,69 @@
+commit 395e1b04b907835b54966b05d3e28d9e5247142f
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Sun Jun 17 15:54:09 2018 +0200
+
+    vmmon: compatibility with eventpoll switch to poll_mask()
+    
+    Since commit 11c5ad0ec441 ("eventpoll: switch to ->poll_mask") in
+    v4.18-rc1, eventpoll switched from ->poll() to ->poll_mask(). Rather than
+    calling the callback directly (which would result in null pointer
+    dereference), use vfs_poll() wrapper. As this wrapper is only available
+    since 4.18-rc1 cycle as well, provide a copy to use when building against
+    older kernels.
+
+Index: work/vmmon-only/include/compat_poll.h
+===================================================================
+--- /dev/null
++++ work/vmmon-only/include/compat_poll.h
+@@ -0,0 +1,30 @@
++#ifndef __COMPAT_POLL_H__
++#define __COMPAT_POLL_H__
++
++#include <linux/poll.h>
++
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0))
++
++#ifndef __poll_t
++typedef unsigned int __poll_t;
++#endif
++
++static inline __poll_t compat_vfs_poll(struct file *file,
++				       struct poll_table_struct *pt)
++{
++	if (unlikely(!file->f_op->poll))
++		return DEFAULT_POLLMASK;
++	return file->f_op->poll(file, pt);
++}
++
++#else
++
++static inline __poll_t compat_vfs_poll(struct file *file,
++				       struct poll_table_struct *pt)
++{
++	return vfs_poll(file, pt);
++}
++
++#endif
++
++#endif /* __COMPAT_POLL_H__ */
+Index: work/vmmon-only/linux/hostif.c
+===================================================================
+--- work.orig/vmmon-only/linux/hostif.c
++++ work/vmmon-only/linux/hostif.c
+@@ -99,6 +99,7 @@
+ #include "pgtbl.h"
+ #include "vmmonInt.h"
+ #include "versioned_atomic.h"
++#include "compat_poll.h"
+ 
+ /*
+  * Determine if we can use high resolution timers.
+@@ -2519,7 +2520,7 @@ HostIF_SemaphoreWait(VMDriver *vm,   //
+       
+       poll_initwait(&table);
+       current->state = TASK_INTERRUPTIBLE;
+-      mask = file->f_op->poll(file, &table.pt);
++      mask = compat_vfs_poll(file, &table.pt);
+       if (!(mask & (POLLIN | POLLERR | POLLHUP))) {
+          vm->vmhost->vcpuSemaTask[vcpuid] = current;
+          schedule_timeout(timeoutms * HZ / 1000);  // convert to Hz

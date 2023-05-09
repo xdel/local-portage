@@ -1,0 +1,59 @@
+commit 8709f32e4b451a7ad1e4c41d1225fcdc73eebbd8
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Mon Apr 4 02:05:17 2022 +0200
+
+    vmnet: use netif_rx() on newer kernels
+    
+    In mainline 5.18-rc1, commit baebdf48c360 ("net: dev: Makes sure netif_rx()
+    can be invoked in any context.") allows calling netif_rx() from any context
+    and commit 2655926aea9b ("net: Remove netif_rx_any_context() and
+    netif_rx_ni().") drops netif_rx_ni() as it is no longer needed.
+    
+    Replace calls of netif_rx_ni() in VNetBridgeReceiveFromVNet() and
+    VNetNetIfReceive() by netif_rx() when building against kernel 5.18 and
+    newer.
+
+Index: work/vmnet-only/bridge.c
+===================================================================
+--- work.orig/vmnet-only/bridge.c
++++ work/vmnet-only/bridge.c
+@@ -694,7 +694,7 @@ VNetBridgeReceiveFromVNet(VNetJack
+           * not do it, or netif_rx_ni() will deadlock on the cli() lock --hpreg
+           */
+ 
+-	 netif_rx_ni(clone);
++	 compat_netif_rx_ni(clone);
+ #	 if LOGLEVEL >= 4
+ 	 do_gettimeofday(&vnetTime);
+ #	 endif
+Index: work/vmnet-only/compat_netdevice.h
+===================================================================
+--- work.orig/vmnet-only/compat_netdevice.h
++++ work/vmnet-only/compat_netdevice.h
+@@ -357,4 +357,13 @@ typedef u32 compat_netdev_features_t;
+ #define compat_netif_trans_update(d) do { (d)->trans_start = jiffies; } while (0)
+ #endif
+ 
++static inline int compat_netif_rx_ni(struct sk_buff *skb)
++{
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
++	return netif_rx(skb);
++#else
++	return netif_rx_ni(skb);
++#endif
++}
++
+ #endif /* __COMPAT_NETDEVICE_H__ */
+Index: work/vmnet-only/netif.c
+===================================================================
+--- work.orig/vmnet-only/netif.c
++++ work/vmnet-only/netif.c
+@@ -324,7 +324,7 @@ VNetNetIfReceive(VNetJack        *this,
+    /* send to the host interface */
+    skb->dev = netIf->dev;
+    skb->protocol = eth_type_trans(skb, netIf->dev);
+-   netif_rx_ni(skb);
++   compat_netif_rx_ni(skb);
+    netIf->stats.rx_packets++;
+ 
+    return;

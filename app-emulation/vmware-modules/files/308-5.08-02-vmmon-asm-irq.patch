@@ -1,0 +1,30 @@
+commit 732a24adc25410a56feba7d980692e3c51d7df36
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Thu Aug 20 10:39:56 2020 +0200
+
+    vmmon: include <asm/irq_vectors.h> explicitly
+    
+    After mainline commit 13c01139b171 ("x86/headers: Remove APIC headers from
+    <asm/smp.h>") in 5.9-rc1, APIC headers are no longer included via
+    <asm/smp.h> so that linux/hostif.c will lack the definition of
+    SPURIOUS_APIC_VECTOR.
+    
+    Include <asm/irq_vectors.h> in linux/hostif.c explicitly to avoid that.
+    
+    Note: unlike newer versions, Workstation 12.5.9 does not really need this
+    include as <asm/irq_vectors.h> is included via other kernel header files
+    but that might change if some more headers cleanup are done in mainline so
+    better include it here explicitly as well.
+
+Index: work/vmmon-only/linux/hostif.c
+===================================================================
+--- work.orig/vmmon-only/linux/hostif.c
++++ work/vmmon-only/linux/hostif.c
+@@ -70,6 +70,7 @@
+ 
+ #include <asm/io.h>
+ #include <asm/uaccess.h>
++#include <asm/irq_vectors.h>
+ #include <linux/mc146818rtc.h>
+ #include <linux/capability.h>
+ #include <linux/kthread.h>

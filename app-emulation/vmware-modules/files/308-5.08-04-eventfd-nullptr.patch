@@ -1,0 +1,43 @@
+commit 3bf64bcf515e84de6951338aa8b43a33e4a2032c
+Author: Jan Andres <jandres@gmx.net>
+Date:   Fri Sep 4 10:59:19 2020 +0200
+
+    Fix NULL pointer dereference in eventfd read call
+    
+    Starting with commit 12aceb89b0bc ("eventfd: convert to f_op->read_iter()")
+    in 5.8-rc1, the "read" function pointer in eventfd's file_operations is
+    NULL, "read_iter" is available instead.
+    
+    Use kernel_read() and kernel_write() instead of directly calling the
+    function pointers to handle this correctly. We can do that safely for
+    kernel 4.14 and newer (older versions have different arguments of
+    kernel_read() and kernel_write()).
+
+Index: work/vmmon-only/linux/hostif.c
+===================================================================
+--- work.orig/vmmon-only/linux/hostif.c
++++ work/vmmon-only/linux/hostif.c
+@@ -2559,7 +2559,11 @@ HostIF_SemaphoreWait(VMDriver *vm,   //
+     * reading no bytes (EAGAIN - non blocking fd) or sizeof(uint64).
+     */
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
++   res = kernel_read(file, (char *) &value, sizeof value, &file->f_pos);
++#else
+    res = file->f_op->read(file, (char *) &value, sizeof value, &file->f_pos);
++#endif
+ 
+    if (res == sizeof value) {
+       res = MX_WAITNORMAL;
+@@ -2676,7 +2680,11 @@ HostIF_SemaphoreSignal(uint64 *args)  //
+     * it be present.
+     */
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
++   res = kernel_write(file, (char *) &value, sizeof value, &file->f_pos);
++#else
+    res = file->f_op->write(file, (char *) &value, sizeof value, &file->f_pos);
++#endif
+ 
+    if (res == sizeof value) {
+       res = MX_WAITNORMAL;

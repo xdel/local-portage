@@ -1,0 +1,152 @@
+commit c1fcc29bad9a1976ede081f0a4eca9555eebb4ad
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Fri Jun 12 10:17:12 2020 +0200
+
+    modules: adapt to new mmap locking API
+    
+    In 5.8-rc1, mmap locking was reworked to use wrappers around mmap_sem
+    (which was also renamed to mmap_lock). All code is now supposed to use
+    these wrappers as the internal implementation of the lock may change in
+    the future.
+    
+    Add the wrappers to older kernels to keep the conditionals out of regular
+    code.
+
+Index: work/vmmon-only/include/compat_mmap_lock.h
+===================================================================
+--- /dev/null
++++ work/vmmon-only/include/compat_mmap_lock.h
+@@ -0,0 +1,34 @@
++#ifndef __COMPAT_MMAP_LOCK_H__
++#define __COMPAT_MMAP_LOCK_H__
++
++#include <linux/mm.h>
++
++/*
++ * In 5.8-rc1, mmap locking was reworked to use wrappers around mmap_sem
++ * (which was also renamed to mmap_lock). All code is now supposed to use
++ * these wrappers as the internal implementation of the lock may change in
++ * the future.
++ *
++ * Check also _LINUX_MMAP_LOCK_H to handle possible backports to distribution
++ * pre-5.8 kernel. This macro is defined in <linux/mmap_lock.h> which is also
++ * included in <linux/mm.h> since the commit introducing the wrappers so that
++ * we should have it defined in any kernel providing the new API.
++ */
++
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)) || defined(_LINUX_MMAP_LOCK_H)
++#include <linux/mmap_lock.h>
++#else
++
++static inline void mmap_read_lock(struct mm_struct *mm)
++{
++	down_read(&mm->mmap_sem);
++}
++
++static inline void mmap_read_unlock(struct mm_struct *mm)
++{
++	up_read(&mm->mmap_sem);
++}
++
++#endif /* 5.8.0 */
++
++#endif /* __COMPAT_MMAP_LOCK_H__ */
+Index: work/vmmon-only/linux/hostif.c
+===================================================================
+--- work.orig/vmmon-only/linux/hostif.c
++++ work/vmmon-only/linux/hostif.c
+@@ -100,6 +100,7 @@
+ #include "vmmonInt.h"
+ #include "versioned_atomic.h"
+ #include "compat_poll.h"
++#include "compat_mmap_lock.h"
+ 
+ /*
+  * Determine if we can use high resolution timers.
+@@ -1166,7 +1167,7 @@ HostIFGetUserPages(void *uvAddr,
+ {
+    int retval;
+ 
+-   down_read(&current->mm->mmap_sem);
++   mmap_read_lock(current->mm);
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
+    retval = get_user_pages((unsigned long)uvAddr, numPages, 0, ppages, NULL);
+ #elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 6, 0)
+@@ -1175,7 +1176,7 @@ HostIFGetUserPages(void *uvAddr,
+    retval = get_user_pages(current, current->mm, (unsigned long)uvAddr,
+                            numPages, 0, 0, ppages, NULL);
+ #endif
+-   up_read(&current->mm->mmap_sem);
++   mmap_read_unlock(current->mm);
+ 
+    return retval != numPages;
+ }
+Index: work/vmnet-only/compat_mmap_lock.h
+===================================================================
+--- /dev/null
++++ work/vmnet-only/compat_mmap_lock.h
+@@ -0,0 +1,34 @@
++#ifndef __COMPAT_MMAP_LOCK_H__
++#define __COMPAT_MMAP_LOCK_H__
++
++#include <linux/mm.h>
++
++/*
++ * In 5.8-rc1, mmap locking was reworked to use wrappers around mmap_sem
++ * (which was also renamed to mmap_lock). All code is now supposed to use
++ * these wrappers as the internal implementation of the lock may change in
++ * the future.
++ *
++ * Check also _LINUX_MMAP_LOCK_H to handle possible backports to distribution
++ * pre-5.8 kernel. This macro is defined in <linux/mmap_lock.h> which is also
++ * included in <linux/mm.h> since the commit introducing the wrappers so that
++ * we should have it defined in any kernel providing the new API.
++ */
++
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)) || defined(_LINUX_MMAP_LOCK_H)
++#include <linux/mmap_lock.h>
++#else
++
++static inline void mmap_read_lock(struct mm_struct *mm)
++{
++	down_read(&mm->mmap_sem);
++}
++
++static inline void mmap_read_unlock(struct mm_struct *mm)
++{
++	up_read(&mm->mmap_sem);
++}
++
++#endif /* 5.8.0 */
++
++#endif /* __COMPAT_MMAP_LOCK_H__ */
+Index: work/vmnet-only/userif.c
+===================================================================
+--- work.orig/vmnet-only/userif.c
++++ work/vmnet-only/userif.c
+@@ -47,6 +47,7 @@
+ 
+ #include "vnetInt.h"
+ #include "compat_skbuff.h"
++#include "compat_mmap_lock.h"
+ #include "vmnetInt.h"
+ #include "vm_atomic.h"
+ #include "vm_assert.h"
+@@ -118,7 +119,7 @@ UserifLockPage(VA addr) // IN
+    struct page *page = NULL;
+    int retval;
+ 
+-   down_read(&current->mm->mmap_sem);
++   mmap_read_lock(current->mm);
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
+    retval = get_user_pages(addr, 1, FOLL_WRITE, &page, NULL);
+ #elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 6, 0)
+@@ -127,7 +128,7 @@ UserifLockPage(VA addr) // IN
+    retval = get_user_pages(current, current->mm, addr,
+                            1, 1, 0, &page, NULL);
+ #endif
+-   up_read(&current->mm->mmap_sem);
++   mmap_read_unlock(current->mm);
+ 
+    if (retval != 1) {
+       return NULL;

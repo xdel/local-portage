@@ -1,0 +1,70 @@
+commit d84ffdac5b257b7ee3c270b5cd0a837f80f36b77
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Sat Oct 17 03:15:01 2020 +0200
+
+    vmmon: avoid set_fs() in isVAReadable()
+    
+    The set_fs() function was dropped on x86_64 architecture by commit
+    47058bb54b57 ("x86: remove address space overrides using set_fs()") in
+    5.10-rc1. In isVAReadable() it is used to check if a kernel address can be
+    read from without risking a pagefault if the answer is negative by using
+    set_fs() to pretend it's a userspace address and checking with
+    copy_from_user(). Starting with 5.8, copy_from_kernel_nofault() does can be
+    used to copy from a kernel address with access check but without an actual
+    pagefault.
+
+diff --git a/vmmon-only/linux/hostif.c b/vmmon-only/linux/hostif.c
+index 36a4f1e..f7f1149 100644
+--- a/vmmon-only/linux/hostif.c
++++ b/vmmon-only/linux/hostif.c
+@@ -2297,6 +2297,27 @@
+ 
+ #if defined(CONFIG_SMP) || defined(CONFIG_X86_UP_IOAPIC) || \
+     defined(CONFIG_X86_UP_APIC) || defined(CONFIG_X86_LOCAL_APIC)
++
++#if COMPAT_LINUX_VERSION_CHECK_LT(5, 8, 0)
++static long compat_copy_from_kernel_nofault(void *dst, VA src, size_t size)
++{
++   mm_segment_t old_fs;
++   long ret;
++
++   old_fs = get_fs();
++   set_fs(KERNEL_DS);
++   ret = HostIF_CopyFromUser(dst, (const void *)src, size);
++   set_fs(old_fs);
++
++   return ret;
++}
++#else
++static long compat_copy_from_kernel_nofault(void *dst, VA src, size_t size)
++{
++   return copy_from_kernel_nofault(dst, (const void *)src, size);
++}
++#endif
++
+ /*
+  *----------------------------------------------------------------------
+  *
+@@ -2316,19 +2337,12 @@
+ static Bool
+ isVAReadable(VA r)  // IN:
+ {
+-   mm_segment_t old_fs;
+    uint32 dummy;
+-   int ret;
+    
+-   old_fs = get_fs();
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)
+-   set_fs(KERNEL_DS);
+-#else
+-   set_fs(get_ds());
+-#endif
++   long ret;
++
+    r = APICR_TO_ADDR(r, APICR_VERSION);
+-   ret = HostIF_CopyFromUser(&dummy, (void*)r, sizeof(dummy));
+-   set_fs(old_fs);
++   ret = compat_copy_from_kernel_nofault(&dummy, r, sizeof(dummy));
+ 
+    return ret == 0;
+ }

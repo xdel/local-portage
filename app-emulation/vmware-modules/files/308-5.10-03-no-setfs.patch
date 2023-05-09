@@ -1,0 +1,56 @@
+commit d33fe2a8daff1a19908654f40c97d09788b4f3dc
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Tue Oct 20 00:16:15 2020 +0200
+
+    vmmon: avoid set_fs() in HostIFFastClockThread()
+    
+    The set_fs() function was dropped on x86_64 architecture by commit
+    47058bb54b57 ("x86: remove address space overrides using set_fs()") in
+    5.10-rc1. The only purpose of set_fs(KERNEL_DS) in HostIFFastClockThread()
+    seems to be to allow using ->read() file operation on /dev/rtc device.
+    There is also ioctl() but neither of the two (RTC_IRQP_SET and RTC_PIE_ON)
+    interprets its argument as a (user) pointer: RTC_IRQP_SET interprets it as
+    unsigned long, RTC_PIE_ON ignores it.
+    
+    Replace the direct call to ->read() file op with kernel_read() wrapper
+    like we did/do in other places and drop the temporary set_fs(KERNEL_DS)
+    trick as it doesn't seem to be needed any more.
+
+Index: work/vmmon-only/linux/hostif.c
+===================================================================
+--- work.orig/vmmon-only/linux/hostif.c
++++ work/vmmon-only/linux/hostif.c
+@@ -3413,7 +3413,11 @@ HostIFStartTimer(Bool rateChanged,  //IN
+          return -1;
+       }
+    }
+-   res = filp->f_op->read(filp, (void *) &buf, sizeof(buf), &pos);
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
++   res = kernel_read(filp, pos, (char *)&buf, sizeof(buf));
++#else
++   res = kernel_read(filp, &buf, sizeof(buf), &pos);
++#endif
+    if (res <= 0) {
+       if (res != -ERESTARTSYS) {
+          Log("/dev/rtc read failed: %d\n", res);
+@@ -3452,12 +3456,9 @@ HostIFFastClockThread(void *data)  // IN
+ {
+    struct file *filp = (struct file *) data;
+    int res;
+-   mm_segment_t oldFS;
+    unsigned int rate = 0;
+    unsigned int prevRate = 0;
+ 
+-   oldFS = get_fs();
+-   set_fs(KERNEL_DS);
+    allow_signal(SIGKILL);
+    set_user_nice(current, linuxState.fastClockPriority);
+ 
+@@ -3491,7 +3492,6 @@ HostIFFastClockThread(void *data)  // IN
+ 
+  out:
+    LinuxDriverWakeUp(TRUE);
+-   set_fs(oldFS);
+ 
+    /*
+     * Do not exit thread until we are told to do so.

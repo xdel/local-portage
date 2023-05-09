@@ -1,0 +1,33 @@
+commit 85404f5fc82e34bf29c42a825c440fee9a05b245
+Author: Michal Kubecek <mkubecek@suse.cz>
+Date:   Sun Jan 2 13:02:21 2022 +0100
+
+    vmmon: work around build failure with -fsanitize=shift
+    
+    An old hack in ASSERT_ON_COMPILE_SELECTOR_SIZE() macro fails to compile
+    with -fsanitize=shift compiler option which Pop!_OS 21.10 distribution
+    started using recently. This is a known problem with __builtin_constant_p()
+    result not being considered constant in general. It is tracked as
+    https://gcc.gnu.org/bugzilla/show_bug.cgi?id=79482 but it is unclear when
+    it is going to be addressed.
+    
+    Work around the issue by replacing the hack with __builtin_choose_expr()
+    which should work correctly with gcc >= 4.9, i.e. also any gcc version
+    supported by kernel upstream.
+
+diff --git a/vmmon-only/include/vm_asm_x86.h b/vmmon-only/include/vm_asm_x86.h
+index 2b37976..9c7ac25 100644
+--- a/vmmon-only/include/vm_asm_x86.h
++++ b/vmmon-only/include/vm_asm_x86.h
+@@ -69,8 +69,9 @@
+ #if (__GNUC__ >= 4) && (__GNUC_MINOR__ >= 1)
+ #define ASSERT_ON_COMPILE_SELECTOR_SIZE(expr)                                \
+    ASSERT_ON_COMPILE(sizeof(Selector) == 2 &&                                \
+-                     ((__builtin_constant_p(expr) && ((expr) >> 16) == 0) || \
+-                      sizeof(expr) <= 2))
++		     __builtin_choose_expr(__builtin_constant_p(expr),       \
++					   ((expr) >> 16) == 0,              \
++					   sizeof(expr) <= 2))
+ #else
+ /* gcc 3.3.3 is not able to produce a constant expression (PR 356383) */
+ #define ASSERT_ON_COMPILE_SELECTOR_SIZE(expr)
