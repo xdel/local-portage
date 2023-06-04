@@ -7,7 +7,7 @@ FIREFOX_PATCHSET="firefox-91esr-patches-10j.tar.xz"
 
 LLVM_MAX_SLOT=14
 
-PYTHON_COMPAT=( python3_{8..10} )
+PYTHON_COMPAT=( python3_{8..11} )
 PYTHON_REQ_USE="ncurses,sqlite,ssl"
 
 WANT_AUTOCONF="2.1"
@@ -580,8 +580,10 @@ src_prepare() {
 	eapply "${FILESDIR}"/moz-91-glibc-2.36-2.patch
 	eapply "${FILESDIR}"/91-esr-from-102.diff
 	eapply "${FILESDIR}"/91-esr-expat.diff
+	eapply "${FILESDIR}"/python-3.11-1.patch
+	eapply "${FILESDIR}"/python-3.11-2.patch
 
-	# Allow user to apply any additional patches without modifing ebuild
+	# Allow user to apply any additional patches without modifying ebuild
 	eapply_user
 
 	# Make cargo respect MAKEOPTS

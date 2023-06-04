@@ -141,6 +141,8 @@ src_prepare() {
 		-e "s:\"\(.*\)/desktop-directories:\"${ED}\1/desktop-directories:" \
 		"${S}/lib/perl/CXMenuXDG.pm"
 
+	eapply "${FILESDIR}"/python-3.10.patch
+
 	# Remove unnecessary files, license.txt file kept as it's used by
 	# multiple files (apart of the menu to show the license)
 	rm -r guis/ || die "Could not remove files"

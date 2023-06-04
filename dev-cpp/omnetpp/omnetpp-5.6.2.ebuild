@@ -43,7 +43,11 @@ src_prepare() {
 
 src_configure() {
 	cd "${S}"
-	export PATH="${PATH}:${S}/bin"
+	if [ $(uname -m) == x86_64 ] ; then
+		export PATH="${PATH}:${S}/bin:/usr/lib64/qt5/bin"
+	else
+		export PATH="${PATH}:${S}/bin:/usr/lib/qt5/bin"
+	fi
 	export TCL_LIBRARY=$(whereis tcl | awk '{print $2}')
 	export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${S}/lib"
 

@@ -1,0 +1,13 @@
+--- a/lib/python/cxconfig.py
++++ b/lib/python/cxconfig.py
+@@ -9,8 +9,8 @@
+ import time
+ try:
+     # pylint: disable=E0611
+-    from collections import MutableMapping
+-    from collections import Mapping
++    from collections.abc import MutableMapping
++    from collections.abc import Mapping
+ except ImportError:
+     from UserDict import DictMixin as MutableMapping
+     from UserDict import DictMixin as Mapping
