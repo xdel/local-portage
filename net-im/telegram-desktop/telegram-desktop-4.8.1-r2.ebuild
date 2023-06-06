@@ -9,7 +9,6 @@ inherit xdg cmake python-any-r1 optfeature flag-o-matic
 
 DESCRIPTION="Official desktop client for Telegram"
 HOMEPAGE="https://desktop.telegram.org"
-RESTRICT="strip"
 
 MY_P="tdesktop-${PV}-full"
 SRC_URI="https://github.com/telegramdesktop/tdesktop/releases/download/v${PV}/${MY_P}.tar.gz"
@@ -33,7 +32,6 @@ RDEPEND="
 	app-arch/lz4:=
 	dev-cpp/abseil-cpp:=
 	dev-libs/glib:2
-	dev-libs/libdispatch
 	dev-libs/libsigc++:2
 	dev-libs/openssl:=
 	dev-libs/protobuf
@@ -88,7 +86,12 @@ BDEPEND="
 PATCHES=(
 	"${FILESDIR}/tdesktop-4.2.4-jemalloc-only-telegram.patch"
 	"${FILESDIR}/tdesktop-4.4.1-fix-dupe-main-decl.patch"
+	"${FILESDIR}/tdesktop-4.8.1-disable-libdispatch.diff"
 )
+
+# as for disable-libdispatch, I've decided to remove even bundled version
+# because some funny race within tdesktop invokes DISPATCH_CLIENT_CRASH
+# with sigill, the patch completely disables libdispatch usage in lib_crl
 
 # Current desktop-file-utils-0.26 does not understand Version=1.5
 QA_DESKTOP_FILE="usr/share/applications/${PN}.desktop"
@@ -167,9 +170,6 @@ src_configure() {
 
 src_install() {
 	cmake_src_install
-	# replace default strip options since removal of .comment causes
-	# weird sigill (illegal opcode)
-	/usr/bin/strip --strip-unneeded "${D}"/usr/bin/telegram-desktop || die
 }
 
 pkg_postinst() {

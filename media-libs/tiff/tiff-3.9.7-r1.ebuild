@@ -19,7 +19,6 @@ IUSE="+cxx jbig jpeg zlib"
 RDEPEND="jpeg? ( >=virtual/jpeg-0-r2[${MULTILIB_USEDEP}] )
 	jbig? ( >=media-libs/jbigkit-2.1[${MULTILIB_USEDEP}] )
 	zlib? ( >=sys-libs/zlib-1.2.8-r1[${MULTILIB_USEDEP}] )
-	!media-libs/tiff-compat
 	!=media-libs/tiff-3*:0"
 DEPEND="${RDEPEND}"
 
