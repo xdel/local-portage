@@ -19,7 +19,7 @@ DEPEND="
 	dev-libs/liblxi
 	qt5? ( dev-qt/qtcharts )
 	gui-libs/gtk:4
-	x11-libs/gtksourceview:5
+	gui-libs/gtksourceview:5
 	gui-libs/libadwaita
 	"
 

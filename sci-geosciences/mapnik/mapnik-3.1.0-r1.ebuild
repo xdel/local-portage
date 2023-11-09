@@ -3,7 +3,7 @@
 
 EAPI=7
 
-PYTHON_COMPAT=( python3_7 python3_8 )
+PYTHON_COMPAT=( python3_9 )
 
 inherit python-any-r1 toolchain-funcs
 
@@ -18,7 +18,7 @@ SRC_URI="
 
 LICENSE="LGPL-3"
 SLOT="0"
-KEYWORDS="~amd64 ~x86"
+KEYWORDS="amd64 x86"
 IUSE="cairo debug doc gdal osmfonts postgres sqlite test"
 
 RESTRICT="!test? ( test )"

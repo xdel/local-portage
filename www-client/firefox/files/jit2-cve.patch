@@ -1,0 +1,179 @@
+
+# HG changeset patch
+# User Jan de Mooij <jdemooij@mozilla.com>
+# Date 1662553808 0
+# Node ID 5c7dddf497dfc59e1bbff8901c4bed78ec899f31
+# Parent  db25a6f7439471938bb3c02a481c9888bb3c5b76
+Bug 1788528 part 2 - Add lexical check to CacheIR stub for BindName. r=iain
+
+This is unlikely to affect performance because `BindName` is only used when
+we don't know the scope chain statically (because of `eval` or similar).
+
+Depends on D156460
+
+Differential Revision: https://phabricator.services.mozilla.com/D156461
+
+diff --git a/js/src/jit-test/tests/cacheir/bug1788528-1.js b/js/src/jit-test/tests/cacheir/bug1788528-1.js
+new file mode 100644
+--- /dev/null
++++ b/js/src/jit-test/tests/cacheir/bug1788528-1.js
+@@ -0,0 +1,15 @@
++// |jit-test| error:ReferenceError: can't access lexical declaration
++function f(i) {
++    if (i === 19) {
++        g();
++    }
++    let val = 0;
++    function g() {
++        eval("");
++        val ||= 1;
++    }
++    g();
++}
++for (var i = 0; i < 20; i++) {
++    f(i);
++}
+diff --git a/js/src/jit-test/tests/cacheir/bug1788528-2.js b/js/src/jit-test/tests/cacheir/bug1788528-2.js
+new file mode 100644
+--- /dev/null
++++ b/js/src/jit-test/tests/cacheir/bug1788528-2.js
+@@ -0,0 +1,15 @@
++// |jit-test| error:ReferenceError: can't access lexical declaration
++function f(i) {
++    if (i === 19) {
++        g();
++    }
++    let val = 0;
++    function g() {
++        eval("");
++        val = 1;
++    }
++    g();
++}
++for (var i = 0; i < 20; i++) {
++    f(i);
++}
+diff --git a/js/src/jit-test/tests/cacheir/bug1788528-3.js b/js/src/jit-test/tests/cacheir/bug1788528-3.js
+new file mode 100644
+--- /dev/null
++++ b/js/src/jit-test/tests/cacheir/bug1788528-3.js
+@@ -0,0 +1,15 @@
++// |jit-test| error:ReferenceError: can't access lexical declaration
++function f(i) {
++    if (i === 19) {
++        g();
++    }
++    let val = 0;
++    function g() {
++        eval("");
++        val += 1;
++    }
++    g();
++}
++for (var i = 0; i < 20; i++) {
++    f(i);
++}
+diff --git a/js/src/jit-test/tests/cacheir/bug1788528-4.js b/js/src/jit-test/tests/cacheir/bug1788528-4.js
+new file mode 100644
+--- /dev/null
++++ b/js/src/jit-test/tests/cacheir/bug1788528-4.js
+@@ -0,0 +1,15 @@
++// |jit-test| error:ReferenceError: can't access lexical declaration
++function f(i) {
++    if (i === 19) {
++        g();
++    }
++    let val = 0;
++    function g() {
++        eval("");
++        val;
++    }
++    g();
++}
++for (var i = 0; i < 20; i++) {
++    f(i);
++}
+diff --git a/js/src/jit/CacheIR.cpp b/js/src/jit/CacheIR.cpp
+--- a/js/src/jit/CacheIR.cpp
++++ b/js/src/jit/CacheIR.cpp
+@@ -2989,16 +2989,28 @@ static bool NeedEnvironmentShapeGuard(JS
+   JSFunction* fun = &callObj->callee();
+   if (!fun->hasBaseScript() || fun->baseScript()->funHasExtensibleScope()) {
+     return true;
+   }
+ 
+   return false;
+ }
+ 
++static ValOperandId EmitLoadEnvironmentSlot(CacheIRWriter& writer,
++                                            NativeObject* holder,
++                                            ObjOperandId holderId,
++                                            uint32_t slot) {
++  if (holder->isFixedSlot(slot)) {
++    return writer.loadFixedSlot(holderId,
++                                NativeObject::getFixedSlotOffset(slot));
++  }
++  size_t dynamicSlotIndex = holder->dynamicSlotIndex(slot);
++  return writer.loadDynamicSlot(holderId, dynamicSlotIndex);
++}
++
+ AttachDecision GetNameIRGenerator::tryAttachEnvironmentName(ObjOperandId objId,
+                                                             HandleId id) {
+   if (IsGlobalOp(JSOp(*pc_)) || script_->hasNonSyntacticScope()) {
+     return AttachDecision::NoAction;
+   }
+ 
+   JSObject* env = env_;
+   Maybe<PropertyInfo> prop;
+@@ -3047,24 +3059,18 @@ AttachDecision GetNameIRGenerator::tryAt
+     if (env == holder) {
+       break;
+     }
+ 
+     lastObjId = writer.loadEnclosingEnvironment(lastObjId);
+     env = env->enclosingEnvironment();
+   }
+ 
+-  ValOperandId resId;
+-  if (holder->isFixedSlot(prop->slot())) {
+-    resId = writer.loadFixedSlot(
+-        lastObjId, NativeObject::getFixedSlotOffset(prop->slot()));
+-  } else {
+-    size_t dynamicSlotIndex = holder->dynamicSlotIndex(prop->slot());
+-    resId = writer.loadDynamicSlot(lastObjId, dynamicSlotIndex);
+-  }
++  ValOperandId resId =
++      EmitLoadEnvironmentSlot(writer, holder, lastObjId, prop->slot());
+   if (holder->is<EnvironmentObject>()) {
+     writer.guardIsNotUninitializedLexical(resId);
+   }
+   writer.loadOperandResult(resId);
+   writer.returnFromIC();
+ 
+   trackAttached("EnvironmentName");
+   return AttachDecision::Attach;
+@@ -3199,16 +3205,23 @@ AttachDecision BindNameIRGenerator::tryA
+ 
+     if (env == holder) {
+       break;
+     }
+ 
+     lastObjId = writer.loadEnclosingEnvironment(lastObjId);
+     env = env->enclosingEnvironment();
+   }
++
++  if (prop.isSome() && holder->is<EnvironmentObject>()) {
++    ValOperandId valId =
++        EmitLoadEnvironmentSlot(writer, holder, lastObjId, prop->slot());
++    writer.guardIsNotUninitializedLexical(valId);
++  }
++
+   writer.loadObjectResult(lastObjId);
+   writer.returnFromIC();
+ 
+   trackAttached("EnvironmentName");
+   return AttachDecision::Attach;
+ }
+ 
+ void BindNameIRGenerator::trackAttached(const char* name) {
+

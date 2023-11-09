@@ -9,6 +9,8 @@
 
 cmdname=$(basename "$0")
 
+export GDK_CORE_DEVICE_EVENTS=1
+
 ##
 ## Variables
 ##

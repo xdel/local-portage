@@ -1,0 +1,30 @@
+diff -ruN a/cmake/external/glib/CMakeLists.txt b/cmake/external/glib/CMakeLists.txt
+--- a/cmake/external/glib/CMakeLists.txt	2023-09-23 17:47:24.853100588 +0300
++++ b/cmake/external/glib/CMakeLists.txt	2023-09-23 17:48:12.252233653 +0300
+@@ -7,14 +7,6 @@
+ add_library(external_glib INTERFACE IMPORTED GLOBAL)
+ add_library(desktop-app::external_glib ALIAS external_glib)
+ 
+-function(add_cppgir) # isolate scope
+-    set(BUILD_TESTING OFF)
+-    set(BUILD_DOC OFF)
+-    set(BUILD_EXAMPLES OFF)
+-    add_subdirectory(cppgir EXCLUDE_FROM_ALL)
+-endfunction()
+-add_cppgir()
+-
+ include(generate_cppgir.cmake)
+ generate_cppgir(external_glib Gio-2.0)
+ 
+diff -ruN a/cmake/external/glib/generate_cppgir.cmake b/cmake/external/glib/generate_cppgir.cmake
+--- a/cmake/external/glib/generate_cppgir.cmake	2023-09-13 20:06:28.000000000 +0300
++++ b/cmake/external/glib/generate_cppgir.cmake	2023-09-23 17:50:16.739958150 +0300
+@@ -4,6 +4,8 @@
+ # For license and copyright information please follow this link:
+ # https://github.com/desktop-app/legal/blob/master/LEGAL
+ 
++find_package(CppGir REQUIRED)
++
+ function(generate_cppgir target_name gir)
+     # cppgir generates all the dependent headers everytime, better to have a global folder
+     set(gen_dst ${CMAKE_BINARY_DIR}/gen)

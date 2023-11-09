@@ -1,0 +1,14 @@
+--- a/palemoon/app/application.ini
++++ b/palemoon/app/application.ini
+@@ -20,9 +20,9 @@
+ 
+ [App]
+ # Vendor=@MOZ_APP_VENDOR@
+-Vendor=Moonchild Productions
++Vendor=Moonchild
+ # Name=@MOZ_APP_BASENAME@
+-Name=Pale Moon
++Name=PaleMoon
+ RemotingName=@MOZ_APP_REMOTINGNAME@
+ #ifdef MOZ_APP_DISPLAYNAME
+ CodeName=@MOZ_APP_DISPLAYNAME@

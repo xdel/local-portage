@@ -1,0 +1,11 @@
+--- a/SConstruct
++++ b/SConstruct
+@@ -43,7 +43,7 @@
+ 
+ DEFAULT_CC = "cc"
+ DEFAULT_CXX = "c++"
+-DEFAULT_CXX_STD = "14"
++DEFAULT_CXX_STD = "17"
+ DEFAULT_CXX_CXXFLAGS = " -DU_USING_ICU_NAMESPACE=0"
+ DEFAULT_CXX_LINKFLAGS = ""
+ if sys.platform == 'darwin':

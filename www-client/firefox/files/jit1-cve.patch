@@ -1,0 +1,343 @@
+
+# HG changeset patch
+# User Jan de Mooij <jdemooij@mozilla.com>
+# Date 1662553808 0
+# Node ID db25a6f7439471938bb3c02a481c9888bb3c5b76
+# Parent  9019f7c05aa7ee9dde426db0e9d2415efa71c10e
+Bug 1788528 part 1 - Remove LoadEnvironment*SlotResult ops. r=iain
+
+Replace with more fine-grained CacheIR ops to avoid code duplication. This also
+lets us reuse more code in the next part.
+
+Differential Revision: https://phabricator.services.mozilla.com/D156460
+
+diff --git a/js/src/jit/BaselineCacheIRCompiler.cpp b/js/src/jit/BaselineCacheIRCompiler.cpp
+--- a/js/src/jit/BaselineCacheIRCompiler.cpp
++++ b/js/src/jit/BaselineCacheIRCompiler.cpp
+@@ -641,64 +641,16 @@ bool BaselineCacheIRCompiler::emitFrameI
+   static_assert(CalleeToken_Function == 0x0);
+   static_assert(CalleeToken_FunctionConstructing == 0x1);
+   masm.andPtr(Imm32(0x1), outputScratch);
+ 
+   masm.tagValue(JSVAL_TYPE_BOOLEAN, outputScratch, output.valueReg());
+   return true;
+ }
+ 
+-bool BaselineCacheIRCompiler::emitLoadEnvironmentFixedSlotResult(
+-    ObjOperandId objId, uint32_t offsetOffset) {
+-  JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+-  AutoOutputRegister output(*this);
+-  Register obj = allocator.useRegister(masm, objId);
+-  AutoScratchRegisterMaybeOutput scratch(allocator, masm, output);
+-
+-  FailurePath* failure;
+-  if (!addFailurePath(&failure)) {
+-    return false;
+-  }
+-
+-  masm.load32(stubAddress(offsetOffset), scratch);
+-  BaseIndex slot(obj, scratch, TimesOne);
+-
+-  // Check for uninitialized lexicals.
+-  masm.branchTestMagic(Assembler::Equal, slot, failure->label());
+-
+-  // Load the value.
+-  masm.loadValue(slot, output.valueReg());
+-  return true;
+-}
+-
+-bool BaselineCacheIRCompiler::emitLoadEnvironmentDynamicSlotResult(
+-    ObjOperandId objId, uint32_t offsetOffset) {
+-  JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+-  AutoOutputRegister output(*this);
+-  Register obj = allocator.useRegister(masm, objId);
+-  AutoScratchRegister scratch(allocator, masm);
+-  AutoScratchRegisterMaybeOutput scratch2(allocator, masm, output);
+-
+-  FailurePath* failure;
+-  if (!addFailurePath(&failure)) {
+-    return false;
+-  }
+-
+-  masm.load32(stubAddress(offsetOffset), scratch);
+-  masm.loadPtr(Address(obj, NativeObject::offsetOfSlots()), scratch2);
+-
+-  // Check for uninitialized lexicals.
+-  BaseIndex slot(scratch2, scratch, TimesOne);
+-  masm.branchTestMagic(Assembler::Equal, slot, failure->label());
+-
+-  // Load the value.
+-  masm.loadValue(slot, output.valueReg());
+-  return true;
+-}
+-
+ bool BaselineCacheIRCompiler::emitLoadConstantStringResult(uint32_t strOffset) {
+   JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+   AutoOutputRegister output(*this);
+   AutoScratchRegisterMaybeOutput scratch(allocator, masm, output);
+ 
+   masm.loadPtr(stubAddress(strOffset), scratch);
+   masm.tagValue(JSVAL_TYPE_STRING, scratch, output.valueReg());
+   return true;
+diff --git a/js/src/jit/CacheIRCompiler.cpp b/js/src/jit/CacheIRCompiler.cpp
+--- a/js/src/jit/CacheIRCompiler.cpp
++++ b/js/src/jit/CacheIRCompiler.cpp
+@@ -1536,16 +1536,31 @@ bool CacheIRCompiler::emitGuardIsUndefin
+   if (!addFailurePath(&failure)) {
+     return false;
+   }
+ 
+   masm.branchTestUndefined(Assembler::NotEqual, input, failure->label());
+   return true;
+ }
+ 
++bool CacheIRCompiler::emitGuardIsNotUninitializedLexical(ValOperandId valId) {
++  JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
++
++  ValueOperand val = allocator.useValueRegister(masm, valId);
++
++  FailurePath* failure;
++  if (!addFailurePath(&failure)) {
++    return false;
++  }
++
++  masm.branchTestMagicValue(Assembler::Equal, val, JS_UNINITIALIZED_LEXICAL,
++                            failure->label());
++  return true;
++}
++
+ bool CacheIRCompiler::emitGuardBooleanToInt32(ValOperandId inputId,
+                                               Int32OperandId resultId) {
+   JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+   Register output = allocator.defineRegister(masm, resultId);
+ 
+   if (allocator.knownType(inputId) == JSVAL_TYPE_BOOLEAN) {
+     Register input =
+         allocator.useRegister(masm, BooleanOperandId(inputId.id()));
+diff --git a/js/src/jit/CacheIROps.yaml b/js/src/jit/CacheIROps.yaml
+--- a/js/src/jit/CacheIROps.yaml
++++ b/js/src/jit/CacheIROps.yaml
+@@ -104,16 +104,23 @@
+ 
+ - name: GuardIsUndefined
+   shared: true
+   transpile: true
+   cost_estimate: 1
+   args:
+     input: ValId
+ 
++- name: GuardIsNotUninitializedLexical
++  shared: true
++  transpile: true
++  cost_estimate: 1
++  args:
++    val: ValId
++
+ - name: GuardToBoolean
+   shared: true
+   transpile: true
+   cost_estimate: 1
+   custom_writer: true
+   args:
+     input: ValId
+ 
+@@ -1954,32 +1961,16 @@
+     str: StringId
+ 
+ - name: FrameIsConstructingResult
+   shared: false
+   transpile: true
+   cost_estimate: 1
+   args:
+ 
+-- name: LoadEnvironmentFixedSlotResult
+-  shared: false
+-  transpile: true
+-  cost_estimate: 1
+-  args:
+-    obj: ObjId
+-    offset: RawInt32Field
+-
+-- name: LoadEnvironmentDynamicSlotResult
+-  shared: false
+-  transpile: true
+-  cost_estimate: 1
+-  args:
+-    obj: ObjId
+-    offset: RawInt32Field
+-
+ - name: LoadObjectResult
+   shared: true
+   transpile: true
+   cost_estimate: 1
+   args:
+     obj: ObjId
+ 
+ - name: LoadStringResult
+diff --git a/js/src/jit/IonCacheIRCompiler.cpp b/js/src/jit/IonCacheIRCompiler.cpp
+--- a/js/src/jit/IonCacheIRCompiler.cpp
++++ b/js/src/jit/IonCacheIRCompiler.cpp
+@@ -1115,61 +1115,16 @@ bool IonCacheIRCompiler::emitProxyGetRes
+   masm.adjustStack(IonOOLProxyExitFrameLayout::Size());
+   return true;
+ }
+ 
+ bool IonCacheIRCompiler::emitFrameIsConstructingResult() {
+   MOZ_CRASH("Baseline-specific op");
+ }
+ 
+-bool IonCacheIRCompiler::emitLoadEnvironmentFixedSlotResult(
+-    ObjOperandId objId, uint32_t offsetOffset) {
+-  JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+-  AutoOutputRegister output(*this);
+-  Register obj = allocator.useRegister(masm, objId);
+-  int32_t offset = int32StubField(offsetOffset);
+-
+-  FailurePath* failure;
+-  if (!addFailurePath(&failure)) {
+-    return false;
+-  }
+-
+-  // Check for uninitialized lexicals.
+-  Address slot(obj, offset);
+-  masm.branchTestMagic(Assembler::Equal, slot, failure->label());
+-
+-  // Load the value.
+-  masm.loadTypedOrValue(slot, output);
+-  return true;
+-}
+-
+-bool IonCacheIRCompiler::emitLoadEnvironmentDynamicSlotResult(
+-    ObjOperandId objId, uint32_t offsetOffset) {
+-  JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+-  AutoOutputRegister output(*this);
+-  Register obj = allocator.useRegister(masm, objId);
+-  int32_t offset = int32StubField(offsetOffset);
+-  AutoScratchRegisterMaybeOutput scratch(allocator, masm, output);
+-
+-  FailurePath* failure;
+-  if (!addFailurePath(&failure)) {
+-    return false;
+-  }
+-
+-  masm.loadPtr(Address(obj, NativeObject::offsetOfSlots()), scratch);
+-
+-  // Check for uninitialized lexicals.
+-  Address slot(scratch, offset);
+-  masm.branchTestMagic(Assembler::Equal, slot, failure->label());
+-
+-  // Load the value.
+-  masm.loadTypedOrValue(slot, output);
+-  return true;
+-}
+-
+ bool IonCacheIRCompiler::emitLoadConstantStringResult(uint32_t strOffset) {
+   JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+   MOZ_CRASH("not used in ion");
+ }
+ 
+ bool IonCacheIRCompiler::emitCompareStringResult(JSOp op, StringOperandId lhsId,
+                                                  StringOperandId rhsId) {
+   JitSpew(JitSpew_Codegen, "%s", __FUNCTION__);
+diff --git a/js/src/jit/WarpCacheIRTranspiler.cpp b/js/src/jit/WarpCacheIRTranspiler.cpp
+--- a/js/src/jit/WarpCacheIRTranspiler.cpp
++++ b/js/src/jit/WarpCacheIRTranspiler.cpp
+@@ -1541,58 +1541,28 @@ bool WarpCacheIRTranspiler::emitLoadFixe
+   auto* load = MLoadFixedSlot::New(alloc(), obj, slotIndex);
+   load->setResultType(MIRTypeFromValueType(JSValueType(type)));
+   add(load);
+ 
+   pushResult(load);
+   return true;
+ }
+ 
+-bool WarpCacheIRTranspiler::emitLoadEnvironmentFixedSlotResult(
+-    ObjOperandId objId, uint32_t offsetOffset) {
+-  int32_t offset = int32StubField(offsetOffset);
+-
+-  MDefinition* obj = getOperand(objId);
+-  uint32_t slotIndex = NativeObject::getFixedSlotIndexFromOffset(offset);
+-
+-  auto* load = MLoadFixedSlot::New(alloc(), obj, slotIndex);
+-  add(load);
+-
+-  auto* lexicalCheck = MLexicalCheck::New(alloc(), load);
++bool WarpCacheIRTranspiler::emitGuardIsNotUninitializedLexical(
++    ValOperandId valId) {
++  MDefinition* val = getOperand(valId);
++
++  auto* lexicalCheck = MLexicalCheck::New(alloc(), val);
+   add(lexicalCheck);
+ 
+   if (snapshot().bailoutInfo().failedLexicalCheck()) {
+     lexicalCheck->setNotMovable();
+   }
+ 
+-  pushResult(lexicalCheck);
+-  return true;
+-}
+-
+-bool WarpCacheIRTranspiler::emitLoadEnvironmentDynamicSlotResult(
+-    ObjOperandId objId, uint32_t offsetOffset) {
+-  int32_t offset = int32StubField(offsetOffset);
+-
+-  MDefinition* obj = getOperand(objId);
+-  size_t slotIndex = NativeObject::getDynamicSlotIndexFromOffset(offset);
+-
+-  auto* slots = MSlots::New(alloc(), obj);
+-  add(slots);
+-
+-  auto* load = MLoadDynamicSlot::New(alloc(), slots, slotIndex);
+-  add(load);
+-
+-  auto* lexicalCheck = MLexicalCheck::New(alloc(), load);
+-  add(lexicalCheck);
+-
+-  if (snapshot().bailoutInfo().failedLexicalCheck()) {
+-    lexicalCheck->setNotMovable();
+-  }
+-
+-  pushResult(lexicalCheck);
++  setOperand(valId, lexicalCheck);
+   return true;
+ }
+ 
+ bool WarpCacheIRTranspiler::emitLoadInt32ArrayLengthResult(ObjOperandId objId) {
+   MDefinition* obj = getOperand(objId);
+ 
+   auto* elements = MElements::New(alloc(), obj);
+   add(elements);
+
+--- a/js/src/jit/CacheIR.cpp	2022-08-15 21:04:44.000000000 +0300
++++ b/js/src/jit/CacheIR.cpp	2023-09-29 11:18:53.301862269 +0300
+@@ -2916,14 +2916,18 @@
+     env = env->enclosingEnvironment();
+   }
+ 
++  ValOperandId resId;
+   if (holder->isFixedSlot(prop->slot())) {
+-    writer.loadEnvironmentFixedSlotResult(
++    resId = writer.loadFixedSlot(
+         lastObjId, NativeObject::getFixedSlotOffset(prop->slot()));
+   } else {
+-    size_t dynamicSlotOffset =
+-        holder->dynamicSlotIndex(prop->slot()) * sizeof(Value);
+-    writer.loadEnvironmentDynamicSlotResult(lastObjId, dynamicSlotOffset);
++    size_t dynamicSlotIndex = holder->dynamicSlotIndex(prop->slot());
++    resId = writer.loadDynamicSlot(lastObjId, dynamicSlotIndex);
+   }
++  if (holder->is<EnvironmentObject>()) {
++    writer.guardIsNotUninitializedLexical(resId);
++  }
++  writer.loadOperandResult(resId);
+   writer.returnFromIC();
+ 
+   trackAttached("EnvironmentName");
+@@ -3043,6 +3047,7 @@
+   auto* holder = &env->as<NativeObject>();
+   if (prop.isSome() && holder->is<EnvironmentObject>() &&
+       (holder->getSlot(prop->slot()).isMagic() || !prop->writable())) {
++    MOZ_ASSERT(holder->is<EnvironmentObject>());
+     return AttachDecision::NoAction;
+   }
+ 

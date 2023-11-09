@@ -14,9 +14,7 @@ AMD64_FBSD_NV_PACKAGE="NVIDIA-FreeBSD-x86_64-${PV}"
 DESCRIPTION="NVIDIA Accelerated Graphics Driver"
 HOMEPAGE="https://www.nvidia.com/"
 SRC_URI="
-	amd64-fbsd? ( ${NV_URI}FreeBSD-x86_64/${PV}/${AMD64_FBSD_NV_PACKAGE}.tar.gz )
 	amd64? ( ${NV_URI}Linux-x86_64/${PV}/${AMD64_NV_PACKAGE}.run )
-	x86-fbsd? ( ${NV_URI}FreeBSD-x86/${PV}/${X86_FBSD_NV_PACKAGE}.tar.gz )
 	x86? ( ${NV_URI}Linux-x86/${PV}/${X86_NV_PACKAGE}.run )
 	tools? (
 		https://download.nvidia.com/XFree86/nvidia-settings/nvidia-settings-${PV}.tar.bz2
@@ -60,7 +58,7 @@ RDEPEND="
 	acpi? ( sys-power/acpid )
 	tools? ( !media-video/nvidia-settings )
 	X? (
-		<x11-base/xorg-server-1.20.99:=
+		x11-base/xorg-server
 		>=x11-libs/libvdpau-0.3-r1
 		sys-libs/zlib[${MULTILIB_USEDEP}]
 		multilib? (
@@ -114,16 +112,7 @@ pkg_setup() {
 	fi
 
 	# set variables to where files are in the package structure
-	if use kernel_FreeBSD; then
-		use x86-fbsd   && S="${WORKDIR}/${X86_FBSD_NV_PACKAGE}"
-		use amd64-fbsd && S="${WORKDIR}/${AMD64_FBSD_NV_PACKAGE}"
-		NV_DOC="${S}/doc"
-		NV_OBJ="${S}/obj"
-		NV_SRC="${S}/src"
-		NV_MAN="${S}/x11/man"
-		NV_X11="${S}/obj"
-		NV_SOVER=1
-	elif use kernel_linux; then
+	if use kernel_linux; then
 		NV_DOC="${S}"
 		NV_OBJ="${S}"
 		NV_SRC="${S}/kernel"
