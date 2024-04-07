@@ -1,0 +1,30 @@
+From b81381396827521b4a1fa88b40fc4c27b3ec31e2 Mon Sep 17 00:00:00 2001
+From: ShiftaDeband <40249870+ShiftaDeband@users.noreply.github.com>
+Date: Wed, 7 Feb 2024 22:41:28 -0700
+Subject: [PATCH] Update archive_api.rb to use Net::HTTP
+
+---
+ lib/wayback_machine_downloader/archive_api.rb | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/lib/wayback_machine_downloader/archive_api.rb b/lib/wayback_machine_downloader/archive_api.rb
+index 01b36d9..6d15fb3 100644
+--- a/lib/wayback_machine_downloader/archive_api.rb
++++ b/lib/wayback_machine_downloader/archive_api.rb
+@@ -3,14 +3,14 @@
+ 
+ module ArchiveAPI
+ 
+-  def get_raw_list_from_api url, page_index
++  def get_raw_list_from_api url, page_index, http
+     request_url = URI("https://web.archive.org/cdx/search/xd")
+     params = [["output", "json"], ["url", url]]
+     params += parameters_for_api page_index
+     request_url.query = URI.encode_www_form(params)
+ 
+     begin
+-      json = JSON.parse(URI(request_url).open.read)
++      json = JSON.parse(http.get(URI(request_url)).body)
+       if (json[0] <=> ["timestamp","original"]) == 0
+         json.shift
+       end
