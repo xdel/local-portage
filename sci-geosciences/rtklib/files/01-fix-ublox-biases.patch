@@ -1,0 +1,19 @@
+commit ce5a20f02b65ae3927b667a3f2373b2cf8643a29
+Author: vuquangtrong <vuquangtrong@gmail.com>
+Date:   Sun Jun 25 22:32:18 2023 +0700
+
+    fix incorrect index of VALSET cmd for ublox
+
+diff --git a/src/rcv/ublox.c b/src/rcv/ublox.c
+index c140a20..706a882 100644
+--- a/src/rcv/ublox.c
++++ b/src/rcv/ublox.c
+@@ -1525,7 +1525,7 @@ extern int gen_ubx(const char *msg, uint8_t *buff)
+     q+=2;
+ 
+ 
+-    if (i == 34) isvalset = true;
++    if (i == 36) isvalset = true;
+ 
+     /* VALSET sanity check */
+     if (isvalset) {

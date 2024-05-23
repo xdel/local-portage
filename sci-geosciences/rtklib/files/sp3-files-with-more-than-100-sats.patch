@@ -1,0 +1,23 @@
+From 48ffe9a0c15b3ffaec4627dba70a15c84a40e5fd Mon Sep 17 00:00:00 2001
+From: Matt Corallo <git@bluematt.me>
+Date: Sun, 26 Feb 2023 23:53:19 +0000
+Subject: [PATCH] Handle SP3 files with more than 100 satellites tracked
+
+For example the GFZ multi-GNSS SP3 files have 126 satellites today.
+---
+ src/preceph.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/preceph.c b/src/preceph.c
+index 2fef11a19..350e46cb5 100644
+--- a/src/preceph.c
++++ b/src/preceph.c
+@@ -88,7 +88,7 @@ static int readsp3h(FILE *fp, gtime_t *time, char *type, int *sats,
+         }
+         else if (!strncmp(buff,"+ ",2)) { /* satellite id */
+             if (ns==0) {
+-                ns=(int)str2num(buff,4,2);
++                ns=(int)str2num(buff,3,3);
+             }
+             for (j=0;j<17&&k<ns;j++) {
+                 sys=code2sys(buff[9+3*j]);
