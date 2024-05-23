@@ -31,6 +31,8 @@ src_prepare() {
 	# cat "${DISTDIR}"/rtklib-manual-demo5.pdf | tee ${S}/rtklib-manual-demo5.pdf > /dev/null || die
 	eapply "${FILESDIR}"/01-fix-ublox-biases.patch
 	eapply "${FILESDIR}"/03-gfortran-back.patch
+	eapply "${FILESDIR}"/rnx2rtcm.patch
+	eapply "${FILESDIR}"/gencrc-include.patch
 	default
 }
 
@@ -45,6 +47,8 @@ src_configure() {
 src_compile() {
 	emake -C app/consapp
 	emake -C app/qtapp
+	emake -C util/rnx2rtcm
+	emake -C util/gencrc
 }
 
 src_install() {
@@ -58,6 +62,8 @@ src_install() {
 	rtklaunch_qt
 		do doexe ./app/qtapp/${i}/${i}
 	done
+	doexe util/rnx2rtcm/rnx2rtcm
+	doexe util/gencrc/{gencrc,genxor,genmsk}
 	doexe app/consapp/rtkrcv/gcc/rtkshut.sh
 	doexe app/consapp/rtkrcv/gcc/rtkstart.sh
 }

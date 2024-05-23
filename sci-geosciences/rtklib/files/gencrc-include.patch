@@ -1,0 +1,10 @@
+--- a/util/gencrc/gencrc.c
++++ b/util/gencrc/gencrc.c
+@@ -8,6 +8,7 @@
+ *-----------------------------------------------------------------------------*/
+ #include <stdio.h>
+ #include <string.h>
++#include <stdint.h>
+ 
+ static const char rcsid[]="$Id:$";
+ 
