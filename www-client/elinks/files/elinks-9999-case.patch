@@ -1,0 +1,10 @@
+--- a/src/document/plain/renderer.c
++++ b/src/document/plain/renderer.c
+@@ -746,6 +746,7 @@
+ 		line_pos += charlen;
+ 		cells += cell;
+ zero:
++		break;
+ 	}
+ 	mem_free(line);
+ 

@@ -20,6 +20,12 @@ IUSE="lapack"
 MAKEOPTS="${MAKEOPTS} -j1"
 
 DEPEND="
+	dev-qt/qtcore:5
+	dev-qt/qtgui:5
+	dev-qt/qtnetwork:5
+	dev-qt/qtsvg:5
+	dev-qt/qtwidgets:5
+	dev-qt/qtserialport:5
 	media-libs/libpng
 	sys-devel/gcc[fortran]
 	lapack? ( virtual/lapack )

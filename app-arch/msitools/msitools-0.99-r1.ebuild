@@ -20,33 +20,34 @@ IUSE='nls rpath gnu-ld'
 #       sys-apps/util-linux[libuuid]
 #       app-arch/gcab[vala]
 RDEPEND=(
-        "dev-libs/glib:2
-        dev-libs/libxml2
-        gnome-extra/libgsf[introspection]
-        $(vala_depend)
-        sys-apps/util-linux
-        app-arch/gcab[vala]
-        gnome-extra/libgsf"
+	"dev-libs/glib:2
+	dev-libs/libxml2
+	gnome-extra/libgsf[introspection]
+	<dev-lang/vala-0.53
+	$(vala_depend)
+	sys-apps/util-linux
+	app-arch/gcab[vala]
+	gnome-extra/libgsf"
 )
 DEPEND_A="$RDEPEND"
 
 src_prepare() {
-        eapply_user
-        vala_src_prepare
-        eautoreconf
+	eapply_user
+	vala_src_prepare
+	eautoreconf
 }
 
 src_configure() {
-        local my_econf_args=(
-        --enable-shared
-        --disable-static
-        $(use_enable nls)
-        $(use_enable rpath)
-        )
-        econf "${my_econf_args[@]}"
+	local my_econf_args=(
+		--enable-shared
+		--disable-static
+		$(use_enable nls)
+		$(use_enable rpath)
+	)
+	econf "${my_econf_args[@]}"
 }
 
 src_install() {
-        default
-        prune_libtool_files
+	default
+	prune_libtool_files
 }

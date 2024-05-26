@@ -1,0 +1,32 @@
+--- a/.gitmodules	2023-12-01 12:07:42.000000000 +0300
++++ b/.gitmodules	2023-12-12 17:22:53.733824627 +0300
+@@ -76,9 +76,6 @@
+ [submodule "Telegram/lib_webview"]
+ 	path = Telegram/lib_webview
+ 	url = https://github.com/desktop-app/lib_webview.git
+-[submodule "Telegram/ThirdParty/dispatch"]
+-	path = Telegram/ThirdParty/dispatch
+-	url = https://github.com/apple/swift-corelibs-libdispatch
+ [submodule "Telegram/ThirdParty/plasma-wayland-protocols"]
+ 	path = Telegram/ThirdParty/plasma-wayland-protocols
+ 	url = https://github.com/KDE/plasma-wayland-protocols.git
+--- a/Telegram/lib_crl/CMakeLists.txt	2023-12-12 17:21:22.715583714 +0300
++++ b/Telegram/lib_crl/CMakeLists.txt	2023-12-12 17:24:06.482420066 +0300
+@@ -65,14 +65,14 @@
+     ${src_loc}
+ )
+ 
+-if (TARGET desktop-app::external_dispatch)
++if (LINUX)
+     target_link_libraries(lib_crl
+     PUBLIC
+-        desktop-app::external_dispatch
++        pthread
+     )
+ endif()
+ 
+-if (build_macstore OR TARGET desktop-app::external_dispatch)
++if (build_macstore OR LINUX)
+     target_compile_definitions(lib_crl
+     PUBLIC
+         CRL_FORCE_COMMON_QUEUE
