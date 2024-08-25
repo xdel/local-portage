@@ -1,0 +1,32 @@
+commit a116230558d82e5e37528a05fe8b260dd420f303
+Author: Andrey Korolyov <andrey@xdel.ru>
+Date:   Sun Aug 25 13:30:35 2024 +0300
+
+    qt5 fix
+
+diff --git a/skychart/component/bgrabitmap/bgraqtbitmap.pas b/skychart/component/bgrabitmap/bgraqtbitmap.pas
+index cfe6f3fb..df6414a7 100644
+--- a/skychart/component/bgrabitmap/bgraqtbitmap.pas
++++ b/skychart/component/bgrabitmap/bgraqtbitmap.pas
+@@ -32,7 +32,7 @@ implementation
+ 
+ uses LCLType,
+   LCLIntf, IntfGraphics,
+-  qtobjects, {$ifdef LCLqt5}qt5{$else}qt4{$endif},
++  {$ifdef LCLqt5}qt5,qtobjects{$else}qt4,qtobjects{$endif},
+   FPImage;
+ 
+ procedure TBGRAQtBitmap.SlowDrawTransparent(ABitmap: TBGRACustomBitmap;
+diff --git a/skychart/u_util.pas b/skychart/u_util.pas
+index a9d320bf..a5d6c5bc 100644
+--- a/skychart/u_util.pas
++++ b/skychart/u_util.pas
+@@ -40,7 +40,7 @@ uses
+   Math, SysUtils, Classes, u_constant,
+   LazUTF8, LCLType, LazFileUtils, Controls, Process, MTPCPU,
+   MaskEdit, enhedits, Menus, Spin, CheckLst, Buttons, ExtCtrls, ActnList,
+-  Forms, Graphics, StdCtrls, ComCtrls, Dialogs, Grids, PrintersDlgs, Printers;
++  Forms, Graphics, StdCtrls, ComCtrls, Dialogs, Grids, Printers;
+ 
+ function rmod(x, y: double): double;
+ function NormRA(ra: double): double;
