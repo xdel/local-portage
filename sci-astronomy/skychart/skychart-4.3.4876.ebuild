@@ -69,6 +69,11 @@ src_unpack() {
 }
 
 src_prepare() {
+	ewarn "If build fails on qtprinters include, add Lazarus symlinks like below
+	qtprinters_h.inc -> qt/qtprinters_h.inc
+	qtprinters.inc -> qt/qtprinters.inc
+	qtprndialogs.inc -> qt/qtprndialogs.inc"
+
 	epatch "${FILESDIR}"/${P}-QA.patch
 	epatch "${FILESDIR}"/${P}-lazarus-3.patch
 	if use system-healpix ; then
