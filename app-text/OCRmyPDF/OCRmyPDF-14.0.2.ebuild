@@ -52,6 +52,7 @@ export SETUPTOOLS_SCM_PRETEND_VERSION=${PV}
 src_prepare() {
 	distutils-r1_src_prepare
 	sed -e "/-n auto/d" -i pyproject.toml || die
+	eapply "${FILESDIR}"/colorspace.patch
 }
 
 src_install() {

@@ -5,7 +5,7 @@ EAPI=7
 
 # Normally you need only one version of this.
 DISTUTILS_SINGLE_IMPL=1
-PYTHON_COMPAT=( python3_{8,9,10} )
+PYTHON_COMPAT=( python3_{9..11} )
 PYTHON_REQ_USE="sqlite,ssl?"
 
 inherit distutils-r1

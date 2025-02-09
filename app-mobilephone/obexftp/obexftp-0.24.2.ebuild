@@ -3,7 +3,7 @@
 
 EAPI=7
 
-PYTHON_COMPAT=( python3_9 python3_10 )
+PYTHON_COMPAT=( python3_{9..11} )
 USE_RUBY="ruby27"
 
 inherit cmake-utils python-single-r1 ruby-single

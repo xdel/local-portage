@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=7
-PYTHON_COMPAT=( python3_{6,7,8} )
+PYTHON_COMPAT=( python3_{9..11} )
 
 inherit cmake-utils python-single-r1
 
@@ -25,7 +25,7 @@ SLOT="0/${PV}"
 
 RDEPEND="=net-wireless/gnuradio-3.8*:0=[${PYTHON_SINGLE_USEDEP}]
 	$(python_gen_cond_dep '
-		dev-libs/boost:=[${PYTHON_MULTI_USEDEP}]
+		dev-libs/boost:=[${PYTHON_USEDEP}]
 	')
 	dev-libs/gmp
 	sci-libs/volk

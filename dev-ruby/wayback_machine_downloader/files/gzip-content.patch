@@ -1,0 +1,40 @@
+From bf6e33c2fed553f718f83a7087a632eaaca75404 Mon Sep 17 00:00:00 2001
+From: Age Bosma <age.bosma@protonmail.com>
+Date: Wed, 11 Oct 2023 15:41:23 +0200
+Subject: [PATCH] Decompress gzip content
+
+WBM is applying compression. "gzip;q=0, identity" as accepted-encoding is being ignored, so decompressing retrieved content.
+---
+ lib/wayback_machine_downloader.rb | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/lib/wayback_machine_downloader.rb b/lib/wayback_machine_downloader.rb
+index baac928..cc3b11b 100644
+--- a/lib/wayback_machine_downloader.rb
++++ b/lib/wayback_machine_downloader.rb
+@@ -7,6 +7,8 @@
+ require 'cgi'
+ require 'json'
+ require 'time'
++require 'zlib'
++require 'stringio'
+ require_relative 'wayback_machine_downloader/tidy_bytes'
+ require_relative 'wayback_machine_downloader/to_regex'
+ require_relative 'wayback_machine_downloader/archive_api'
+@@ -271,7 +273,15 @@ def download_file file_remote_info
+         open(file_path, "wb") do |file|
+           begin
+             URI("https://web.archive.org/web/#{file_timestamp}id_/#{file_url}").open("Accept-Encoding" => "plain") do |uri|
+-              file.write(uri.read)
++              content = uri.read
++              
++              if uri.content_encoding.include? 'gzip'
++                gz = Zlib::GzipReader.new(StringIO.new(content))
++                content = gz.read
++              end
++              
++              file.write(content)
++
+               if uri.meta.has_key?("x-archive-orig-last-modified")
+                 original_file_mtime = Time.parse(uri.meta["x-archive-orig-last-modified"])
+               end

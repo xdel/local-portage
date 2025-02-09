@@ -1,0 +1,31 @@
+From 6edf7568495913e924265cf447e64fee2427ea54 Mon Sep 17 00:00:00 2001
+From: "James R. Barlow" <james@purplerock.ca>
+Date: Sun, 30 Jun 2024 00:08:51 -0700
+Subject: [PATCH] optimize: trap Hifi..Error
+
+Fixes [Bug]: NotImplementedError: not sure how to get colorspace #1315
+---
+ src/ocrmypdf/optimize.py | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/ocrmypdf/optimize.py b/src/ocrmypdf/optimize.py
+index 06f5de250..43506dc6f 100644
+--- a/src/ocrmypdf/optimize.py
++++ b/src/ocrmypdf/optimize.py
+@@ -28,6 +28,7 @@
+     Stream,
+     UnsupportedImageTypeError,
+ )
++from pikepdf.models.image import HifiPrintImageNotTranscodableError
+ from PIL import Image
+ 
+ from ocrmypdf._concurrent import Executor, SerialExecutor
+@@ -200,7 +201,7 @@ def extract_image_generic(
+             with imgname.open('wb') as f:
+                 ext = pim.extract_to(stream=f)
+             imgname.rename(imgname.with_suffix(ext))
+-        except UnsupportedImageTypeError:
++        except (UnsupportedImageTypeError, HifiPrintImageNotTranscodableError):
+             return None
+         return XrefExt(xref, ext)
+     elif (
