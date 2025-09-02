@@ -8,7 +8,7 @@ inherit qmake-utils git-r3
 DESCRIPTION="Real Time Kinematic and other advanced GPS positioning techniques"
 HOMEPAGE="http://gpspp.sakura.ne.jp/rtklib/rtklib.htm"
 EGIT_REPO_URI="https://github.com/rtklibexplorer/RTKLIB"
-EGIT_BRANCH="demo5"
+EGIT_BRANCH="main"
 # SRC_URI="https://rtkexplorer.com/pdfs/manual_demo5.pdf -> rtklib-manual-demo5.pdf"
 
 LICENSE="GPL-2+"

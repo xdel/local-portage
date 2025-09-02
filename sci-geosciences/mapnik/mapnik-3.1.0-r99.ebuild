@@ -21,7 +21,7 @@ IUSE="cairo debug doc gdal osmfonts postgres sqlite test"
 RESTRICT="!test? ( test )"
 
 RDEPEND="
-	>=dev-libs/boost-1.48:=[threads]
+	>=dev-libs/boost-1.48:=
 	dev-libs/icu:=
 	sys-libs/zlib
 	media-libs/freetype
@@ -54,7 +54,7 @@ DEPEND="${RDEPEND}"
 PATCHES=(
 	"${FILESDIR}/${PN}-2.2.0-configure-only-once.patch"
 	"${FILESDIR}/${PN}-2.2.0-dont-run-ldconfig.patch"
-	# "${FILESDIR}/${PN}-git-enforce-cxx-17.patch"
+	"${FILESDIR}/${PN}-3.1.0-libxml2.patch"
 )
 
 src_prepare() {

@@ -113,7 +113,7 @@ src_prepare() {
 	kernel_is ge 4 11 0 && epatch "${FILESDIR}/${PV_MAJOR}-4.11-02-vmmon.patch"
 
 	# Allow user patches so they can support RC kernels and whatever else
-	eapply_user
+	epatch_user
 }
 
 src_install() {

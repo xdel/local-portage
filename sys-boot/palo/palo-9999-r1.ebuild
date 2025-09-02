@@ -1,7 +1,7 @@
 # Copyright 1999-2016 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=6
+EAPI=7
 inherit eutils flag-o-matic git-r3 toolchain-funcs
 
 DESCRIPTION="PALO : PArisc Linux Loader"

@@ -1,0 +1,127 @@
+--- /dev/null
++++ b/skychart/library/chealpix/Makefile.linux
+@@ -0,0 +1,18 @@
++##############################################################################
++
++CC=gcc
++CFLAGS += -w -fPIC
++SO_Name       = libchealpix.so
++LIBFLAGS      = -shared -lc -lm -lstdc++ -Wl,-soname,$(SO_Name) $(arch_flags)
++
++OBJS =	chealpix.o
++
++all: $(SO_Name)
++
++$(SO_Name): $(OBJS)
++	$(CC) $(CFLAGS) $(LDFLAGS) $(LIBFLAGS) -o $@ $(OBJS)
++
++chealpix.o:	chealpix.h chealpix.c
++
++clean:
++	rm -f *.a *.o $(SO_Name)
+--- /dev/null
++++ a/skychart/library/calceph/Makefile.linux
+@@ -0,0 +1,32 @@
++# Common flags
++OSTYPE = $(shell uname)
++ifneq ($(findstring BSD,$(OSTYPE)),)
++CC            = cc
++else
++CC            = gcc
++endif
++
++CP = cp
++
++
++SOName        = libcalceph.so.1
++SO_Name       = libcalceph.so.1.1
++CFLAGS        = -DHAVE_CONFIG_H -I. -O2 -fPIC 
++LIBFLAGS      = -shared -Wl,-soname,$(SO_Name)  -lm $(arch_flags)
++
++.PHONY: all clean
++
++SRC=$(wildcard *.c)
++
++OBJ=$(SRC:.c=.o)
++
++all: $(SO_Name)
++
++$(SO_Name): calcephconfig.h $(OBJS)
++	$(CC) $(CFLAGS) $(LDFLAGS) $(LIBFLAGS) -o $@ $(OBJS)
++
++calcephconfig.h : 
++	$(CP) calcephconfig.std calcephconfig.h
++
++clean:
++	rm -f calcephconfig.h *.a *.o $(SO_Name)
+--- a/skychart/library/Makefile.in
++++ b/skychart/library/Makefile.in
+@@ -27,7 +27,7 @@
+         $(MAKE) -C chealpix -f Makefile.win64 all
+         $(MAKE) -C calceph -f Makefile.win64 all
+  else
+- ifeq ($(OS_TARGET),darwin)
++ ifeq ($(OS_TARGET),linux)
+    ifeq ($(CPU_TARGET),i386)
+         $(MAKE) -C getdss all arch_flags=-m32
+         $(MAKE) -C plan404 all arch_flags=-m32
+@@ -38,8 +38,8 @@
+         $(MAKE) -C getdss all arch_flags=-m64
+         $(MAKE) -C plan404 all arch_flags=-m64
+         $(MAKE) -C wcs all arch_flags=-m64
+-        $(MAKE) -C chealpix -f Makefile.darwin64 all
+-        $(MAKE) -C calceph all arch_flags=-m64
++        $(MAKE) -C chealpix -f Makefile.linux all
++        $(MAKE) -C calceph -f Makefile.linux all
+    endif
+  endif
+  endif
+@@ -60,12 +60,12 @@
+         $(MAKE) -C chealpix -f Makefile.win64 clean
+         $(MAKE) -C calceph -f Makefile.win64 clean
+ else
+-ifeq ($(OS_TARGET),darwin)
++ifeq ($(OS_TARGET),linux)
+ 	$(MAKE) -C getdss clean
+ 	$(MAKE) -C plan404 clean
+ 	$(MAKE) -C wcs clean
+-	$(MAKE) -C chealpix -f Makefile.darwin clean
+-	$(MAKE) -C calceph clean
++	$(MAKE) -C chealpix -f Makefile.linux clean
++	$(MAKE) -C calceph -f Makefile.linux clean
+ endif
+ endif
+ endif
+--- a/skychart/library/getdss/Makefile	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/library/getdss/Makefile	2025-09-02 22:50:22.680523586 +0300
+@@ -33,7 +33,7 @@
+ OBJS = getdss_lib.o dss.o extr_fit.o getpiece.o \
+ 	hdcmprss.o bitinput.o decode.o dodecode.o hinv.o \
+ 	platelst.o qtreedec.o
+-LIBS = -lm -lstdc++
++LIBS += -lm -lstdc++
+ 
+ all: $(SO_Name)
+ 
+--- a/skychart/library/plan404/Makefile	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/library/plan404/Makefile	2025-09-02 22:51:18.227712347 +0300
+@@ -46,7 +46,7 @@
+ # Object files
+ OBJ_DIR = ./obj
+ OBJ := $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRC))
+-LIBS = -lm
++LIBS += -lm
+ 
+ all: $(SO_Name)
+ 
+--- a/skychart/library/wcs/Makefile	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/library/wcs/Makefile	2025-09-02 22:51:49.734675145 +0300
+@@ -43,7 +43,7 @@
+ 	worldpos.o tnxpos.o zpxpos.o dsspos.o platepos.o \
+ 	sortstar.o iget.o fileutil.o \
+ 	wcslib.o lin.o cel.o proj.o sph.o wcstrig.o distort.o poly.o
+-LIBS = -lm
++LIBS += -lm
+ 
+ all: $(SO_Name)
+ 

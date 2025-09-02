@@ -3,7 +3,7 @@
 
 EAPI="6"
 
-PYTHON_COMPAT=( python3_10 python3_11 )
+PYTHON_COMPAT=( python3_8 python3_9 )
 
 inherit eutils git-r3 python-any-r1
 
@@ -17,7 +17,7 @@ SRC_URI="https://github.com/berkeley-abc/abc/archive/${ABCREV}.tar.gz -> abc-${A
 
 
 SLOT="0"
-KEYWORDS=""
+KEYWORDS="**"
 IUSE="abc"
 
 RDEPEND="

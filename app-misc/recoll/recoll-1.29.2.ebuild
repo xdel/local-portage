@@ -3,7 +3,7 @@
 
 EAPI=7
 
-PYTHON_COMPAT=( python3_{9..11} )
+PYTHON_COMPAT=( python3_{6..9} )
 
 inherit linux-info optfeature python-single-r1 qmake-utils
 

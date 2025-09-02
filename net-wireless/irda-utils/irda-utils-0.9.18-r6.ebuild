@@ -1,7 +1,7 @@
 # Copyright 1999-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=6
+EAPI=7
 
 inherit eutils flag-o-matic toolchain-funcs udev
 
@@ -41,7 +41,7 @@ PATCHES=(
 
 src_prepare() {
 	# TODO: switch to 'default' once udev.eclass is EAPI=6 clean
-	epatch -p1 "${PATCHES[@]}"
+	eapply -p1 "${PATCHES[@]}"
 
 	append-flags "-fno-strict-aliasing" # bug????
 
@@ -90,7 +90,7 @@ src_install() {
 	newdoc irattach/ChangeLog  ChangeLog.irattach
 	newdoc irdadump/ChangeLog  ChangeLog.irdadump
 	newdoc smcinit/ChangeLog   ChangeLog.smcinit
-	dohtml smcinit/RobMiller-irda.html
+	docinto smcinit/RobMiller-irda.html
 	dodoc README
 
 	newconfd "${FILESDIR}/irda.confd" irda

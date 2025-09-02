@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/sci-astronomy/skychart/skychart-3.10.2854.ebuild,v 1.1 2014/04/03 12:29:38 hasufell Exp $
 
-EAPI=6
+EAPI=7
 
 inherit toolchain-funcs eutils xdg-utils
 
@@ -74,8 +74,8 @@ src_prepare() {
 	qtprinters.inc -> qt/qtprinters.inc
 	qtprndialogs.inc -> qt/qtprndialogs.inc"
 
-	epatch "${FILESDIR}"/${P}-QA.patch
-	epatch "${FILESDIR}"/${P}-lazarus-3.patch
+	eapply "${FILESDIR}"/${P}-QA.patch
+	eapply "${FILESDIR}"/${P}-lazarus-3.patch
 	if use system-healpix ; then
 		sed -i '/chealpix/d' library/Makefile.in
 	fi

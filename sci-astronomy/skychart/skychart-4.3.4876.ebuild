@@ -35,7 +35,7 @@ unset i
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="~amd64"
-IUSE="system-healpix"
+IUSE="+healpix"
 
 # pascal
 QA_FLAGS_IGNORED="usr/bin/cdcicon
@@ -52,7 +52,7 @@ RDEPEND="${CDEPEND}
 DEPEND="${CDEPEND}
 	>=dev-lang/lazarus-3.0.0[qt5,extras]
 	>=dev-lang/fpc-3.0.0
-	system-healpix? ( sci-astronomy/healpix )"
+	healpix? ( sci-astronomy/healpix )"
 
 S=${WORKDIR}/${PN}-${MY_PV}-src
 
@@ -76,9 +76,6 @@ src_prepare() {
 
 	epatch "${FILESDIR}"/${P}-QA.patch
 	epatch "${FILESDIR}"/${P}-lazarus-3.patch
-	if use system-healpix ; then
-		sed -i '/chealpix/d' library/Makefile.in
-	fi
 	eapply_user
 }
 

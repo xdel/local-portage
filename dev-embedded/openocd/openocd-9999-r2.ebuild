@@ -25,6 +25,7 @@ RESTRICT="strip" # includes non-native binaries
 # libftd2xx is the default because it is reported to work better.
 DEPEND="dev-embedded/libjaylink
 	dev-libs/hidapi
+	dev-lang/jimtcl
 	usb? ( virtual/libusb )
 	presto? ( dev-embedded/libftd2xx )
 	ftd2xx? ( dev-embedded/libftd2xx )

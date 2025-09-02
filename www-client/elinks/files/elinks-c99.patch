@@ -1,5 +1,5 @@
---- a/src/ecmascript/libdom/mujs/document.c
-+++ b/src/ecmascript/libdom/mujs/document.c
+--- a/src/js/mujs/document.c
++++ b/src/js/mujs/document.c
 @@ -617,7 +617,7 @@
  		}
  		break;

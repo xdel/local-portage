@@ -1,0 +1,74 @@
+--- a/skychart/component/downloaddialog/downloaddialog.pas	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/component/downloaddialog/downloaddialog.pas	2025-09-02 23:30:52.393251756 +0300
+@@ -26,7 +26,7 @@
+ interface
+ 
+ uses
+-  LResources, blcksock, HTTPsend, FTPSend, FileUtil, ssl_openssl3,
++  LResources, blcksock, HTTPsend, FTPSend, FileUtil, ssl_openssl,
+   Classes, SysUtils, LazUTF8, Dialogs, Buttons, Graphics, Forms,
+   Controls, StdCtrls, ExtCtrls;
+ 
+--- a/skychart/component/synapse/laz_synapse.lpk	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/component/synapse/laz_synapse.lpk	2025-09-02 23:30:33.596408680 +0300
+@@ -147,12 +147,12 @@
+         <UnitName Value="tlntsend"/>
+       </Item33>
+       <Item34>
+-        <Filename Value="ssl_openssl3.pas"/>
+-        <UnitName Value="ssl_openssl3"/>
++        <Filename Value="ssl_openssl.pas"/>
++        <UnitName Value="ssl_openssl"/>
+       </Item34>
+       <Item35>
+-        <Filename Value="ssl_openssl3_lib.pas"/>
+-        <UnitName Value="ssl_openssl3_lib"/>
++        <Filename Value="ssl_openssl_lib.pas"/>
++        <UnitName Value="ssl_openssl_lib"/>
+       </Item35>
+     </Files>
+     <RequiredPkgs Count="1">
+--- a/skychart/component/synapse/laz_synapse.pas	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/component/synapse/laz_synapse.pas	2025-09-02 23:30:58.643310412 +0300
+@@ -8,7 +8,7 @@
+ interface
+ 
+ uses
+-  asn1util, blcksock, clamsend, dnssend, ftpsend, ftptsend, httpsend, imapsend, ldapsend, mimeinln, mimemess, mimepart, nntpsend, pingsend, pop3send, slogsend, smtpsend, snmpsend, sntpsend, synachar, synacode, synacrypt, synadbg, synafpc, synaicnv, synaip, synamisc, synaser, synautil, synsock, tlntsend, ssl_openssl3, ssl_openssl3_lib;
++  asn1util, blcksock, clamsend, dnssend, ftpsend, ftptsend, httpsend, imapsend, ldapsend, mimeinln, mimemess, mimepart, nntpsend, pingsend, pop3send, slogsend, smtpsend, snmpsend, sntpsend, synachar, synacode, synacrypt, synadbg, synafpc, synaicnv, synaip, synamisc, synaser, synautil, synsock, tlntsend, ssl_openssl, ssl_openssl_lib;
+ 
+ implementation
+ 
+--- a/skychart/component/synapse/ssl_openssl11.pas	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/component/synapse/ssl_openssl11.pas	2025-09-02 23:31:12.610108149 +0300
+@@ -82,7 +82,7 @@
+   {$WARN IMPLICIT_STRING_CAST_LOSS OFF}
+ {$ENDIF}
+ 
+-unit ssl_openssl11{$IFDEF SUPPORTS_DEPRECATED} deprecated{$IFDEF SUPPORTS_DEPRECATED_DETAILS} 'Use ssl_openssl3 with OpenSSL 3.0 instead'{$ENDIF}{$ENDIF};
++unit ssl_openssl11;
+ 
+ interface
+ 
+--- a/skychart/component/synapse/ssl_openssl.pas	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/component/synapse/ssl_openssl.pas	2025-09-02 23:31:05.093370943 +0300
+@@ -86,7 +86,7 @@
+   {$WARN IMPLICIT_STRING_CAST_LOSS OFF}
+ {$ENDIF}
+ 
+-unit ssl_openssl{$IFDEF SUPPORTS_DEPRECATED} deprecated{$IFDEF SUPPORTS_DEPRECATED_DETAILS} 'Use ssl_openssl3 with OpenSSL 3.0 instead'{$ENDIF}{$ENDIF};
++unit ssl_openssl;
+ 
+ interface
+ 
+--- a/skychart/cu_httpdownload.pas	2025-08-19 12:14:05.000000000 +0300
++++ b/skychart/cu_httpdownload.pas	2025-09-02 23:36:28.089736264 +0300
+@@ -27,7 +27,7 @@
+ 
+ interface
+ 
+-uses  u_util, u_constant, blcksock, HTTPsend, FTPSend, ssl_openssl3,
++uses  u_util, u_constant, blcksock, HTTPsend, FTPSend, ssl_openssl,
+   Classes, SysUtils;
+ 
+ const FSpeedPosMax=50;
